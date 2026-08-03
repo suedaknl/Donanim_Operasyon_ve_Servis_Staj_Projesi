@@ -1,5 +1,6 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.login
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -9,17 +10,20 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
-fun LoginScreen() {
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
+fun LoginScreen(
+    viewModel: LoginViewModel = viewModel(),
+    onNavigateToHome: () -> Unit = {} // Yönlendirme parametremizi ekledik
+) {
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -33,8 +37,8 @@ fun LoginScreen() {
         Spacer(modifier = Modifier.height(32.dp))
 
         OutlinedTextField(
-            value = username,
-            onValueChange = { newText -> username = newText },
+            value = viewModel.username,
+            onValueChange = { viewModel.onUsernameChanged(it) },
             label = { Text("Kullanıcı Adı") },
             modifier = Modifier.fillMaxWidth()
         )
@@ -42,21 +46,16 @@ fun LoginScreen() {
         Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedTextField(
-            value = password,
-            onValueChange = { newText -> password = newText },
+            value = viewModel.password,
+            onValueChange = { viewModel.onPasswordChanged(it) },
             label = { Text("Şifre") },
-
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            visualTransformation = if (viewModel.passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-
             trailingIcon = {
-                val image = if (passwordVisible)
-                    Icons.Filled.Visibility
-                else Icons.Filled.VisibilityOff
+                val image = if (viewModel.passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                val description = if (viewModel.passwordVisible) "Şifreyi Gizle" else "Şifreyi Göster"
 
-                val description = if (passwordVisible) "Şifreyi Gizle" else "Şifreyi Göster"
-
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                IconButton(onClick = { viewModel.togglePasswordVisibility() }) {
                     Icon(imageVector = image, contentDescription = description)
                 }
             },
@@ -67,7 +66,15 @@ fun LoginScreen() {
 
         Button(
             onClick = {
-                println("Kullanıcı Adı: $username, Şifre: $password")
+                viewModel.login(
+                    onSuccess = {
+                        Toast.makeText(context, "Giriş Başarılı!", Toast.LENGTH_SHORT).show()
+                        onNavigateToHome() // Başarılı girişte Ana Ekrana yönlendir!
+                    },
+                    onError = { errorMessage ->
+                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+                    }
+                )
             },
             modifier = Modifier.fillMaxWidth()
         ) {
