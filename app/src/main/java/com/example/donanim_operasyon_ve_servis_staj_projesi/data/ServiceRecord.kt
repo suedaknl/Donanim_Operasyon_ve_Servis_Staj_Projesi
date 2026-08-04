@@ -5,14 +5,25 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "service_records")
 data class ServiceRecord(
-    @PrimaryKey(autoGenerate = true)
-    val id: Int = 0,
-    val companyName: String,       // Firma Adı
-    val deviceType: String,        // Cihaz Tipi (POS, Tablet, Yazıcı vb.)
-    val serialNumber: String,      // Seri Numarası
-    val location: String,          // Lokasyon / Şube
-    val priority: String,          // Öncelik (Düşük, Normal, Acil)
-    val issueDescription: String,  // Arıza Detayı / Açıklama
-    val status: String,            // Durum (Bekliyor, İşlemde, Tamamlandı vb.)
-    val date: String               // Kayıt Tarihi
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val companyName: String,
+    val deviceType: String,
+    val serialNumber: String,
+    val location: String,
+    val priority: String = "Normal",
+    val issueDescription: String,
+    val status: String = "Bekliyor", // Yeni eklenen durum alanı
+    val date: String
 )
+
+// Durum sabitlerini tek bir yerden yönetmek için object yapısı
+object ServiceStatus {
+    const val BEKLIYOR = "Bekliyor"
+    const val YOLDA = "Yolda"
+    const val ISLEME_BASLANDI = "İşleme Başlandı"
+    const val PARCA_BEKLENIYOR = "Parça Bekleniyor"
+    const val TAMAMLANDI = "Tamamlandı"
+    const val IPTAL = "İptal"
+
+    val all = listOf(BEKLIYOR, YOLDA, ISLEME_BASLANDI, PARCA_BEKLENIYOR, TAMAMLANDI, IPTAL)
+}
