@@ -3,9 +3,11 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -37,7 +40,6 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModelFactory
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen() {
@@ -50,7 +52,26 @@ fun HomeScreen() {
     val selectedRecord by viewModel.selectedRecord.collectAsState()
     val showAddDialog = remember { mutableStateOf(false) }
 
-    // Eğer bir kart seçildiyse Detay Ekranını göster, seçilmediyse Ana Listeyi
+    // Arama ve Filtreleme State'leri
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFilter by remember { mutableStateOf("Hepsi") }
+
+    // Filtreleme ve Arama Mantığı
+    val filteredRecords = serviceRecords.filter { record ->
+        val matchesSearch = record.companyName.contains(searchQuery, ignoreCase = true) ||
+                record.serialNumber.contains(searchQuery, ignoreCase = true) ||
+                record.deviceType.contains(searchQuery, ignoreCase = true)
+
+        val matchesFilter = when (selectedFilter) {
+            "Bekleyen" -> record.status == ServiceStatus.BEKLIYOR
+            "Tamamlanan" -> record.status == ServiceStatus.TAMAMLANDI
+            "Parça Bekleyen" -> record.status == ServiceStatus.PARCA_BEKLENIYOR
+            else -> true
+        }
+
+        matchesSearch && matchesFilter
+    }
+
     if (selectedRecord != null) {
         DetailScreen(
             record = selectedRecord!!,
@@ -61,10 +82,24 @@ fun HomeScreen() {
         )
     } else {
         Box(modifier = Modifier.fillMaxSize()) {
+            val activeCount = serviceRecords.count { it.status != ServiceStatus.TAMAMLANDI }
+
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text("Aktif Operasyonlar ve Servisler") },
+                        title = {
+                            Column {
+                                Text(
+                                    text = "Aktif Operasyonlar ve Servisler",
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Toplam $activeCount aktif servis",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             titleContentColor = MaterialTheme.colorScheme.primary,
@@ -86,12 +121,44 @@ fun HomeScreen() {
                         .padding(paddingValues)
                         .padding(16.dp)
                 ) {
-                    // 🌟 EKLENEN YER: Dashboard Özet Kartları (En Üstte Kuşbakışı Durum)
+                    // 1. Dashboard Özet Kartları
                     DashboardSummary(records = serviceRecords)
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    if (serviceRecords.isEmpty()) {
+                    // 2. Arama Çubuğu (Search Bar)
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        label = { Text("Firma, Cihaz veya Seri No Ara...") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // 3. Filtreleme Çipleri (FilterChips)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Hepsi", "Bekleyen", "Tamamlanan", "Parça Bekleyen").forEach { filter ->
+                            FilterChip(
+                                selected = selectedFilter == filter,
+                                onClick = { selectedFilter = filter },
+                                label = { Text(filter) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 4. Liste veya Boş Durum
+                    if (filteredRecords.isEmpty()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -99,7 +166,7 @@ fun HomeScreen() {
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Henüz bir iş emri bulunmuyor.\nSağ alttaki butondan ekleyebilirsiniz.",
+                                text = "Aradığınız kriterlere uygun iş emri bulunamadı.",
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -112,7 +179,7 @@ fun HomeScreen() {
                                 .weight(1f),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(serviceRecords) { record ->
+                            items(filteredRecords) { record ->
                                 ServiceRecordCard(
                                     record = record,
                                     onCardClick = { viewModel.selectRecord(record) },
@@ -156,24 +223,9 @@ fun DashboardSummary(records: List<ServiceRecord>) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        SummaryCard(
-            title = "Toplam",
-            count = totalCount.toString(),
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(1f)
-        )
-        SummaryCard(
-            title = "Bekleyen",
-            count = pendingCount.toString(),
-            color = Color(0xFFFF9800), // Turuncu
-            modifier = Modifier.weight(1f)
-        )
-        SummaryCard(
-            title = "Tamamlanan",
-            count = completedCount.toString(),
-            color = Color(0xFF4CAF50), // Yeşil
-            modifier = Modifier.weight(1f)
-        )
+        SummaryCard(title = "Toplam", count = totalCount.toString(), color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+        SummaryCard(title = "Bekleyen", count = pendingCount.toString(), color = Color(0xFFFF9800), modifier = Modifier.weight(1f))
+        SummaryCard(title = "Tamamlanan", count = completedCount.toString(), color = Color(0xFF4CAF50), modifier = Modifier.weight(1f))
     }
 }
 
@@ -186,24 +238,12 @@ fun SummaryCard(title: String, count: String, color: Color, modifier: Modifier =
         border = BorderStroke(1.dp, color.copy(alpha = 0.3f))
     ) {
         Column(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodySmall,
-                color = color,
-                fontWeight = FontWeight.Bold
-            )
+            Text(text = title, style = MaterialTheme.typography.bodySmall, color = color, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = count,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = color
-            )
+            Text(text = count, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = color)
         }
     }
 }
@@ -215,85 +255,43 @@ fun ServiceRecordCard(
     onDeleteClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCardClick() },
+        modifier = Modifier.fillMaxWidth().clickable { onCardClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth()
-        ) {
-            // Üst Kısım: Firma Adı ve Silme Butonu
+        Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = record.companyName,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = record.companyName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(4.dp))
-
-                    // Lokasyon İkonlu Gösterim
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = "Lokasyon",
-                            modifier = Modifier.size(16.dp),
-                            tint = Color.Gray
-                        )
+                        Icon(imageVector = Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Gray)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = record.location,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Gray
-                        )
+                        Text(text = record.location, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                     }
                 }
                 IconButton(onClick = onDeleteClick) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Kaydı Sil",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                    Icon(imageVector = Icons.Default.Delete, contentDescription = "Sil", tint = MaterialTheme.colorScheme.error)
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Orta Kısım: Cihaz Tipi ve Seri No
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Build,
-                    contentDescription = "Cihaz",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.secondary
-                )
+                Icon(imageVector = Icons.Default.Build, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.secondary)
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = record.deviceType,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Text(text = record.deviceType, style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.width(16.dp))
-                Text(
-                    text = "#${record.serialNumber}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Text(text = "#${record.serialNumber}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Alt Kısım: Renkli Rozetler (Badge) ve Tarih
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -303,17 +301,14 @@ fun ServiceRecordCard(
                     PriorityBadge(priority = record.priority)
                     StatusBadge(status = record.status)
                 }
-
-                Text(
-                    text = record.date,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.Gray
-                )
+                Text(text = record.date, style = MaterialTheme.typography.labelMedium, color = Color.Gray)
             }
         }
     }
 }
 
+// 📄 Detay Ekranı
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
     record: ServiceRecord,
@@ -322,7 +317,6 @@ fun DetailScreen(
 ) {
     Scaffold(
         topBar = {
-            @OptIn(ExperimentalMaterial3Api::class)
             TopAppBar(
                 title = { Text(record.companyName) },
                 navigationIcon = {
@@ -343,16 +337,25 @@ fun DetailScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            DetailRow("Lokasyon / Şube", record.location)
-            DetailRow("Cihaz Tipi", record.deviceType)
-            DetailRow("Seri Numarası", record.serialNumber)
-            DetailRow("Öncelik", record.priority)
-            DetailRow("Arıza Açıklaması", record.issueDescription)
-            DetailRow("Kayıt Tarihi", record.date)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    DetailRow("Firma Adı", record.companyName)
+                    DetailRow("Lokasyon / Şube / Adres", record.location)
+                    DetailRow("Cihaz Modeli / Tipi", record.deviceType)
+                    DetailRow("Seri Numarası", record.serialNumber)
+                    DetailRow("Öncelik Seviyesi", record.priority)
+                    DetailRow("Arıza Açıklaması", record.issueDescription)
+                    DetailRow("Kayıt Tarihi", record.date)
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Text("Servis Durumu", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Servis Durumunu Güncelle", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
 
             StatusDropdown(
@@ -372,12 +375,6 @@ fun StatusDropdown(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(
-            text = "Durumu Değiştirmek İçin Seçin:",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
         ServiceStatus.all.forEach { status ->
             val isSelected = status == currentStatus
 
@@ -402,9 +399,14 @@ fun StatusDropdown(
 
 @Composable
 fun DetailRow(label: String, value: String) {
-    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = Color.Gray)
-        Text(value, style = MaterialTheme.typography.bodyLarge)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = Color.Gray, fontWeight = FontWeight.Medium)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -435,12 +437,7 @@ fun StatusBadge(status: String) {
         ) {
             Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = color)
             Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = status,
-                color = color,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold
-            )
+            Text(text = status, color = color, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -449,10 +446,10 @@ fun StatusBadge(status: String) {
 fun AddServiceForm(onDismiss: () -> Unit, onSave: (ServiceRecord) -> Unit) {
     var companyName by remember { mutableStateOf("") }
     var deviceType by remember { mutableStateOf("") }
+    var serialNumber by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
     var priority by remember { mutableStateOf("Normal") }
     var issueDesc by remember { mutableStateOf("") }
-
     var validationMessage by remember { mutableStateOf("") }
 
     Card(
@@ -461,76 +458,47 @@ fun AddServiceForm(onDismiss: () -> Unit, onSave: (ServiceRecord) -> Unit) {
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp)
-        ) {
-            Text(
-                text = "Yeni İş Emri Oluştur",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-
+        Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+            Text(text = "Yeni İş Emri Oluştur", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = companyName,
-                onValueChange = { companyName = it },
-                label = { Text("Firma Adı *") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
+            OutlinedTextField(value = companyName, onValueChange = { companyName = it }, label = { Text("Firma Adı *") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(value = deviceType, onValueChange = { deviceType = it }, label = { Text("Cihaz Tipi / Modeli *") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(value = serialNumber, onValueChange = { serialNumber = it }, label = { Text("Seri Numarası (Boş bırakılırsa otomatik üretilir)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(value = location, onValueChange = { location = it }, label = { Text("Lokasyon / Şube *") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(text = "Öncelik Seviyesi:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("Normal", "Yüksek", "Kritik").forEach { level ->
+                    FilterChip(
+                        selected = priority == level,
+                        onClick = { priority = level },
+                        label = { Text(level) }
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = deviceType,
-                onValueChange = { deviceType = it },
-                label = { Text("Cihaz Tipi *") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = location,
-                onValueChange = { location = it },
-                label = { Text("Lokasyon / Şube *") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = issueDesc,
-                onValueChange = { issueDesc = it },
-                label = { Text("Arıza Açıklaması *") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            OutlinedTextField(value = issueDesc, onValueChange = { issueDesc = it }, label = { Text("Arıza Açıklaması *") }, modifier = Modifier.fillMaxWidth())
 
             if (validationMessage.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = validationMessage,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold
-                )
+                Text(text = validationMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = onDismiss) {
-                    Text("İptal")
-                }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onDismiss) { Text("İptal") }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
                     onClick = {
@@ -544,15 +512,16 @@ fun AddServiceForm(onDismiss: () -> Unit, onSave: (ServiceRecord) -> Unit) {
                             validationMessage = if (missingFields.size == 1) {
                                 "${missingFields[0]} girilmedi!"
                             } else {
-                                val joined = missingFields.joinToString(", ")
-                                "$joined girilmedi!"
+                                "${missingFields.joinToString(", ")} girilmedi!"
                             }
                         } else {
                             validationMessage = ""
+                            val finalSerial = if (serialNumber.isBlank()) "SN-${(1000..9999).random()}" else serialNumber
+
                             val newRecord = ServiceRecord(
                                 companyName = companyName,
                                 deviceType = deviceType,
-                                serialNumber = "SN-${(1000..9999).random()}",
+                                serialNumber = finalSerial,
                                 location = location,
                                 priority = priority,
                                 issueDescription = issueDesc,
@@ -562,9 +531,7 @@ fun AddServiceForm(onDismiss: () -> Unit, onSave: (ServiceRecord) -> Unit) {
                             onSave(newRecord)
                         }
                     }
-                ) {
-                    Text("Kaydet")
-                }
+                ) { Text("Kaydet") }
             }
         }
     }
@@ -591,18 +558,10 @@ fun PriorityBadge(priority: String) {
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, color.copy(alpha = 0.3f))
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
             Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = color)
             Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = priority,
-                color = color,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold
-            )
+            Text(text = priority, color = color, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
         }
     }
 }
