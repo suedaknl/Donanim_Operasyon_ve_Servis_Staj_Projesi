@@ -12,13 +12,16 @@ import androidx.compose.ui.Modifier
 fun AdminLoginScreen(
     onLoginSuccess: () -> Unit
 ) {
-    // Ekranın kendi içinde tuttuğu State'ler
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var rememberMe by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
 
-    // Tüm UI işlemleri ve giriş alanları ortak LoginForm'a devrediliyor
+    // Hata State'leri
+    var usernameError by remember { mutableStateOf("") }
+    var passwordError by remember { mutableStateOf("") }
+    var generalError by remember { mutableStateOf("") }
+
     LoginForm(
         title = "Admin Girişi",
         username = username,
@@ -27,14 +30,41 @@ fun AdminLoginScreen(
         usernameLabel = "Kullanıcı Adı",
         loginButtonText = "Giriş Yap",
         isPasswordVisible = passwordVisible,
-        onUsernameChange = { username = it },
-        onPasswordChange = { password = it },
+        usernameError = usernameError,
+        passwordError = passwordError,
+        generalError = generalError,
+        onUsernameChange = {
+            username = it
+            usernameError = "" // Kullanıcı yazmaya başlayınca hatayı temizle
+            generalError = ""
+        },
+        onPasswordChange = {
+            password = it
+            passwordError = ""
+            generalError = ""
+        },
         onRememberMeChange = { rememberMe = it },
         onPasswordVisibilityChange = { passwordVisible = !passwordVisible },
         onLoginClick = {
-            // İleride eklenecek doğrulama işlemleri (Validation) buraya gelebilir.
-            // Şimdilik doğrudan başarılı sayıp callback'i tetikliyoruz.
-            onLoginSuccess()
+            var isValid = true
+
+            if (username.isBlank()) {
+                usernameError = "Kullanıcı adı zorunludur."
+                isValid = false
+            }
+            if (password.isBlank()) {
+                passwordError = "Şifre zorunludur."
+                isValid = false
+            }
+
+            if (isValid) {
+                // Şimdilik sabit admin doğrulaması
+                if (username == "admin" && password == "1234") {
+                    onLoginSuccess()
+                } else {
+                    generalError = "Kullanıcı adı veya şifre hatalı."
+                }
+            }
         },
         modifier = Modifier.fillMaxSize()
     )

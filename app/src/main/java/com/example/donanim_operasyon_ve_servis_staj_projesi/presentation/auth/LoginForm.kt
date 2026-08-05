@@ -28,7 +28,11 @@ fun LoginForm(
     onRememberMeChange: (Boolean) -> Unit,
     onPasswordVisibilityChange: () -> Unit,
     onLoginClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Yeni eklenen Hata State'leri
+    usernameError: String = "",
+    passwordError: String = "",
+    generalError: String = ""
 ) {
     Column(
         modifier = modifier
@@ -36,7 +40,6 @@ fun LoginForm(
             .padding(24.dp),
         verticalArrangement = Arrangement.Center
     ) {
-        // Başlık
         Text(
             text = title,
             style = MaterialTheme.typography.headlineMedium,
@@ -46,19 +49,23 @@ fun LoginForm(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Kullanıcı Adı Alanı
         OutlinedTextField(
             value = username,
             onValueChange = onUsernameChange,
             label = { Text(usernameLabel) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(12.dp),
+            isError = usernameError.isNotEmpty(),
+            supportingText = {
+                if (usernameError.isNotEmpty()) {
+                    Text(text = usernameError, color = MaterialTheme.colorScheme.error)
+                }
+            }
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Şifre Alanı
         OutlinedTextField(
             value = password,
             onValueChange = onPasswordChange,
@@ -67,6 +74,12 @@ fun LoginForm(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
+            isError = passwordError.isNotEmpty(),
+            supportingText = {
+                if (passwordError.isNotEmpty()) {
+                    Text(text = passwordError, color = MaterialTheme.colorScheme.error)
+                }
+            },
             trailingIcon = {
                 val image = if (isPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
                 val description = if (isPasswordVisible) "Şifreyi Gizle" else "Şifreyi Göster"
@@ -79,7 +92,6 @@ fun LoginForm(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Beni Hatırla CheckBox
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
@@ -95,9 +107,19 @@ fun LoginForm(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Giriş Yap Butonu
+        // Genel Hata Mesajı (Kullanıcı adı veya şifre hatalı durumu)
+        if (generalError.isNotEmpty()) {
+            Text(
+                text = generalError,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+
         Button(
             onClick = onLoginClick,
             modifier = Modifier
