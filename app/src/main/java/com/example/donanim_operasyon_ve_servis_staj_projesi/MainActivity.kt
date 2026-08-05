@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.login.LoginScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.navigation.AppNavigation
 import com.example.donanim_operasyon_ve_servis_staj_projesi.ui.theme.Donanim_Operasyon_ve_Servis_Staj_ProjesiTheme
 
 class MainActivity : ComponentActivity() {

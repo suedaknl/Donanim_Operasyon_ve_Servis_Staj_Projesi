@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.ServiceRecord
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.ServiceRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

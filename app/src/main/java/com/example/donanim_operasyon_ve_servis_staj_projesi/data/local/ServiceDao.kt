@@ -1,10 +1,14 @@
-package com.example.donanim_operasyon_ve_servis_staj_projesi.data
+package com.example.donanim_operasyon_ve_servis_staj_projesi.data.local
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
 
 @Dao
 interface ServiceDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.Companion.REPLACE)
     suspend fun insertRecord(record: ServiceRecord)
 
     @Delete

@@ -1,169 +1,154 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.login
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen(onLoginSuccess: () -> Unit) {
+fun LoginScreen(
+    onAdminLogin: () -> Unit,
+    onUserLogin: () -> Unit
+) {
+    // Seçili rolü tutan state (true = Admin, false = Personel)
+    var isAdminMode by remember { mutableStateOf(true) }
+
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
     var rememberMe by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) } // Yükleniyor durumu için state
 
-    val coroutineScope = rememberCoroutineScope()
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        // Logo (Mevcut tasarımdaki mavi İngiliz anahtarı ikonunu temsilen)
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(80.dp)
         ) {
-            // Kurumsal İkon / Logo Alanı
-            Surface(
-                modifier = Modifier.size(72.dp),
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
+            Icon(
+                imageVector = Icons.Default.Build,
+                contentDescription = "Logo",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxSize()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Başlıklar
+        Text(
+            text = "Çorumgaz Servis & Operasyon",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "Personel Giriş Portali",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Rol Seçim Sekmeleri (TabRow veya Butonlar)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = { isAdminMode = true },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (isAdminMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                )
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Build,
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(36.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                Text("Admin Girişi", fontWeight = if (isAdminMode) FontWeight.Bold else FontWeight.Normal)
+            }
+
+            OutlinedButton(
+                onClick = { isAdminMode = false },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (!isAdminMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Text("Saha Personeli", fontWeight = if (!isAdminMode) FontWeight.Bold else FontWeight.Normal)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Dinamik Form Alanı
+        AnimatedVisibility(visible = isAdminMode) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Kullanıcı Adı") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Şifre") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Checkbox(checked = rememberMe, onCheckedChange = { rememberMe = it })
+                    Text("Beni Hatırla", style = MaterialTheme.typography.bodyMedium)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = onAdminLogin,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Giriş Yap")
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "Çorumgaz Servis & Operasyon",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "Personel Giriş Portalı",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.secondary
-            )
-
-            Spacer(modifier = Modifier.height(36.dp))
-
-            OutlinedTextField(
-                value = username,
-                onValueChange = {
-                    username = it
-                    errorMessage = ""
-                },
-                label = { Text("Kullanıcı Adı") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                enabled = !isLoading // Yüklenirken alanları kilitle
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = password,
-                onValueChange = {
-                    password = it
-                    errorMessage = ""
-                },
-                label = { Text("Şifre") },
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(imageVector = image, contentDescription = null)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                enabled = !isLoading
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Checkbox(
-                    checked = rememberMe,
-                    onCheckedChange = { rememberMe = it },
-                    enabled = !isLoading
-                )
+        AnimatedVisibility(visible = !isAdminMode) {
+            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "Beni Hatırla",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-
-            if (errorMessage.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = errorMessage,
-                    color = MaterialTheme.colorScheme.error,
+                    text = "Saha personeli yetkisiyle sisteme giriş yapmadan hızlıca yeni donanım ve arıza kaydı oluşturabilirsiniz.",
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(vertical = 16.dp)
                 )
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = {
-                    if (username.isBlank() || password.isBlank()) {
-                        errorMessage = "Kullanıcı adı ve şifre boş bırakılamaz!"
-                    } else if (username == "admin" && password == "1234") {
-                        errorMessage = ""
-                        isLoading = true // Yükleniyor animasyonunu başlat
-
-                        // Sahte bir sunucu gecikmesi (1 saniye) simüle edelim ki animasyon görünsün
-                        coroutineScope.launch {
-                            delay(1000)
-                            isLoading = false
-                            onLoginSuccess()
-                        }
-                    } else {
-                        errorMessage = "Hatalı kullanıcı adı veya şifre!"
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                enabled = !isLoading // İşlem yapılırken butona tekrar basılmasını önle
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("Giriş Yap", style = MaterialTheme.typography.titleMedium)
+                Button(
+                    onClick = onUserLogin,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Yeni İş Emri Formuna Git")
                 }
             }
         }

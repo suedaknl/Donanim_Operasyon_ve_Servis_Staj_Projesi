@@ -1,4 +1,4 @@
-package com.example.donanim_operasyon_ve_servis_staj_projesi.data
+package com.example.donanim_operasyon_ve_servis_staj_projesi.data.local
 
 import android.content.Context
 import androidx.room.Database

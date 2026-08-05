@@ -33,10 +33,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.AppDatabase
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.ServiceRecord
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.ServiceRepository
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.ServiceStatus
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.AppDatabase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModelFactory
 

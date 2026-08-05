@@ -1,4 +1,7 @@
-package com.example.donanim_operasyon_ve_servis_staj_projesi.data
+package com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository
+
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceDao
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 
 class ServiceRepository(private val serviceDao: ServiceDao) {
 
