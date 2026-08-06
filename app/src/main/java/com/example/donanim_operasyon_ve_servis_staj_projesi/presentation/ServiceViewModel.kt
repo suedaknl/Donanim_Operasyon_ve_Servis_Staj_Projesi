@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() {
 
@@ -20,6 +23,14 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     // Detay ekranında gösterilecek seçili kaydı tutan state
     private val _selectedRecord = MutableStateFlow<ServiceRecord?>(null)
     val selectedRecord: StateFlow<ServiceRecord?> = _selectedRecord.asStateFlow()
+
+    // --- YENİ EKLENEN KISIM: Arama ve Filtreleme State'leri ---
+    var searchQuery by mutableStateOf("")
+        private set
+
+    var selectedFilter by mutableStateOf("Hepsi")
+        private set
+    // -----------------------------------------------------------
 
     init {
         loadRecords()
@@ -31,6 +42,16 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             _serviceRecords.value = records
         }
     }
+
+    // --- YENİ EKLENEN KISIM: Arama ve Filtreleme Güncelleme Fonksiyonları ---
+    fun updateSearchQuery(query: String) {
+        searchQuery = query
+    }
+
+    fun updateSelectedFilter(filter: String) {
+        selectedFilter = filter
+    }
+    // ------------------------------------------------------------------------
 
     // Hangi karta tıklandığını seçme
     fun selectRecord(record: ServiceRecord) {

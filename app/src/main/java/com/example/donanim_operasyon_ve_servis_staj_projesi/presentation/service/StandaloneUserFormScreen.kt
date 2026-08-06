@@ -140,6 +140,7 @@ fun StandaloneUserFormScreen(
                         val newRecord = ServiceRecord(
                             companyName = companyName,
                             deviceType = deviceType,
+                            deviceModel = "Belirtilmedi",
                             serialNumber = finalSerial,
                             location = location,
                             priority = priority,

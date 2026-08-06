@@ -8,11 +8,12 @@ data class ServiceRecord(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val companyName: String,
     val deviceType: String,
+    val deviceModel: String, // Yeni eklenen alan
     val serialNumber: String,
     val location: String,
     val priority: String = "Normal",
     val issueDescription: String,
-    val status: String = "Bekliyor", // Yeni eklenen durum alanı
+    val status: String = "Bekliyor",
     val date: String
 )
 
