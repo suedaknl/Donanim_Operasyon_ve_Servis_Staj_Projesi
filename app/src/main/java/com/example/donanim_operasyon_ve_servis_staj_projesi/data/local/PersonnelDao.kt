@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
+
 @Dao
 interface PersonnelDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -25,4 +26,10 @@ interface PersonnelDao {
     // Kullanıcı adı benzersizlik kontrolü ve ileride Login ekranı için kullanılacak sorgu
     @Query("SELECT * FROM personnel_table WHERE username = :username LIMIT 1")
     suspend fun getPersonnelByUsername(username: String): Personnel?
+
+    @Query("SELECT * FROM personnel_table WHERE id = :id LIMIT 1")
+    suspend fun getPersonnelById(id: Int): Personnel?
+
+
 }
+

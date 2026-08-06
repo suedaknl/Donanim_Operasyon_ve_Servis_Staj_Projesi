@@ -148,15 +148,59 @@ fun AppNavigation() {
             )
         }
 
-        // --- PERSONEL YÖNETİMİ ROUTE'LARI ---
+// --- PERSONEL YÖNETİMİ ROUTE'LARI ---
         composable("personnel_list") {
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
 
             PersonnelListScreen(
                 viewModel = personnelViewModel,
-                onNavigateToAddPersonnel = {
-                    navController.navigate("add_personnel")
-                },
+                onNavigateToAddPersonnel = { navController.navigate("add_personnel") },
+                onNavigateToEditPersonnel = { id -> navController.navigate("add_personnel?personnelId=$id") },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Çökmeleri önlemek için güvenli String tabanlı argüman tanımı
+        composable(
+            route = "add_personnel?personnelId={personnelId}",
+            arguments = listOf(
+                navArgument("personnelId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelIdStr = backStackEntry.arguments?.getString("personnelId")
+            val actualId = personnelIdStr?.toIntOrNull()
+
+            AddPersonnelScreen(
+                viewModel = personnelViewModel,
+                personnelId = actualId,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Yeni Ekleme ve Düzenleme için Tek Rota (Opsiyonel Argüman)
+        composable(
+            route = "add_personnel?personnelId={personnelId}",
+            arguments = listOf(
+                navArgument("personnelId") {
+                    type = NavType.IntType
+                    defaultValue = -1 // ID gelmezse -1 (Yeni kayıt modu)
+                }
+            )
+        ) { backStackEntry ->
+            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelIdArg = backStackEntry.arguments?.getInt("personnelId") ?: -1
+            val actualId = if (personnelIdArg == -1) null else personnelIdArg
+
+            AddPersonnelScreen(
+                viewModel = personnelViewModel,
+                personnelId = actualId, // ID aktarıldı (Düzenleme veya Ekleme modu otomatik seçilecek)
                 onNavigateBack = {
                     navController.popBackStack()
                 }

@@ -24,6 +24,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelV
 fun PersonnelListScreen(
     viewModel: PersonnelViewModel,
     onNavigateToAddPersonnel: () -> Unit,
+    onNavigateToEditPersonnel: (Int) -> Unit, // YENİ EKLENEN PARAMETRE
     onNavigateBack: () -> Unit
 ) {
     val personnelList by viewModel.personnelList.collectAsState()
@@ -72,7 +73,7 @@ fun PersonnelListScreen(
                     PersonnelCard(
                         personnel = personnel,
                         onDeleteClick = { personnelToDelete = personnel },
-                        onEditClick = { /* Düzenleme modülü ileride eklenebilir */ }
+                        onEditClick = { onNavigateToEditPersonnel(personnel.id) } // YENİ GÜNCELLEME: ID gönderiliyor
                     )
                 }
             }

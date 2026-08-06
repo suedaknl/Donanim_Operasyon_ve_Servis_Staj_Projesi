@@ -21,4 +21,8 @@ class ServiceRepository(private val serviceDao: ServiceDao) {
     suspend fun getAllRecords(): List<ServiceRecord> {
         return serviceDao.getAllRecords()
     }
+
+    suspend fun updateService(service: ServiceRecord) {
+        serviceDao.updateService(service)
+    }
 }

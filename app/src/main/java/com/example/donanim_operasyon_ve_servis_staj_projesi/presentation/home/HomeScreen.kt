@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
@@ -33,27 +34,30 @@ fun HomeScreen(
     onServiceClick: (ServiceRecord) -> Unit,
     onLogOut: () -> Unit
 ) {
-    // 1. Menü açılır/kapanır durumu (State)
     var expandedMenu by remember { mutableStateOf(false) }
 
-    // 2. Arama ve Filtreleme Mantığı
+    // 1. Güncellenmiş Filtreleme Mantığı
     val filteredList = serviceList.filter { service ->
         val matchesSearch = searchQuery.isBlank() ||
                 service.companyName.contains(searchQuery, ignoreCase = true) ||
                 service.deviceType.contains(searchQuery, ignoreCase = true) ||
                 service.serialNumber.contains(searchQuery, ignoreCase = true)
 
-        val matchesFilter = selectedFilter == "Hepsi" || service.status == selectedFilter
+        val matchesFilter = when (selectedFilter) {
+            "Bekleyen" -> service.status == "Bekliyor" || service.status == "Parça Bekleniyor"
+            "Devam Eden" -> service.status == "Yolda" || service.status == "İşleme Başlandı"
+            "Tamamlanan" -> service.status == "Tamamlandı"
+            else -> true // "Hepsi" ve diğer durumlar için
+        }
 
         matchesSearch && matchesFilter
     }
 
-    // 3. Dashboard Özet Hesaplamaları (Tüm listeye göre hesaplanır)
+    // 2. Güncellenmiş Dashboard Sayaç Hesaplamaları
     val totalCount = serviceList.size
-    // DÜZELTME: "Bekleyen" kelimesi veritabanındaki karşılığı olan "Bekliyor" ile değiştirildi.
-    val pendingCount = serviceList.count { it.status == "Bekliyor" }
-    val inProgressCount = serviceList.count { it.status == "Devam Eden" }
-    val completedCount = serviceList.count { it.status == "Tamamlanan" }
+    val bekleyenCount = serviceList.count { it.status == "Bekliyor" || it.status == "Parça Bekleniyor" }
+    val devamEdenCount = serviceList.count { it.status == "Yolda" || it.status == "İşleme Başlandı" }
+    val tamamlananCount = serviceList.count { it.status == "Tamamlandı" }
 
     Scaffold(
         topBar = {
@@ -109,7 +113,7 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 5. Renkli Dashboard Kartları
+            // 3. Renkleri ve Değişkenleri Güncellenmiş Dashboard Kartları
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -121,28 +125,27 @@ fun HomeScreen(
                     modifier = Modifier.weight(1f)
                 )
                 DashboardCard(
-                    title = "Bekleyen", // Kart başlığı görsel UX açısından "Bekleyen" olarak kalıyor
-                    count = pendingCount,
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    title = "Bekleyen",
+                    count = bekleyenCount,
+                    containerColor = Color(0xFFFF9800), // Turuncu
                     modifier = Modifier.weight(1f)
                 )
                 DashboardCard(
                     title = "Devam Eden",
-                    count = inProgressCount,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    count = devamEdenCount,
+                    containerColor = Color(0xFF2196F3), // Mavi
                     modifier = Modifier.weight(1f)
                 )
                 DashboardCard(
-                    title = "Biten",
-                    count = completedCount,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    title = "Tamamlanan",
+                    count = tamamlananCount,
+                    containerColor = Color(0xFF4CAF50), // Yeşil
                     modifier = Modifier.weight(1f)
                 )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 6. Arama Çubuğu
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
@@ -155,9 +158,8 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 7. Filtreleme Çipleri
-            // DÜZELTME: "Bekleyen" yerine "Bekliyor" yazıldı.
-            val filters = listOf("Hepsi", "Bekliyor", "Devam Eden", "Tamamlanan")
+            // 4. Güncellenmiş Filtreleme Çipleri
+            val filters = listOf("Hepsi", "Bekleyen", "Devam Eden", "Tamamlanan")
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -172,7 +174,6 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 8. Dinamik İş Emirleri Listesi
             if (filteredList.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -207,7 +208,7 @@ fun HomeScreen(
 }
 
 @Composable
-fun DashboardCard(title: String, count: Int, containerColor: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+fun DashboardCard(title: String, count: Int, containerColor: Color, modifier: Modifier = Modifier) {
     ElevatedCard(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
@@ -223,13 +224,15 @@ fun DashboardCard(title: String, count: Int, containerColor: androidx.compose.ui
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = if (containerColor != MaterialTheme.colorScheme.primaryContainer) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = count.toString(),
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = if (containerColor != MaterialTheme.colorScheme.primaryContainer) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
             )
         }
     }
@@ -260,19 +263,15 @@ fun ServiceItemCard(service: ServiceRecord, onClick: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
 
-                // DÜZELTME: "Bekleyen" yerine "Bekliyor" yazıldı.
+                // 5. Liste Öğelerindeki Rozet Renklerinin Yeni Durumlara Göre Eşlenmesi
                 val badgeColor = when (service.status) {
-                    "Tamamlanan" -> MaterialTheme.colorScheme.tertiaryContainer
-                    "Devam Eden" -> MaterialTheme.colorScheme.secondaryContainer
-                    "Bekliyor" -> MaterialTheme.colorScheme.errorContainer
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                }
-
-                val badgeTextColor = when (service.status) {
-                    "Tamamlanan" -> MaterialTheme.colorScheme.onTertiaryContainer
-                    "Devam Eden" -> MaterialTheme.colorScheme.onSecondaryContainer
-                    "Bekliyor" -> MaterialTheme.colorScheme.onErrorContainer
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    "Bekliyor" -> Color(0xFFFF9800)
+                    "Yolda" -> Color(0xFF2196F3)
+                    "İşleme Başlandı" -> Color(0xFF9C27B0)
+                    "Parça Bekleniyor" -> Color(0xFFFBC02D)
+                    "Tamamlandı" -> Color(0xFF4CAF50)
+                    "İptal" -> Color(0xFFF44336)
+                    else -> Color.Gray
                 }
 
                 Surface(
@@ -283,7 +282,7 @@ fun ServiceItemCard(service: ServiceRecord, onClick: () -> Unit) {
                         text = service.status,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        color = badgeTextColor,
+                        color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
                 }

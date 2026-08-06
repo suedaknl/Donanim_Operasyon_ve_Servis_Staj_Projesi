@@ -24,7 +24,7 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     private val _selectedRecord = MutableStateFlow<ServiceRecord?>(null)
     val selectedRecord: StateFlow<ServiceRecord?> = _selectedRecord.asStateFlow()
 
-    // --- YENİ EKLENEN KISIM: Arama ve Filtreleme State'leri ---
+    // --- Arama ve Filtreleme State'leri ---
     var searchQuery by mutableStateOf("")
         private set
 
@@ -43,7 +43,7 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    // --- YENİ EKLENEN KISIM: Arama ve Filtreleme Güncelleme Fonksiyonları ---
+    // --- Arama ve Filtreleme Güncelleme Fonksiyonları ---
     fun updateSearchQuery(query: String) {
         searchQuery = query
     }
@@ -77,7 +77,15 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    // Yeni: Durum güncelleme fonksiyonu ve anlık state senkronizasyonu
+    // YENİLENDİ: Update işlemi artık I/O thread'inde yapılıp sonrasında listeyi güncelliyor
+    fun updateRecord(service: ServiceRecord) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateService(service)
+            loadRecords() // EKSİK OLAN SATIR EKLENDİ: Ekranlar anında güncellenecek
+        }
+    }
+
+    // (Opsiyonel) Durum güncelleme fonksiyonu ve anlık state senkronizasyonu
     fun updateStatus(recordId: Int, newStatus: String) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateStatus(recordId, newStatus)

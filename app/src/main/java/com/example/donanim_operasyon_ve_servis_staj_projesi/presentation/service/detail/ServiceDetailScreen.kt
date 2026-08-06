@@ -1,6 +1,7 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail
 
 import android.util.Log
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,13 +29,20 @@ fun ServiceDetailScreen(
     val serviceList by viewModel.serviceRecords.collectAsState()
     val service = serviceList.find { it.id == serviceId }
 
-    // ÇÖZÜM 1: Dialog state'i rememberSaveable ile korumaya alındı
+    // Dialog state'leri
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    var showStatusDialog by rememberSaveable { mutableStateOf(false) }
+    var selectedStatus by rememberSaveable { mutableStateOf("") }
 
-    // ÇÖZÜM 2: Ekranı tamamen yok eden "return" yerine, güvenli bir bekleme ekranı konuldu.
+    // Snackbar (Bildirim mesajı) state'leri
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
+    val statusOptions = listOf("Bekliyor", "Yolda", "İşleme Başlandı", "Parça Bekleniyor", "Tamamlandı", "İptal")
+
     if (service == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator() // Veri saliselik kaybolursa ekranı korur
+            CircularProgressIndicator()
         }
         return
     }
@@ -49,6 +58,7 @@ fun ServiceDetailScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("İş Emri Detayı", fontWeight = FontWeight.Bold) },
@@ -134,7 +144,10 @@ fun ServiceDetailScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Button(
-                onClick = { /* Placeholder */ },
+                onClick = {
+                    selectedStatus = service.status
+                    showStatusDialog = true
+                },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -146,7 +159,7 @@ fun ServiceDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedButton(
-                    onClick = { /* Placeholder */ },
+                    onClick = { /* Düzenle İşlevi Sonra Eklenecek */ },
                     modifier = Modifier.weight(1f).height(50.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -155,7 +168,6 @@ fun ServiceDetailScreen(
 
                 Button(
                     onClick = {
-                        Log.d("ServiceDetail", "Sil butonuna tıklandı!")
                         showDeleteDialog = true
                     },
                     modifier = Modifier.weight(1f).height(50.dp),
@@ -170,6 +182,63 @@ fun ServiceDetailScreen(
         }
     }
 
+    // Durum Güncelleme Diyaloğu
+    if (showStatusDialog) {
+        AlertDialog(
+            onDismissRequest = { showStatusDialog = false },
+            title = { Text("İş Emri Durumunu Güncelle", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    statusOptions.forEach { status ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedStatus = status }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = (selectedStatus == status),
+                                onClick = { selectedStatus = status }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = status, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (selectedStatus == service.status) {
+                            // Durum aynıysa güncelleme yapma, sadece mesaj ver
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("İş emrinin durumu zaten aynı.")
+                            }
+                        } else {
+                            // Farklı bir durum seçildiyse güncelle
+                            val updatedRecord = service.copy(status = selectedStatus)
+                            viewModel.updateRecord(updatedRecord)
+
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("İş emri durumu güncellendi.")
+                            }
+                        }
+                        showStatusDialog = false // İşlem bitince diyaloğu kapat
+                    }
+                ) {
+                    Text("Kaydet")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showStatusDialog = false }) {
+                    Text("İptal")
+                }
+            }
+        )
+    }
+
+    // Silme Onay Diyaloğu
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -188,9 +257,7 @@ fun ServiceDetailScreen(
                 }
             },
             dismissButton = {
-                OutlinedButton(
-                    onClick = { showDeleteDialog = false }
-                ) {
+                OutlinedButton(onClick = { showDeleteDialog = false }) {
                     Text("İptal")
                 }
             }

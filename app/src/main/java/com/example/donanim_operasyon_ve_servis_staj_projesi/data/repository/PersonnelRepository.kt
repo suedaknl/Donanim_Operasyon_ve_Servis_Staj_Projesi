@@ -26,4 +26,8 @@ class PersonnelRepository(private val personnelDao: PersonnelDao) {
     suspend fun getPersonnelByUsername(username: String): Personnel? {
         return personnelDao.getPersonnelByUsername(username)
     }
+
+    suspend fun getPersonnelById(id: Int): Personnel? {
+        return personnelDao.getPersonnelById(id)
+    }
 }

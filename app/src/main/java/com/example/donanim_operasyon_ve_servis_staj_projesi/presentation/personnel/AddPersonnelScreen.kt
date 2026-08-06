@@ -22,10 +22,13 @@ import kotlinx.coroutines.launch
 @Composable
 fun AddPersonnelScreen(
     viewModel: PersonnelViewModel,
+    personnelId: Int? = null,
     onNavigateBack: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+
+    var originalPersonnel by remember { mutableStateOf<Personnel?>(null) }
 
     var fullName by remember { mutableStateOf("") }
     var fullNameError by remember { mutableStateOf("") }
@@ -45,11 +48,42 @@ fun AddPersonnelScreen(
     var isActive by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
 
+    val isEditMode = personnelId != null
+
+    // Sayfa açıldığında ID ile veritabanından personeli çek
+    LaunchedEffect(personnelId) {
+        if (isEditMode && personnelId != null) {
+            viewModel.getPersonnelById(personnelId) { personnel ->
+                if (personnel != null) {
+                    originalPersonnel = personnel
+                    fullName = personnel.fullName
+                    username = personnel.username
+                    password = personnel.password
+                    phoneNumber = personnel.phoneNumber
+                    role = personnel.role
+                    isActive = personnel.isActive
+                } else {
+                    // KAYIT BULUNAMADI KURALI: Snackbar göster ve geri dön, INSERT YAPMA
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("Personel bilgisi bulunamadı.")
+                        delay(1000)
+                        onNavigateBack()
+                    }
+                }
+            }
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Yeni Personel Ekle", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        text = if (isEditMode) "Personel Düzenle" else "Yeni Personel",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
@@ -68,38 +102,60 @@ fun AddPersonnelScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedTextField(
-                value = fullName, onValueChange = { fullName = it; fullNameError = "" },
-                label = { Text("Ad Soyad") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                isError = fullNameError.isNotEmpty(), supportingText = { if (fullNameError.isNotEmpty()) Text(fullNameError, color = MaterialTheme.colorScheme.error) }
+                value = fullName,
+                onValueChange = { fullName = it; fullNameError = "" },
+                label = { Text("Ad Soyad") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                isError = fullNameError.isNotEmpty(),
+                supportingText = { if (fullNameError.isNotEmpty()) Text(fullNameError, color = MaterialTheme.colorScheme.error) }
             )
 
             OutlinedTextField(
-                value = username, onValueChange = { username = it; usernameError = "" },
-                label = { Text("Kullanıcı Adı") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                isError = usernameError.isNotEmpty(), supportingText = { if (usernameError.isNotEmpty()) Text(usernameError, color = MaterialTheme.colorScheme.error) }
+                value = username,
+                onValueChange = { username = it; usernameError = "" },
+                label = { Text("Kullanıcı Adı") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                isError = usernameError.isNotEmpty(),
+                supportingText = { if (usernameError.isNotEmpty()) Text(usernameError, color = MaterialTheme.colorScheme.error) }
             )
 
             OutlinedTextField(
-                value = password, onValueChange = { password = it; passwordError = "" },
-                label = { Text("Şifre") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                value = password,
+                onValueChange = { password = it; passwordError = "" },
+                label = { Text("Şifre") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
-                isError = passwordError.isNotEmpty(), supportingText = { if (passwordError.isNotEmpty()) Text(passwordError, color = MaterialTheme.colorScheme.error) }
+                isError = passwordError.isNotEmpty(),
+                supportingText = { if (passwordError.isNotEmpty()) Text(passwordError, color = MaterialTheme.colorScheme.error) }
             )
 
             OutlinedTextField(
-                value = phoneNumber, onValueChange = { phoneNumber = it; phoneError = "" },
-                label = { Text("Telefon") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                isError = phoneError.isNotEmpty(), supportingText = { if (phoneError.isNotEmpty()) Text(phoneError, color = MaterialTheme.colorScheme.error) }
+                value = phoneNumber,
+                onValueChange = { phoneNumber = it; phoneError = "" },
+                label = { Text("Telefon") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                isError = phoneError.isNotEmpty(),
+                supportingText = { if (phoneError.isNotEmpty()) Text(phoneError, color = MaterialTheme.colorScheme.error) }
             )
 
             OutlinedTextField(
-                value = role, onValueChange = { role = it; roleError = "" },
-                label = { Text("Görev (Örn: Saha Personeli)") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                isError = roleError.isNotEmpty(), supportingText = { if (roleError.isNotEmpty()) Text(roleError, color = MaterialTheme.colorScheme.error) }
+                value = role,
+                onValueChange = { role = it; roleError = "" },
+                label = { Text("Görev (Örn: Saha Personeli)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                isError = roleError.isNotEmpty(),
+                supportingText = { if (roleError.isNotEmpty()) Text(roleError, color = MaterialTheme.colorScheme.error) }
             )
 
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -113,6 +169,14 @@ fun AddPersonnelScreen(
                 onClick = {
                     if (isSaving) return@Button
 
+                    // Düzenleme modunda olup ID gelmesine rağmen veri henüz yüklenmediyse / bulunamadıysa işlem yaptırma
+                    if (isEditMode && originalPersonnel == null) {
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("Personel bilgisi yüklenemediği için işlem yapılamaz.")
+                        }
+                        return@Button
+                    }
+
                     var isValid = true
                     if (fullName.isBlank()) { fullNameError = "Bu alan zorunludur."; isValid = false }
                     if (username.isBlank()) { usernameError = "Bu alan zorunludur."; isValid = false }
@@ -122,34 +186,82 @@ fun AddPersonnelScreen(
 
                     if (isValid) {
                         isSaving = true
-                        coroutineScope.launch {
-                            val success = viewModel.addPersonnel(
-                                Personnel(
-                                    fullName = fullName.trim(),
-                                    username = username.trim(),
-                                    password = password.trim(),
-                                    phoneNumber = phoneNumber.trim(),
-                                    role = role.trim(),
-                                    isActive = isActive
-                                )
+
+                        if (isEditMode && originalPersonnel != null) {
+                            // DÜZENLEME MODU (UPDATE)
+                            val hasChanges = fullName.trim() != originalPersonnel!!.fullName ||
+                                    username.trim() != originalPersonnel!!.username ||
+                                    password.trim() != originalPersonnel!!.password ||
+                                    phoneNumber.trim() != originalPersonnel!!.phoneNumber ||
+                                    role.trim() != originalPersonnel!!.role ||
+                                    isActive != originalPersonnel!!.isActive
+
+                            if (!hasChanges) {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Personel bilgilerinde değişiklik yapılmadı.")
+                                }
+                                isSaving = false
+                                return@Button
+                            }
+
+                            val updatedPersonnel = originalPersonnel!!.copy(
+                                fullName = fullName.trim(),
+                                username = username.trim(),
+                                password = password.trim(),
+                                phoneNumber = phoneNumber.trim(),
+                                role = role.trim(),
+                                isActive = isActive
                             )
 
-                            if (success) {
-                                snackbarHostState.showSnackbar("Personel başarıyla eklendi.")
-                                delay(500)
-                                onNavigateBack()
-                            } else {
-                                usernameError = "Bu kullanıcı adı zaten kullanılmaktadır."
-                                isSaving = false
+                            viewModel.updatePersonnel(updatedPersonnel) { success ->
+                                if (success) {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("Personel bilgileri güncellendi.")
+                                        delay(500)
+                                        onNavigateBack()
+                                    }
+                                } else {
+                                    usernameError = "Güncelleme başarısız. Kullanıcı adı sistemde mevcut olabilir."
+                                    isSaving = false
+                                }
+                            }
+
+                        } else if (!isEditMode) {
+                            // YENİ EKLEME MODU (INSERT) - Asla ID varsa buraya girmez
+                            coroutineScope.launch {
+                                val success = viewModel.addPersonnel(
+                                    Personnel(
+                                        fullName = fullName.trim(),
+                                        username = username.trim(),
+                                        password = password.trim(),
+                                        phoneNumber = phoneNumber.trim(),
+                                        role = role.trim(),
+                                        isActive = isActive
+                                    )
+                                )
+
+                                if (success) {
+                                    snackbarHostState.showSnackbar("Personel başarıyla eklendi.")
+                                    delay(500)
+                                    onNavigateBack()
+                                } else {
+                                    usernameError = "Bu kullanıcı adı zaten kullanılmaktadır."
+                                    isSaving = false
+                                }
                             }
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
                 shape = RoundedCornerShape(12.dp),
                 enabled = !isSaving
             ) {
-                Text("Kaydet", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = if (isEditMode) "GÜNCELLE" else "KAYDET",
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
         }
     }

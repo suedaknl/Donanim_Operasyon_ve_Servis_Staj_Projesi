@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 
 @Dao
 interface ServiceDao {
@@ -20,4 +21,7 @@ interface ServiceDao {
 
     @Query("SELECT * FROM service_records")
     suspend fun getAllRecords(): List<ServiceRecord>
+
+    @Update
+    suspend fun updateService(service: ServiceRecord)
 }

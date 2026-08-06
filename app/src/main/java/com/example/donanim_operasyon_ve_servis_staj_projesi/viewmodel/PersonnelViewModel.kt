@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class PersonnelViewModel(private val repository: PersonnelRepository) : ViewModel() {
 
@@ -32,15 +34,35 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
         return true
     }
 
-    fun updatePersonnel(personnel: Personnel) {
-        viewModelScope.launch {
-            repository.updatePersonnel(personnel)
+    fun updatePersonnel(personnel: Personnel, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.updatePersonnel(personnel)
+                // Mevcut listeyi tazeleyen fonksiyonunu buraya ekle (örn: loadPersonnel() veya getPersonnelList())
+                // loadPersonnel()
+                onComplete(true)
+            } catch (e: Exception) {
+                onComplete(false)
+            }
         }
+    }
+    fun getPersonnelById(id: Int): Personnel? {
+        // personnelList StateFlow/LiveData adın neyse ona göre uyarla
+        return personnelList.value.find { it.id == id }
     }
 
     fun deletePersonnel(personnel: Personnel) {
         viewModelScope.launch {
             repository.deletePersonnel(personnel)
+        }
+    }
+
+    fun getPersonnelById(id: Int, onResult: (Personnel?) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val personnel = repository.getPersonnelById(id)
+            withContext(Dispatchers.Main) {
+                onResult(personnel)
+            }
         }
     }
 }
