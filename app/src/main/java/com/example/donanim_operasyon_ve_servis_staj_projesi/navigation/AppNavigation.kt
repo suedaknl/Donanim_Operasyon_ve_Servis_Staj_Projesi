@@ -11,6 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType // YENİ EKLENDİ
+import androidx.navigation.navArgument // YENİ EKLENDİ
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -20,7 +22,8 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.Pe
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.WelcomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home.HomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.AddServiceScreen
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.StandaloneUserFormScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceDetailScreen // YENİ EKLENDİ
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.StandaloneUserFormScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.AddPersonnelScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.splash.SplashScreen
@@ -48,8 +51,6 @@ fun AppNavigation() {
     val serviceFactory = remember { ServiceViewModelFactory(serviceRepository) }
 
     // --- MİMARİ DÜZELTME: SHARED VIEWMODEL ---
-    // ServiceViewModel, NavHost'un dışında (Activity/AppNavigation seviyesinde) oluşturulur.
-    // Böylece "home" ve "add_service" rotaları bellekteki aynı instance'ı paylaşır.
     val sharedServiceViewModel: ServiceViewModel = viewModel(factory = serviceFactory)
 
     NavHost(navController = navController, startDestination = "splash") {
@@ -109,13 +110,29 @@ fun AppNavigation() {
                     navController.navigate("add_service")
                 },
                 onServiceClick = { service ->
-                    // İleride eklenecek rotalar
-                    // navController.navigate("service_detail/${service.id}")
+                    // GÜNCELLENDİ: Gerçek detay ekranına yönlendirme
+                    navController.navigate("service_detail/${service.id}")
                 },
                 onLogOut = {
                     navController.navigate("welcome") {
                         popUpTo(0)
                     }
+                }
+            )
+        }
+
+        // --- İŞ EMRİ DETAY ROTASI (YENİ EKLENDİ) ---
+        composable(
+            route = "service_detail/{serviceId}",
+            arguments = listOf(navArgument("serviceId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: return@composable
+
+            ServiceDetailScreen(
+                viewModel = sharedServiceViewModel,
+                serviceId = serviceId,
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -159,8 +176,6 @@ fun AppNavigation() {
 
         // --- PERSONEL STANDALONE EKRANI ---
         composable("user_form") {
-            // Not: Personel Standalone ekranında, bağımsız bir ekleme yapıldığı için
-            // kendi içindeki kurguyla bırakıldı. Personel modülüne dokunulmadı.
             StandaloneUserFormScreen(
                 onLogOut = {
                     navController.navigate("welcome") {

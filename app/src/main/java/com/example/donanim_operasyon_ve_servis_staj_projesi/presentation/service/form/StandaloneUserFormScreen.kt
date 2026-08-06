@@ -1,4 +1,4 @@
-package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service // Kendi paket yapına göre güncelle
+package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form // Kendi paket yapına göre güncelle
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
