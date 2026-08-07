@@ -29,9 +29,12 @@ class ServiceRepository(private val serviceDao: ServiceDao) {
         return serviceDao.getServiceById(id)
     }
 
-    // --- YENİ EKLENEN METOT ---
-    // Bir personel silindiğinde ona atanmış iş emirlerindeki atamayı temizler
     suspend fun clearAssignedPersonnel(personnelId: Int) {
         serviceDao.clearAssignedPersonnel(personnelId)
+    }
+
+    // --- AŞAMA 2.1 İÇİN EKLENEN REPOSITORY FONKSİYONU ---
+    suspend fun getRecordsByPersonnelId(personnelId: Int): List<ServiceRecord> {
+        return serviceDao.getRecordsByPersonnelId(personnelId)
     }
 }

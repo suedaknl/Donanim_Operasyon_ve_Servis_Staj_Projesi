@@ -17,20 +17,22 @@ import kotlinx.coroutines.launch
 
 class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() {
 
+    // Admin tarafı için mevcut akış
     private val _serviceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
     val serviceRecords: StateFlow<List<ServiceRecord>> = _serviceRecords
 
-    // Detay ekranında gösterilecek seçili kaydı tutan state
+    // --- AŞAMA 2.1: PERSONEL TARAFI İÇİN STATEFLOW ---
+    private val _personnelServiceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
+    val personnelServiceRecords: StateFlow<List<ServiceRecord>> = _personnelServiceRecords.asStateFlow()
+
     private val _selectedRecord = MutableStateFlow<ServiceRecord?>(null)
     val selectedRecord: StateFlow<ServiceRecord?> = _selectedRecord.asStateFlow()
 
-    // --- Arama ve Filtreleme State'leri ---
     var searchQuery by mutableStateOf("")
         private set
 
     var selectedFilter by mutableStateOf("Hepsi")
         private set
-    // -----------------------------------------------------------
 
     init {
         loadRecords()
@@ -43,7 +45,14 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    // --- Arama ve Filtreleme Güncelleme Fonksiyonları ---
+    // --- AŞAMA 2.1: SADECE BELİRLİ PERSONELE AİT İŞLERİ YÜKLEME ---
+    fun loadRecordsForPersonnel(personnelId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val records = repository.getRecordsByPersonnelId(personnelId)
+            _personnelServiceRecords.value = records
+        }
+    }
+
     fun updateSearchQuery(query: String) {
         searchQuery = query
     }
@@ -51,14 +60,11 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     fun updateSelectedFilter(filter: String) {
         selectedFilter = filter
     }
-    // ------------------------------------------------------------------------
 
-    // Hangi karta tıklandığını seçme
     fun selectRecord(record: ServiceRecord) {
         _selectedRecord.value = record
     }
 
-    // Detay ekranından çıkış yapıldığında seçimi temizleme
     fun clearSelection() {
         _selectedRecord.value = null
     }
@@ -77,41 +83,33 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    // YENİLENDİ: Update işlemi artık I/O thread'inde yapılıp sonrasında listeyi güncelliyor
     fun updateRecord(service: ServiceRecord) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateService(service)
-            loadRecords() // EKSİK OLAN SATIR EKLENDİ: Ekranlar anında güncellenecek
+            loadRecords()
         }
     }
 
-    // (Opsiyonel) Durum güncelleme fonksiyonu ve anlık state senkronizasyonu
     fun updateStatus(recordId: Int, newStatus: String) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateStatus(recordId, newStatus)
-            loadRecords() // Listeyi tazele
-
-            // Seçili olan kaydı da güncel tut ki detay ekranında anında yansısın
+            loadRecords()
             _selectedRecord.value = _selectedRecord.value?.copy(status = newStatus)
         }
     }
 
-    // Düzenleme ekranında verileri anında doldurmak için ID'ye göre yerel listeden kayıt bulur
     fun getServiceById(id: Int): ServiceRecord? {
         return serviceRecords.value.find { it.id == id }
     }
 
-    // --- YENİ EKLENEN METOT ---
-    // Bir personel silindiğinde ona atanmış iş emirlerindeki atamayı temizler
     fun clearAssignedPersonnel(personnelId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.clearAssignedPersonnel(personnelId)
-            loadRecords() // Liste ve UI anında güncellensin
+            loadRecords()
         }
     }
 }
 
-// Çökme sorununu engelleyen Factory sınıfımız
 class ServiceViewModelFactory(private val repository: ServiceRepository) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
         if (modelClass.isAssignableFrom(ServiceViewModel::class.java)) {

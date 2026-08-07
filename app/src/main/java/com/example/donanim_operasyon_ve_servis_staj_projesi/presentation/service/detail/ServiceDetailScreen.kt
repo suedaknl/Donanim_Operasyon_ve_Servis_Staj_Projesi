@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
@@ -27,16 +28,15 @@ fun ServiceDetailScreen(
     viewModel: ServiceViewModel,
     personnelViewModel: PersonnelViewModel,
     serviceId: Int,
+    personnelId: Int? = null, // YENİ: Personel oturum kontrolü için opsiyonel ID
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit
 ) {
     val serviceRecords by viewModel.serviceRecords.collectAsState()
     val service = serviceRecords.find { it.id == serviceId }
 
-    // Personel listesi state'i
     val personnelList by personnelViewModel.personnelList.collectAsState()
 
-    // Diyalog ve Snackbar Kontrol State'leri
     var showAssignDialog by remember { mutableStateOf(false) }
     var showStatusDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -47,6 +47,29 @@ fun ServiceDetailScreen(
     if (service == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("İş emri bulunamadı veya silindi.")
+        }
+        return
+    }
+
+    // GÜVENLİK KONTROLÜ: Eğer ekranı açan bir personel ise ve bu iş emri başka bir personele aitse erişimi engelle!
+    if (personnelId != null && service.assignedPersonnelId != personnelId) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    text = "Bu iş emrini görüntüleme yetkiniz yok (Başka bir personele atanmış).",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
+                Button(onClick = onNavigateBack) {
+                    Text("Geri Dön")
+                }
+            }
         }
         return
     }
@@ -62,7 +85,7 @@ fun ServiceDetailScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("İş Emri Detayları", fontWeight = FontWeight.Bold) },
+                title = { Text(if (personnelId != null) "İş Emri Detayı (Personel)" else "İş Emri Detayları", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri Dön")
@@ -87,9 +110,9 @@ fun ServiceDetailScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = "İş No: #${service.id}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     Text(text = "Firma: ${service.companyName}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
-                    // --- EKLENEN ALAN: Yetkili Kişi ve Telefon ---
                     Text("Yetkili Kişi: ${service.contactPerson ?: "Belirtilmedi"}")
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
@@ -99,22 +122,19 @@ fun ServiceDetailScreen(
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                    Text("Cihaz: ${service.deviceType} - ${service.deviceModel}")
+                    Text("Cihaz Tipi: ${service.deviceType}")
+                    Text("Cihaz Modeli: ${service.deviceModel}")
                     Text("Seri No: ${service.serialNumber}")
                     Text("Lokasyon: ${service.location}")
 
-                    // --- EKLENEN ALAN: Açık Adres ---
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Açık Adres: ${service.address ?: "Belirtilmedi"}")
                     }
 
-                    Text("Tarih: ${service.date}")
-
-                    // --- EKLENEN ALAN: Planlanan Ziyaret ---
+                    Text("Oluşturulma Tarihi: ${service.date}")
                     Text("Planlanan Ziyaret: ${service.plannedDate ?: "Belirtilmedi"}")
-
                     Text("Öncelik: ${service.priority}", color = MaterialTheme.colorScheme.error)
 
                     // MEVCUT DURUM BİLGİSİ
@@ -161,61 +181,71 @@ fun ServiceDetailScreen(
                 }
             }
 
-            // --- BUTONLAR BÖLÜMÜ ---
+            // --- BUTONLAR BÖLÜMÜ (YETKİ KISITLAMASI) ---
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
-                // 1. PERSONEL ATA BUTONU
-                Button(
-                    onClick = { showAssignDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                ) {
-                    Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Personel Ata")
-                }
+                // Yalnızca Admin veya ileride yetkilendirilen roller için Personel Ata ve Durum Güncelle butonları
+                // Şimdiki kurala göre: Personel sadece detayları görür, parça/silme/düzenleme yapamaz.
+                // Ancak "Durum Güncelle" butonu sonraki saha operasyonları için korunabilir ya da Admin'e özel tutulabilir.
+                // İstekte: "Personel başka personel atayamasın, temel bilgileri değiştirmesin, admin işlemleri görünmesin" denmiştir.
 
-                // 2. DURUM GÜNCELLE BUTONU
-                Button(
-                    onClick = { showStatusDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
-                ) {
-                    Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Durum Güncelle")
-                }
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-
-                    // 3. DÜZENLE BUTONU
+                if (personnelId == null) {
+                    // --- ADMIN GÖRÜNÜMÜ (TÜM YETKİLER AKTİF) ---
                     Button(
-                        onClick = { onNavigateToEdit(service.id) },
-                        modifier = Modifier.weight(1f)
+                        onClick = { showAssignDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Düzenle")
+                        Text("Personel Ata")
                     }
 
-                    // 4. SİL BUTONU
                     Button(
-                        onClick = { showDeleteDialog = true },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        onClick = { showStatusDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Sil")
+                        Text("Durum Güncelle")
                     }
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { onNavigateToEdit(service.id) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Düzenle")
+                        }
+
+                        Button(
+                            onClick = { showDeleteDialog = true },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sil")
+                        }
+                    }
+                } else {
+                    // --- PERSONEL GÖRÜNÜMÜ (YETKİLER KISITLANDI) ---
+                    // Personel sadece okuyabilir, admin işlemleri (Düzenle, Sil, Personel Ata) görünmez.
+                    Text(
+                        text = "Saha operasyon yetkileri sonraki aşamalarda eklenecektir.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
                 }
             }
         }
     }
 
-    // --- DİYALOGLAR ---
-
-    // 1. PERSONEL ATA DİYALOĞU
+    // --- DİYALOGLAR (Sadece Admin veya ilgili yetkiler tetikleyebilir) ---
     if (showAssignDialog) {
         var selectedPersonnelId by remember { mutableStateOf(service.assignedPersonnelId) }
         val activePersonnelList = personnelList.filter { it.isActive }
@@ -267,7 +297,6 @@ fun ServiceDetailScreen(
         )
     }
 
-    // 2. DURUM GÜNCELLE DİYALOĞU
     if (showStatusDialog) {
         var selectedStatus by remember { mutableStateOf(service.status) }
 
@@ -318,7 +347,6 @@ fun ServiceDetailScreen(
         )
     }
 
-    // 3. SİLME ONAY DİYALOĞU
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },

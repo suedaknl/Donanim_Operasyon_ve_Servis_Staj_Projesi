@@ -51,6 +51,10 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
         return personnelList.value.find { it.id == id }
     }
 
+    suspend fun getPersonnelByUsername(username: String): Personnel? {
+        return repository.getPersonnelByUsername(username)
+    }
+
     fun deletePersonnel(personnel: Personnel) {
         viewModelScope.launch {
             repository.deletePersonnel(personnel)

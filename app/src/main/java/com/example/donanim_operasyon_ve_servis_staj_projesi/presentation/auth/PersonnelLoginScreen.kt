@@ -1,18 +1,17 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @Composable
 fun PersonnelLoginScreen(
-    onLoginSuccess: () -> Unit
-    // İleride ViewModel buraya eklenecek:
-    // viewModel: PersonnelViewModel
+    viewModel: PersonnelViewModel, // ViewModel parametresi
+    onLoginSuccess: (Int) -> Unit, // Başarılı girişte Personnel ID dışarı aktarılıyor
+    onNavigateBack: () -> Unit
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -23,6 +22,8 @@ fun PersonnelLoginScreen(
     var usernameError by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf("") }
     var generalError by remember { mutableStateOf("") }
+
+    val coroutineScope = rememberCoroutineScope()
 
     LoginForm(
         title = "Servis Personeli Girişi",
@@ -60,22 +61,19 @@ fun PersonnelLoginScreen(
             }
 
             if (isValid) {
-                /*
-                TODO: İleride Room Database üzerinden doğrulama yapılacak.
-                Örnek Altyapı:
-                val personnel = viewModel.getPersonnelByUsername(username)
-                if (personnel != null && personnel.password == password) {
-                    onLoginSuccess()
-                } else {
-                    generalError = "Kullanıcı adı veya şifre hatalı."
-                }
-                */
+                coroutineScope.launch {
+                    // Mevcut PersonnelViewModel'daki personel listesini alıp eşleşen kullanıcıyı buluyoruz
+                    val matchedPersonnel = viewModel.getPersonnelByUsername(username.trim())
 
-                // Şimdilik Personel Yönetimi bağlanana kadar geçici sabit hesap
-                if (username == "personel" && password == "1234") {
-                    onLoginSuccess()
-                } else {
-                    generalError = "Kullanıcı adı veya şifre hatalı."
+                    if (matchedPersonnel != null && matchedPersonnel.password == password.trim()) {
+                        if (matchedPersonnel.isActive) {
+                            onLoginSuccess(matchedPersonnel.id) // Doğru ID route'a aktarılıyor
+                        } else {
+                            generalError = "Hesabınız pasif durumdadır."
+                        }
+                    } else {
+                        generalError = "Kullanıcı adı veya şifre hatalı."
+                    }
                 }
             }
         },

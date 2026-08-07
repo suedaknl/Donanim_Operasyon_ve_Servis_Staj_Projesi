@@ -38,19 +38,15 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.Serv
 fun AppNavigation() {
     val navController = rememberNavController()
 
-    // Veritabanı ve Repository bağımlılıkları
     val context = LocalContext.current
     val database = remember { AppDatabase.getDatabase(context) }
 
-    // Personnel modülü için ortak ViewModel oluşturulması
     val personnelRepository = remember { PersonnelRepository(database.personnelDao()) }
     val personnelFactory = remember { PersonnelViewModelFactory(personnelRepository) }
 
-    // Service modülü için Repository ve Factory oluşturulması
     val serviceRepository = remember { ServiceRepository(database.serviceDao()) }
     val serviceFactory = remember { ServiceViewModelFactory(serviceRepository) }
 
-    // --- MİMARİ DÜZELTME: SHARED VIEWMODEL ---
     val sharedServiceViewModel: ServiceViewModel = viewModel(factory = serviceFactory)
 
     NavHost(navController = navController, startDestination = "splash") {
@@ -83,16 +79,18 @@ fun AppNavigation() {
         }
 
         composable("personnel_login") {
+            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
             PersonnelLoginScreen(
-                onLoginSuccess = {
-                    navController.navigate("user_form") {
+                viewModel = personnelViewModel,
+                onLoginSuccess = { personnelId ->
+                    navController.navigate("user_form/$personnelId") {
                         popUpTo("welcome") { inclusive = true }
                     }
-                }
+                },
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
-        // --- ADMIN HOME EKRANI ---
         composable("home") {
             val serviceList by sharedServiceViewModel.serviceRecords.collectAsState()
 
@@ -104,61 +102,45 @@ fun AppNavigation() {
                 onFilterSelected = { filterValue ->
                     sharedServiceViewModel.updateSelectedFilter(filterValue ?: "")
                 },
-                onNavigateToPersonnel = {
-                    navController.navigate("personnel_list")
-                },
-                onNavigateToAddService = {
-                    navController.navigate("add_service")
-                },
-                onServiceClick = { service ->
-                    navController.navigate("service_detail/${service.id}")
-                },
+                onNavigateToPersonnel = { navController.navigate("personnel_list") },
+                onNavigateToAddService = { navController.navigate("add_service") },
+                onServiceClick = { service -> navController.navigate("service_detail/${service.id}") },
                 onLogOut = {
-                    navController.navigate("welcome") {
-                        popUpTo(0)
-                    }
+                    navController.navigate("welcome") { popUpTo(0) }
                 }
             )
         }
 
+        // Admin Detay Rotası
         composable(
             route = "service_detail/{serviceId}",
             arguments = listOf(navArgument("serviceId") { type = NavType.IntType })
         ) { backStackEntry ->
             val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: return@composable
-
-            // YENİ EKLENEN: PersonnelViewModel üretilip detay ekranına gönderiliyor
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
 
             ServiceDetailScreen(
                 viewModel = sharedServiceViewModel,
-                personnelViewModel = personnelViewModel, // YENİ EKLENEN PARAMETRE
+                personnelViewModel = personnelViewModel,
                 serviceId = serviceId,
-                onNavigateBack = {
-                    navController.popBackStack()
-                },
-                onNavigateToEdit = { id ->
-                    navController.navigate("add_service?serviceId=$id")
-                }
+                personnelId = null, // Admin modunda personel ID null geçer
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { id -> navController.navigate("add_service?serviceId=$id") }
             )
         }
 
-
-        // --- PERSONEL YÖNETİMİ ROUTE'LARI ---
         composable("personnel_list") {
-            // DÜZELTME: Factory eklendi, artık çökme olmayacak
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
 
             PersonnelListScreen(
                 viewModel = personnelViewModel,
-                serviceViewModel = sharedServiceViewModel, // YENİ EKLENEN PARAMETRE
+                serviceViewModel = sharedServiceViewModel,
                 onNavigateToAddPersonnel = { navController.navigate("add_personnel") },
                 onNavigateToEditPersonnel = { id -> navController.navigate("add_personnel?personnelId=$id") },
                 onNavigateBack = { navController.popBackStack() }
             )
         }
 
-        // --- İŞ EMRİ EKLEME VE DÜZENLEME ROTASI ---
         composable(
             route = "add_service?serviceId={serviceId}",
             arguments = listOf(
@@ -174,15 +156,11 @@ fun AppNavigation() {
 
             AddServiceScreen(
                 viewModel = sharedServiceViewModel,
-                serviceId = actualServiceId, // DÜZELTME: -1 hatası kaldırıldı, doğrudan opsiyonel ID veriliyor
-                onNavigateBack = {
-                    navController.popBackStack()
-                }
+                serviceId = actualServiceId,
+                onNavigateBack = { navController.popBackStack() }
             )
-
         }
 
-        // Çökmeleri önlemek için güvenli String tabanlı argüman tanımı (Ekleme ve Düzenleme için Tek Rota)
         composable(
             route = "add_personnel?personnelId={personnelId}",
             arguments = listOf(
@@ -200,20 +178,49 @@ fun AppNavigation() {
             AddPersonnelScreen(
                 viewModel = personnelViewModel,
                 personnelId = actualId,
-                onNavigateBack = {
-                    navController.popBackStack()
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Personel Ana Ekranı Rotası
+        composable(
+            route = "user_form/{personnelId}",
+            arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
+
+            StandaloneUserFormScreen(
+                viewModel = sharedServiceViewModel,
+                personnelId = personnelId,
+                onServiceClick = { serviceId ->
+                    // YENİ: Personel kartına basınca güvenli personel detay rotasına yönlendiriliyor
+                    navController.navigate("personnel_service_detail/$serviceId/$personnelId")
+                },
+                onLogOut = {
+                    navController.navigate("welcome") { popUpTo(0) }
                 }
             )
         }
 
-        // --- PERSONEL STANDALONE EKRANI ---
-        composable("user_form") {
-            StandaloneUserFormScreen(
-                onLogOut = {
-                    navController.navigate("welcome") {
-                        popUpTo(0)
-                    }
-                }
+        // YENİ: Personel Güvenli Detay Ekranı Rotası
+        composable(
+            route = "personnel_service_detail/{serviceId}/{personnelId}",
+            arguments = listOf(
+                navArgument("serviceId") { type = NavType.IntType },
+                navArgument("personnelId") { type = NavType.IntType }
+            )
+        ) { backStackEntry ->
+            val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: return@composable
+            val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: return@composable
+            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+
+            ServiceDetailScreen(
+                viewModel = sharedServiceViewModel,
+                personnelViewModel = personnelViewModel,
+                serviceId = serviceId,
+                personnelId = personnelId, // Personel ID gönderilerek güvenlik kontrolü tetiklenir
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEdit = { /* Personel düzenleme yapamaz */ }
             )
         }
     }
