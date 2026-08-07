@@ -1,68 +1,68 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail
 
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import kotlinx.coroutines.launch
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ServiceDetailScreen(
     viewModel: ServiceViewModel,
+    personnelViewModel: PersonnelViewModel,
     serviceId: Int,
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit
 ) {
-    val serviceList by viewModel.serviceRecords.collectAsState()
-    val service = serviceList.find { it.id == serviceId }
+    val serviceRecords by viewModel.serviceRecords.collectAsState()
+    val service = serviceRecords.find { it.id == serviceId }
 
-    // Dialog state'leri
-    var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
-    var showStatusDialog by rememberSaveable { mutableStateOf(false) }
-    var selectedStatus by rememberSaveable { mutableStateOf("") }
+    // Personel listesi state'i
+    val personnelList by personnelViewModel.personnelList.collectAsState()
 
-    // Snackbar (Bildirim mesajı) state'leri
+    // Diyalog ve Snackbar Kontrol State'leri
+    var showAssignDialog by remember { mutableStateOf(false) }
+    var showStatusDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
-    val statusOptions = listOf("Bekliyor", "Yolda", "İşleme Başlandı", "Parça Bekleniyor", "Tamamlandı", "İptal")
-
     if (service == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+            Text("İş emri bulunamadı veya silindi.")
         }
         return
     }
 
-    val statusColor = when (service.status) {
-        "Bekliyor" -> Color(0xFFFF9800)
-        "Yolda" -> Color(0xFF2196F3)
-        "İşleme Başlandı" -> Color(0xFF9C27B0)
-        "Parça Bekleniyor" -> Color(0xFFFBC02D)
-        "Tamamlandı" -> Color(0xFF4CAF50)
-        "İptal" -> Color(0xFFF44336)
-        else -> Color.Gray
+    // Atanan personelin ismini bulma mantığı
+    val assignedPersonnelName = if (service.assignedPersonnelId != null) {
+        personnelList.find { it.id == service.assignedPersonnelId }?.fullName ?: "Personel Bulunamadı (Silinmiş Olabilir)"
+    } else {
+        "Atanmadı"
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("İş Emri Detayı", fontWeight = FontWeight.Bold) },
+                title = { Text("İş Emri Detayları", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri Dön")
@@ -80,130 +80,194 @@ fun ServiceDetailScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+
+            // --- BİLGİ KARTI ---
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "İş No: #${service.id}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Surface(
-                            color = statusColor,
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = service.status,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = "Firma: ${service.companyName}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    HorizontalDivider()
+                    Text("Cihaz: ${service.deviceType} - ${service.deviceModel}")
+                    Text("Seri No: ${service.serialNumber}")
+                    Text("Lokasyon: ${service.location}")
+                    Text("Tarih: ${service.date}")
+                    Text("Öncelik: ${service.priority}", color = MaterialTheme.colorScheme.error)
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    DetailRow(label = "Firma", value = service.companyName)
-                    DetailRow(label = "Cihaz Tipi", value = service.deviceType)
-                    DetailRow(label = "Cihaz Modeli", value = service.deviceModel)
-                    DetailRow(label = "Seri No", value = service.serialNumber)
-                    DetailRow(label = "Lokasyon", value = service.location)
-                    DetailRow(label = "Öncelik", value = service.priority)
-                    DetailRow(label = "Oluşturulma Tarihi", value = service.date)
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(text = "Arıza Açıklaması", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // MEVCUT DURUM BİLGİSİ
+                    Spacer(modifier = Modifier.height(4.dp))
                     Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = service.issueDescription,
+                            text = "Mevcut Durum: ${service.status}",
                             modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodyMedium
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
+                    }
+
+                    // ATANAN PERSONEL BİLGİSİ
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Atanan Personel: $assignedPersonnelName",
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = {
-                    selectedStatus = service.status
-                    showStatusDialog = true
-                },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Durum Güncelle")
+            // --- ARIZA AÇIKLAMASI KARTI ---
+            ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Arıza Açıklaması", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(service.issueDescription)
+                }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { onNavigateToEdit(service.id) },
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Düzenle")
-                }
+            // --- BUTONLAR BÖLÜMÜ ---
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
+                // 1. PERSONEL ATA BUTONU
                 Button(
-                    onClick = {
-                        showDeleteDialog = true
-                    },
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    onClick = { showAssignDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                 ) {
-                    Text("Sil")
+                    Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Personel Ata")
+                }
+
+                // 2. DURUM GÜNCELLE BUTONU
+                Button(
+                    onClick = { showStatusDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                ) {
+                    Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Durum Güncelle")
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                    // 3. DÜZENLE BUTONU
+                    Button(
+                        onClick = { onNavigateToEdit(service.id) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Düzenle")
+                    }
+
+                    // 4. SİL BUTONU
+                    Button(
+                        onClick = { showDeleteDialog = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Sil")
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 
-    // Durum Güncelleme Diyaloğu
+    // --- DİYALOGLAR ---
+
+    // 1. PERSONEL ATA DİYALOĞU
+    if (showAssignDialog) {
+        var selectedPersonnelId by remember { mutableStateOf(service.assignedPersonnelId) }
+        val activePersonnelList = personnelList.filter { it.isActive }
+
+        AlertDialog(
+            onDismissRequest = { showAssignDialog = false },
+            title = { Text("Personel Ata", fontWeight = FontWeight.Bold) },
+            text = {
+                if (activePersonnelList.isEmpty()) {
+                    Text("Şu anda sistemde atanabilir aktif personel bulunmuyor.")
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        items(activePersonnelList) { personnel ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedPersonnelId = personnel.id }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (selectedPersonnelId == personnel.id),
+                                    onClick = { selectedPersonnelId = personnel.id },
+                                    colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = personnel.fullName, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val updatedRecord = service.copy(assignedPersonnelId = selectedPersonnelId)
+                        viewModel.updateRecord(updatedRecord)
+                        showAssignDialog = false
+                    }
+                ) {
+                    Text("Ata")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAssignDialog = false }) {
+                    Text("İptal")
+                }
+            }
+        )
+    }
+
+    // 2. DURUM GÜNCELLE DİYALOĞU
     if (showStatusDialog) {
+        var selectedStatus by remember { mutableStateOf(service.status) }
+
         AlertDialog(
             onDismissRequest = { showStatusDialog = false },
-            title = { Text("İş Emri Durumunu Güncelle", fontWeight = FontWeight.Bold) },
+            title = { Text("Durum Güncelle", fontWeight = FontWeight.Bold) },
             text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    statusOptions.forEach { status ->
+                Column {
+                    ServiceStatus.all.forEach { statusOption ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedStatus = status }
-                                .padding(vertical = 12.dp),
+                                .clickable { selectedStatus = statusOption }
+                                .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = (selectedStatus == status),
-                                onClick = { selectedStatus = status }
+                                selected = (selectedStatus == statusOption),
+                                onClick = { selectedStatus = statusOption }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = status, style = MaterialTheme.typography.bodyLarge)
+                            Text(text = statusOption)
                         }
                     }
                 }
@@ -216,38 +280,33 @@ fun ServiceDetailScreen(
                                 snackbarHostState.showSnackbar("İş emrinin durumu zaten aynı.")
                             }
                         } else {
-                            val updatedRecord = service.copy(status = selectedStatus)
-                            viewModel.updateRecord(updatedRecord)
-
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("İş emri durumu güncellendi.")
-                            }
+                            viewModel.updateStatus(service.id, selectedStatus)
                         }
                         showStatusDialog = false
                     }
                 ) {
-                    Text("Kaydet")
+                    Text("Güncelle")
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showStatusDialog = false }) {
+                TextButton(onClick = { showStatusDialog = false }) {
                     Text("İptal")
                 }
             }
         )
     }
 
-    // Silme Onay Diyaloğu
+    // 3. SİLME ONAY DİYALOĞU
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("İş Emrini Sil", fontWeight = FontWeight.Bold) },
-            text = { Text("Bu iş emrini silmek istediğinize emin misiniz?") },
+            text = { Text("Bu iş emrini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.") },
             confirmButton = {
                 Button(
                     onClick = {
-                        showDeleteDialog = false
                         viewModel.deleteRecord(service)
+                        showDeleteDialog = false
                         onNavigateBack()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -256,21 +315,10 @@ fun ServiceDetailScreen(
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showDeleteDialog = false }) {
+                TextButton(onClick = { showDeleteDialog = false }) {
                     Text("İptal")
                 }
             }
         )
-    }
-}
-
-@Composable
-fun DetailRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
     }
 }

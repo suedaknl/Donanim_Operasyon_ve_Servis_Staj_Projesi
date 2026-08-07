@@ -18,13 +18,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel // YENİ EKLENEN IMPORT
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PersonnelListScreen(
     viewModel: PersonnelViewModel,
+    serviceViewModel: ServiceViewModel, // YENİ EKLENEN PARAMETRE
     onNavigateToAddPersonnel: () -> Unit,
-    onNavigateToEditPersonnel: (Int) -> Unit, // YENİ EKLENEN PARAMETRE
+    onNavigateToEditPersonnel: (Int) -> Unit,
     onNavigateBack: () -> Unit
 ) {
     val personnelList by viewModel.personnelList.collectAsState()
@@ -73,7 +75,7 @@ fun PersonnelListScreen(
                     PersonnelCard(
                         personnel = personnel,
                         onDeleteClick = { personnelToDelete = personnel },
-                        onEditClick = { onNavigateToEditPersonnel(personnel.id) } // YENİ GÜNCELLEME: ID gönderiliyor
+                        onEditClick = { onNavigateToEditPersonnel(personnel.id) }
                     )
                 }
             }
@@ -88,7 +90,12 @@ fun PersonnelListScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        // 1. ÖNCE: Bu personele ait iş emirlerindeki atamayı (assignedPersonnelId) temizle
+                        serviceViewModel.clearAssignedPersonnel(personnel.id)
+
+                        // 2. SONRA: Personeli veritabanından tamamen sil
                         viewModel.deletePersonnel(personnel)
+
                         personnelToDelete = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)

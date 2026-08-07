@@ -100,6 +100,15 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     fun getServiceById(id: Int): ServiceRecord? {
         return serviceRecords.value.find { it.id == id }
     }
+
+    // --- YENİ EKLENEN METOT ---
+    // Bir personel silindiğinde ona atanmış iş emirlerindeki atamayı temizler
+    fun clearAssignedPersonnel(personnelId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearAssignedPersonnel(personnelId)
+            loadRecords() // Liste ve UI anında güncellensin
+        }
+    }
 }
 
 // Çökme sorununu engelleyen Factory sınıfımız

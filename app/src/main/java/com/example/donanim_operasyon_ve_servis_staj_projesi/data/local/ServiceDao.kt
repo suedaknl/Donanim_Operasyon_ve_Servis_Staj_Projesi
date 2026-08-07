@@ -27,4 +27,9 @@ interface ServiceDao {
 
     @Query("SELECT * FROM service_records WHERE id = :id")
     suspend fun getServiceById(id: Int): ServiceRecord?
+
+    // --- YENİ EKLENEN METOT ---
+    // Bir personel silindiğinde ona atanmış iş emirlerindeki atamayı temizler
+    @Query("UPDATE service_records SET assignedPersonnelId = NULL WHERE assignedPersonnelId = :personnelId")
+    suspend fun clearAssignedPersonnel(personnelId: Int)
 }

@@ -127,8 +127,12 @@ fun AppNavigation() {
         ) { backStackEntry ->
             val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: return@composable
 
+            // YENİ EKLENEN: PersonnelViewModel üretilip detay ekranına gönderiliyor
+            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+
             ServiceDetailScreen(
                 viewModel = sharedServiceViewModel,
+                personnelViewModel = personnelViewModel, // YENİ EKLENEN PARAMETRE
                 serviceId = serviceId,
                 onNavigateBack = {
                     navController.popBackStack()
@@ -147,6 +151,7 @@ fun AppNavigation() {
 
             PersonnelListScreen(
                 viewModel = personnelViewModel,
+                serviceViewModel = sharedServiceViewModel, // YENİ EKLENEN PARAMETRE
                 onNavigateToAddPersonnel = { navController.navigate("add_personnel") },
                 onNavigateToEditPersonnel = { id -> navController.navigate("add_personnel?personnelId=$id") },
                 onNavigateBack = { navController.popBackStack() }
@@ -169,12 +174,12 @@ fun AppNavigation() {
 
             AddServiceScreen(
                 viewModel = sharedServiceViewModel,
-                // DÜZELTME: -1 yerine doğrudan actualServiceId veriyoruz (null ise null gider)
-                serviceId = actualServiceId,
+                serviceId = actualServiceId, // DÜZELTME: -1 hatası kaldırıldı, doğrudan opsiyonel ID veriliyor
                 onNavigateBack = {
                     navController.popBackStack()
                 }
             )
+
         }
 
         // Çökmeleri önlemek için güvenli String tabanlı argüman tanımı (Ekleme ve Düzenleme için Tek Rota)

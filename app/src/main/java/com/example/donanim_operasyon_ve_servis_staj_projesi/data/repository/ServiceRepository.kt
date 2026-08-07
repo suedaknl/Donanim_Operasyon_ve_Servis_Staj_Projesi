@@ -13,7 +13,6 @@ class ServiceRepository(private val serviceDao: ServiceDao) {
         serviceDao.deleteRecord(record)
     }
 
-    // Yeni: Durum güncelleme köprüsü
     suspend fun updateStatus(recordId: Int, newStatus: String) {
         serviceDao.updateStatus(recordId, newStatus)
     }
@@ -30,4 +29,9 @@ class ServiceRepository(private val serviceDao: ServiceDao) {
         return serviceDao.getServiceById(id)
     }
 
+    // --- YENİ EKLENEN METOT ---
+    // Bir personel silindiğinde ona atanmış iş emirlerindeki atamayı temizler
+    suspend fun clearAssignedPersonnel(personnelId: Int) {
+        serviceDao.clearAssignedPersonnel(personnelId)
+    }
 }

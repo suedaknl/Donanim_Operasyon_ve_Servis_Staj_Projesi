@@ -5,19 +5,20 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "service_records")
 data class ServiceRecord(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
     val companyName: String,
     val deviceType: String,
-    val deviceModel: String, // Yeni eklenen alan
+    val deviceModel: String,
     val serialNumber: String,
     val location: String,
-    val priority: String = "Normal",
+    val priority: String,
     val issueDescription: String,
-    val status: String = "Bekliyor",
-    val date: String
+    val status: String,
+    val date: String,
+    val assignedPersonnelId: Int? = null
 )
 
-// Durum sabitlerini tek bir yerden yönetmek için object yapısı
 object ServiceStatus {
     const val BEKLIYOR = "Bekliyor"
     const val YOLDA = "Yolda"
