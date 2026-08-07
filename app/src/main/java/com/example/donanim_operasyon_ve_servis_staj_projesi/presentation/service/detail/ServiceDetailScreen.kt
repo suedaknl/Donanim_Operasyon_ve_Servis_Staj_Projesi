@@ -28,7 +28,7 @@ fun ServiceDetailScreen(
     viewModel: ServiceViewModel,
     personnelViewModel: PersonnelViewModel,
     serviceId: Int,
-    personnelId: Int? = null, // YENİ: Personel oturum kontrolü için opsiyonel ID
+    personnelId: Int? = null,
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit
 ) {
@@ -51,7 +51,7 @@ fun ServiceDetailScreen(
         return
     }
 
-    // GÜVENLİK KONTROLÜ: Eğer ekranı açan bir personel ise ve bu iş emri başka bir personele aitse erişimi engelle!
+    // GÜVENLİK KONTROLÜ: Personel başka bir personelin işine erişemez
     if (personnelId != null && service.assignedPersonnelId != personnelId) {
         Box(
             modifier = Modifier
@@ -74,7 +74,6 @@ fun ServiceDetailScreen(
         return
     }
 
-    // Atanan personelin ismini bulma mantığı
     val assignedPersonnelName = if (service.assignedPersonnelId != null) {
         personnelList.find { it.id == service.assignedPersonnelId }?.fullName ?: "Personel Bulunamadı (Silinmiş Olabilir)"
     } else {
@@ -181,16 +180,10 @@ fun ServiceDetailScreen(
                 }
             }
 
-            // --- BUTONLAR BÖLÜMÜ (YETKİ KISITLAMASI) ---
+            // --- BUTONLAR BÖLÜMÜ ---
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-
-                // Yalnızca Admin veya ileride yetkilendirilen roller için Personel Ata ve Durum Güncelle butonları
-                // Şimdiki kurala göre: Personel sadece detayları görür, parça/silme/düzenleme yapamaz.
-                // Ancak "Durum Güncelle" butonu sonraki saha operasyonları için korunabilir ya da Admin'e özel tutulabilir.
-                // İstekte: "Personel başka personel atayamasın, temel bilgileri değiştirmesin, admin işlemleri görünmesin" denmiştir.
-
                 if (personnelId == null) {
-                    // --- ADMIN GÖRÜNÜMÜ (TÜM YETKİLER AKTİF) ---
+                    // --- ADMIN GÖRÜNÜMÜ ---
                     Button(
                         onClick = { showAssignDialog = true },
                         modifier = Modifier.fillMaxWidth(),
@@ -232,20 +225,43 @@ fun ServiceDetailScreen(
                         }
                     }
                 } else {
-                    // --- PERSONEL GÖRÜNÜMÜ (YETKİLER KISITLANDI) ---
-                    // Personel sadece okuyabilir, admin işlemleri (Düzenle, Sil, Personel Ata) görünmez.
-                    Text(
-                        text = "Saha operasyon yetkileri sonraki aşamalarda eklenecektir.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
+                    // --- PERSONEL GÖRÜNÜMÜ (FAZ 2.2 SAHA AKIŞI) ---
+                    // Eğer durum TAMAMLANDI veya IPTAL ise durum güncelleme butonu gizlenir (kilitlenir)
+                    val isLocked = service.status == ServiceStatus.TAMAMLANDI || service.status == ServiceStatus.IPTAL
+
+                    if (!isLocked) {
+                        Button(
+                            onClick = { showStatusDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                        ) {
+                            Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Durum Güncelle")
+                        }
+                    } else {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Bu iş emri sonlandırıldığı için durumu değiştirilemez.",
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 
-    // --- DİYALOGLAR (Sadece Admin veya ilgili yetkiler tetikleyebilir) ---
+    // --- DİYALOGLAR ---
+
+    // 1. PERSONEL ATA DİYALOĞU (Admin)
     if (showAssignDialog) {
         var selectedPersonnelId by remember { mutableStateOf(service.assignedPersonnelId) }
         val activePersonnelList = personnelList.filter { it.isActive }
@@ -297,46 +313,73 @@ fun ServiceDetailScreen(
         )
     }
 
+    // 2. DURUM GÜNCELLE DİYALOĞU (Admin ve Personel Ortak / Dinamik Filtreli)
     if (showStatusDialog) {
-        var selectedStatus by remember { mutableStateOf(service.status) }
+        // İlgili duruma göre seçilebilir sonraki listeyi belirliyoruz
+        val availableStatuses = if (personnelId == null) {
+            ServiceStatus.all // Admin tüm durumlara geçebilir
+        } else {
+            // Personel için FAZ 2.2 Kurallarına göre dinamik sonraki durumlar
+            when (service.status) {
+                ServiceStatus.BEKLIYOR -> listOf(ServiceStatus.YOLDA, ServiceStatus.IPTAL)
+                ServiceStatus.YOLDA -> listOf(ServiceStatus.ISLEME_BASLANDI, ServiceStatus.IPTAL)
+                ServiceStatus.ISLEME_BASLANDI -> listOf(ServiceStatus.PARCA_BEKLENIYOR, ServiceStatus.TAMAMLANDI, ServiceStatus.IPTAL)
+                ServiceStatus.PARCA_BEKLENIYOR -> listOf(ServiceStatus.ISLEME_BASLANDI, ServiceStatus.IPTAL)
+                else -> emptyList()
+            }
+        }
+
+        var selectedStatus by remember { mutableStateOf(if (availableStatuses.isNotEmpty()) availableStatuses.first() else service.status) }
 
         AlertDialog(
             onDismissRequest = { showStatusDialog = false },
             title = { Text("Durum Güncelle", fontWeight = FontWeight.Bold) },
             text = {
-                Column {
-                    ServiceStatus.all.forEach { statusOption ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedStatus = statusOption }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = (selectedStatus == statusOption),
-                                onClick = { selectedStatus = statusOption }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = statusOption)
+                if (availableStatuses.isEmpty()) {
+                    Text("Bu durumdan geçilebilecek başka bir aşama bulunmuyor.")
+                } else {
+                    Column {
+                        availableStatuses.forEach { statusOption ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedStatus = statusOption }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (selectedStatus == statusOption),
+                                    onClick = { selectedStatus = statusOption }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = statusOption)
+                            }
                         }
                     }
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        if (selectedStatus == service.status) {
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("İş emrinin durumu zaten aynı.")
+                if (availableStatuses.isNotEmpty()) {
+                    Button(
+                        onClick = {
+                            // GÜVENLİK KONTROLÜ: İşlem anında personelin hâlâ bu işe atanmış olduğunu doğrula
+                            if (personnelId != null && service.assignedPersonnelId != personnelId) {
+                                showStatusDialog = false
+                                return@Button
                             }
-                        } else {
-                            viewModel.updateStatus(service.id, selectedStatus)
+
+                            if (selectedStatus == service.status) {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("İş emrinin durumu zaten aynı.")
+                                }
+                            } else {
+                                viewModel.updateStatus(service.id, selectedStatus)
+                            }
+                            showStatusDialog = false
                         }
-                        showStatusDialog = false
+                    ) {
+                        Text("Güncelle")
                     }
-                ) {
-                    Text("Güncelle")
                 }
             },
             dismissButton = {
@@ -347,6 +390,7 @@ fun ServiceDetailScreen(
         )
     }
 
+    // 3. SİLME ONAY DİYALOĞU (Admin)
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
