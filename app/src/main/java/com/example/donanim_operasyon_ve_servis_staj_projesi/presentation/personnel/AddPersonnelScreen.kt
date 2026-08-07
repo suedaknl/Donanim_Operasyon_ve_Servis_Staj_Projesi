@@ -17,6 +17,16 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Lock // Zaten varsa ekleme
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,6 +47,7 @@ fun AddPersonnelScreen(
     var usernameError by remember { mutableStateOf("") }
 
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf("") }
 
     var phoneNumber by remember { mutableStateOf("") }
@@ -123,13 +134,24 @@ fun AddPersonnelScreen(
 
             OutlinedTextField(
                 value = password,
-                onValueChange = { password = it; passwordError = "" },
+                onValueChange = { password = it;
+                    var showError = false
+                },
                 label = { Text("Şifre") },
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                trailingIcon = {
+                    val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                    val description = if (passwordVisible) "Şifreyi Gizle" else "Şifreyi Göster"
+
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(imageVector = image, contentDescription = description)
+                    }
+                },
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                isError = passwordError.isNotEmpty(),
-                supportingText = { if (passwordError.isNotEmpty()) Text(passwordError, color = MaterialTheme.colorScheme.error) }
+                shape = RoundedCornerShape(12.dp)
             )
 
             OutlinedTextField(
