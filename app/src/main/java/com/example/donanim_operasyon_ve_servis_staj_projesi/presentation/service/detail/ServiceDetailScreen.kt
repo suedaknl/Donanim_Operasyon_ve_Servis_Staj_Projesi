@@ -88,11 +88,33 @@ fun ServiceDetailScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(text = "Firma: ${service.companyName}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    HorizontalDivider()
+
+                    // --- EKLENEN ALAN: Yetkili Kişi ve Telefon ---
+                    Text("Yetkili Kişi: ${service.contactPerson ?: "Belirtilmedi"}")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Yetkili Telefon: ${service.contactPhone ?: "Belirtilmedi"}")
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
                     Text("Cihaz: ${service.deviceType} - ${service.deviceModel}")
                     Text("Seri No: ${service.serialNumber}")
                     Text("Lokasyon: ${service.location}")
+
+                    // --- EKLENEN ALAN: Açık Adres ---
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Açık Adres: ${service.address ?: "Belirtilmedi"}")
+                    }
+
                     Text("Tarih: ${service.date}")
+
+                    // --- EKLENEN ALAN: Planlanan Ziyaret ---
+                    Text("Planlanan Ziyaret: ${service.plannedDate ?: "Belirtilmedi"}")
+
                     Text("Öncelik: ${service.priority}", color = MaterialTheme.colorScheme.error)
 
                     // MEVCUT DURUM BİLGİSİ

@@ -6,17 +6,13 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [
-        ServiceRecord::class,
-        Personnel::class
-    ],
-    version = 3,
+    entities = [ServiceRecord::class, Personnel::class],
+    version = 4, // YENİ EKLENEN: Versiyon 3'ten 4'e güncellendi
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun serviceDao(): ServiceDao
-
     abstract fun personnelDao(): PersonnelDao
 
     companion object {
@@ -28,11 +24,10 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "app_database"
+                    "app_database" // Eğer kendi projende buradaki veritabanı adın farklıysa (örneğin "service_db"), onu aynı bırakabilirsin.
                 )
                     .fallbackToDestructiveMigration()
                     .build()
-
                 INSTANCE = instance
                 instance
             }

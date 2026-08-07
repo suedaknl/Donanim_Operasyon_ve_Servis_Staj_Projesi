@@ -27,14 +27,21 @@ fun AddServiceScreen(
     serviceId: Int? = null,
     onNavigateBack: () -> Unit
 ) {
-    // Form state'leri
+    // Mevcut form state'leri
     var companyName by remember { mutableStateOf("") }
     var deviceType by remember { mutableStateOf("") }
     var deviceModel by remember { mutableStateOf("") }
     var serialNumber by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
     var issueDescription by remember { mutableStateOf("") }
-    var selectedPriority by remember { mutableStateOf("Orta") } // Varsayılan öncelik
+    var selectedPriority by remember { mutableStateOf("Orta") }
+
+    // --- YENİ EKLENEN FORM STATE'LERİ ---
+    var contactPerson by remember { mutableStateOf("") }
+    var contactPhone by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var plannedDate by remember { mutableStateOf("") }
+    // ------------------------------------
 
     var showError by remember { mutableStateOf(false) }
 
@@ -57,11 +64,17 @@ fun AddServiceScreen(
                 location = record.location
                 selectedPriority = record.priority
                 issueDescription = record.issueDescription
+
+                // --- YENİ ALANLARIN DOLDURULMASI ---
+                // Eğer veritabanında null ise forma boş metin ("") olarak yansıtıyoruz
+                contactPerson = record.contactPerson ?: ""
+                contactPhone = record.contactPhone ?: ""
+                address = record.address ?: ""
+                plannedDate = record.plannedDate ?: ""
             }
         }
     }
 
-    // Ekran başlığı dinamik olarak belirlenir
     val screenTitle = if (serviceId == null) "Yeni İş Emri Oluştur" else "İş Emri Düzenle"
 
     Scaffold(
@@ -95,6 +108,28 @@ fun AddServiceScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
+
+            // --- YENİ EKLENEN UI: YETKİLİ KİŞİ VE TELEFON ---
+            OutlinedTextField(
+                value = contactPerson,
+                onValueChange = { contactPerson = it },
+                label = { Text("Yetkili Kişi") },
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            OutlinedTextField(
+                value = contactPhone,
+                onValueChange = { contactPhone = it },
+                label = { Text("Yetkili Telefon") },
+                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+            // -----------------------------------------------
 
             // Cihaz Tipi ve Modeli
             Row(
@@ -143,7 +178,29 @@ fun AddServiceScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            // Öncelik Seçimi (Renk Kodlu AssistChip / FilterChip)
+            // --- YENİ EKLENEN UI: ADRES VE TARİH ---
+            OutlinedTextField(
+                value = address,
+                onValueChange = { address = it },
+                label = { Text("Açık Adres") },
+                leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            OutlinedTextField(
+                value = plannedDate,
+                onValueChange = { plannedDate = it },
+                label = { Text("Planlanan Ziyaret Tarihi / Saati") },
+                leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+            // ---------------------------------------
+
+            // Öncelik Seçimi
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "Öncelik Seviyesi",
@@ -154,8 +211,6 @@ fun AddServiceScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     priorities.forEach { priority ->
                         val isSelected = selectedPriority == priority
-
-                        // Önceliğe göre dinamik renkler (Yüksek -> Kırmızı, Orta -> Turuncu, Düşük -> Yeşil)
                         val priorityColor = when (priority) {
                             "Yüksek" -> Color(0xFFC62828)
                             "Orta" -> Color(0xFFEF6C00)
@@ -192,7 +247,7 @@ fun AddServiceScreen(
 
             if (showError) {
                 Text(
-                    text = "Lütfen tüm alanları eksiksiz doldurun.",
+                    text = "Lütfen tüm zorunlu alanları eksiksiz doldurun.", // Metin opsiyonel alanları kapsamayacak şekilde ufak netleştirildi
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -200,15 +255,16 @@ fun AddServiceScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Kaydet Butonu (Ekleme ve Güncelleme Mantığı Bir Arada)
+            // Kaydet Butonu
             Button(
                 onClick = {
+                    // YENİ ALANLAR İÇİN VALIDATION EKLENMEDİ (Kasten Opsiyonel Bırakıldı)
                     if (companyName.isBlank() || deviceType.isBlank() || deviceModel.isBlank() ||
                         serialNumber.isBlank() || location.isBlank() || issueDescription.isBlank()) {
                         showError = true
                     } else {
                         if (existingRecord != null) {
-                            // DÜZENLEME MODU: Mevcut kaydın ID, tarih ve durumunu koruyarak kopyala
+                            // DÜZENLEME MODU: ID, tarih, atanan personel ve durum bilgileri otomatik korunur
                             val updatedRecord = existingRecord!!.copy(
                                 companyName = companyName.trim(),
                                 deviceType = deviceType.trim(),
@@ -216,11 +272,16 @@ fun AddServiceScreen(
                                 serialNumber = serialNumber.trim(),
                                 location = location.trim(),
                                 priority = selectedPriority,
-                                issueDescription = issueDescription.trim()
+                                issueDescription = issueDescription.trim(),
+                                // YENİ ALANLAR (Boş bırakıldıysa veritabanına NULL olarak kaydedilir)
+                                contactPerson = contactPerson.trim().takeIf { it.isNotBlank() },
+                                contactPhone = contactPhone.trim().takeIf { it.isNotBlank() },
+                                address = address.trim().takeIf { it.isNotBlank() },
+                                plannedDate = plannedDate.trim().takeIf { it.isNotBlank() }
                             )
                             viewModel.updateRecord(updatedRecord)
                         } else {
-                            // YENİ EKLEME MODU: Yeni bir ServiceRecord oluştur
+                            // YENİ EKLEME MODU
                             val currentDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())
 
                             val newRecord = ServiceRecord(
@@ -231,8 +292,13 @@ fun AddServiceScreen(
                                 location = location.trim(),
                                 priority = selectedPriority,
                                 issueDescription = issueDescription.trim(),
-                                status = ServiceStatus.BEKLIYOR, // Sadece yeni kayıtta durumu sıfırdan belirliyoruz
-                                date = currentDate
+                                status = ServiceStatus.BEKLIYOR,
+                                date = currentDate,
+                                // YENİ ALANLAR
+                                contactPerson = contactPerson.trim().takeIf { it.isNotBlank() },
+                                contactPhone = contactPhone.trim().takeIf { it.isNotBlank() },
+                                address = address.trim().takeIf { it.isNotBlank() },
+                                plannedDate = plannedDate.trim().takeIf { it.isNotBlank() }
                             )
                             viewModel.insertRecord(newRecord)
                         }
