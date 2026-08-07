@@ -24,9 +24,10 @@ import java.util.Locale
 @Composable
 fun AddServiceScreen(
     viewModel: ServiceViewModel,
-    serviceId: Int? = null, // Buranın Int? olduğundan emin ol
+    serviceId: Int? = null,
     onNavigateBack: () -> Unit
 ) {
+    // Form state'leri
     var companyName by remember { mutableStateOf("") }
     var deviceType by remember { mutableStateOf("") }
     var deviceModel by remember { mutableStateOf("") }
@@ -37,12 +38,36 @@ fun AddServiceScreen(
 
     var showError by remember { mutableStateOf(false) }
 
+    // Düzenleme modunda orijinal kaydı tutmak için
+    var existingRecord by remember { mutableStateOf<ServiceRecord?>(null) }
+
     val priorities = listOf("Düşük", "Orta", "Yüksek")
+
+    // serviceId varsa mevcut verileri çek ve formu doldur (Pre-fill)
+    LaunchedEffect(serviceId) {
+        if (serviceId != null) {
+            val record = viewModel.getServiceById(serviceId)
+            if (record != null) {
+                existingRecord = record
+
+                companyName = record.companyName
+                deviceType = record.deviceType
+                deviceModel = record.deviceModel
+                serialNumber = record.serialNumber
+                location = record.location
+                selectedPriority = record.priority
+                issueDescription = record.issueDescription
+            }
+        }
+    }
+
+    // Ekran başlığı dinamik olarak belirlenir
+    val screenTitle = if (serviceId == null) "Yeni İş Emri Oluştur" else "İş Emri Düzenle"
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Yeni İş Emri Oluştur", fontWeight = FontWeight.Bold) },
+                title = { Text(screenTitle, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri Dön")
@@ -175,27 +200,43 @@ fun AddServiceScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Kaydet Butonu (Mevcut mantığı korur)
+            // Kaydet Butonu (Ekleme ve Güncelleme Mantığı Bir Arada)
             Button(
                 onClick = {
                     if (companyName.isBlank() || deviceType.isBlank() || deviceModel.isBlank() ||
                         serialNumber.isBlank() || location.isBlank() || issueDescription.isBlank()) {
                         showError = true
                     } else {
-                        val currentDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())
+                        if (existingRecord != null) {
+                            // DÜZENLEME MODU: Mevcut kaydın ID, tarih ve durumunu koruyarak kopyala
+                            val updatedRecord = existingRecord!!.copy(
+                                companyName = companyName.trim(),
+                                deviceType = deviceType.trim(),
+                                deviceModel = deviceModel.trim(),
+                                serialNumber = serialNumber.trim(),
+                                location = location.trim(),
+                                priority = selectedPriority,
+                                issueDescription = issueDescription.trim()
+                            )
+                            viewModel.updateRecord(updatedRecord)
+                        } else {
+                            // YENİ EKLEME MODU: Yeni bir ServiceRecord oluştur
+                            val currentDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())
 
-                        val newRecord = ServiceRecord(
-                            companyName = companyName.trim(),
-                            deviceType = deviceType.trim(),
-                            deviceModel = deviceModel.trim(),
-                            serialNumber = serialNumber.trim(),
-                            location = location.trim(),
-                            priority = selectedPriority,
-                            issueDescription = issueDescription.trim(),
-                            status = ServiceStatus.BEKLIYOR,
-                            date = currentDate
-                        )
-                        viewModel.insertRecord(newRecord)
+                            val newRecord = ServiceRecord(
+                                companyName = companyName.trim(),
+                                deviceType = deviceType.trim(),
+                                deviceModel = deviceModel.trim(),
+                                serialNumber = serialNumber.trim(),
+                                location = location.trim(),
+                                priority = selectedPriority,
+                                issueDescription = issueDescription.trim(),
+                                status = ServiceStatus.BEKLIYOR, // Sadece yeni kayıtta durumu sıfırdan belirliyoruz
+                                date = currentDate
+                            )
+                            viewModel.insertRecord(newRecord)
+                        }
+
                         onNavigateBack()
                     }
                 },

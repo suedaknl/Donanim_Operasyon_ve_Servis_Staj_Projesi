@@ -1,5 +1,8 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -11,9 +14,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 
 class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() {
 
@@ -96,12 +96,11 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    // Düzenleme ekranı için ID'ye göre tekil kayıt getirme (suspend kaldırıldı)
-    suspend fun getServiceById(id: Int): ServiceRecord? {
-        return repository.getServiceById(id)
+    // Düzenleme ekranında verileri anında doldurmak için ID'ye göre yerel listeden kayıt bulur
+    fun getServiceById(id: Int): ServiceRecord? {
+        return serviceRecords.value.find { it.id == id }
     }
 }
-
 
 // Çökme sorununu engelleyen Factory sınıfımız
 class ServiceViewModelFactory(private val repository: ServiceRepository) : ViewModelProvider.Factory {

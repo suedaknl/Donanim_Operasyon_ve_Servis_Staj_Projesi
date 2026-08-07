@@ -169,12 +169,12 @@ fun AppNavigation() {
 
             AddServiceScreen(
                 viewModel = sharedServiceViewModel,
-                serviceId = actualServiceId ?: -1,
+                // DÜZELTME: -1 yerine doğrudan actualServiceId veriyoruz (null ise null gider)
+                serviceId = actualServiceId,
                 onNavigateBack = {
                     navController.popBackStack()
                 }
             )
-
         }
 
         // Çökmeleri önlemek için güvenli String tabanlı argüman tanımı (Ekleme ve Düzenleme için Tek Rota)
