@@ -6,9 +6,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
@@ -22,6 +24,7 @@ import java.util.Locale
 @Composable
 fun AddServiceScreen(
     viewModel: ServiceViewModel,
+    serviceId: Int? = null, // Buranın Int? olduğundan emin ol
     onNavigateBack: () -> Unit
 ) {
     var companyName by remember { mutableStateOf("") }
@@ -55,64 +58,130 @@ fun AddServiceScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Firma Adı
             OutlinedTextField(
-                value = companyName, onValueChange = { companyName = it; showError = false },
-                label = { Text("Firma Adı") }, modifier = Modifier.fillMaxWidth(), singleLine = true
+                value = companyName,
+                onValueChange = { companyName = it; showError = false },
+                label = { Text("Firma Adı") },
+                leadingIcon = { Icon(Icons.Default.Business, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
             )
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Cihaz Tipi ve Modeli
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 OutlinedTextField(
-                    value = deviceType, onValueChange = { deviceType = it; showError = false },
-                    label = { Text("Cihaz Tipi") }, modifier = Modifier.weight(1f), singleLine = true
+                    value = deviceType,
+                    onValueChange = { deviceType = it; showError = false },
+                    label = { Text("Cihaz Tipi") },
+                    leadingIcon = { Icon(Icons.Default.Devices, contentDescription = null) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
-                    value = deviceModel, onValueChange = { deviceModel = it; showError = false },
-                    label = { Text("Cihaz Modeli") }, modifier = Modifier.weight(1f), singleLine = true
+                    value = deviceModel,
+                    onValueChange = { deviceModel = it; showError = false },
+                    label = { Text("Cihaz Modeli") },
+                    leadingIcon = { Icon(Icons.Default.PhoneAndroid, contentDescription = null) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
 
+            // Seri No
             OutlinedTextField(
-                value = serialNumber, onValueChange = { serialNumber = it; showError = false },
-                label = { Text("Seri No") }, modifier = Modifier.fillMaxWidth(), singleLine = true
+                value = serialNumber,
+                onValueChange = { serialNumber = it; showError = false },
+                label = { Text("Seri No") },
+                leadingIcon = { Icon(Icons.Default.QrCode, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
             )
 
+            // Lokasyon
             OutlinedTextField(
-                value = location, onValueChange = { location = it; showError = false },
-                label = { Text("Lokasyon") }, modifier = Modifier.fillMaxWidth(), singleLine = true
+                value = location,
+                onValueChange = { location = it; showError = false },
+                label = { Text("Lokasyon") },
+                leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
             )
 
-            Text("Öncelik", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                priorities.forEach { priority ->
-                    FilterChip(
-                        selected = selectedPriority == priority,
-                        onClick = { selectedPriority = priority },
-                        label = { Text(priority) }
-                    )
+            // Öncelik Seçimi (Renk Kodlu AssistChip / FilterChip)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Öncelik Seviyesi",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    priorities.forEach { priority ->
+                        val isSelected = selectedPriority == priority
+
+                        // Önceliğe göre dinamik renkler (Yüksek -> Kırmızı, Orta -> Turuncu, Düşük -> Yeşil)
+                        val priorityColor = when (priority) {
+                            "Yüksek" -> Color(0xFFC62828)
+                            "Orta" -> Color(0xFFEF6C00)
+                            else -> Color(0xFF2E7D32)
+                        }
+
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedPriority = priority },
+                            label = { Text(priority, fontWeight = FontWeight.Medium) },
+                            leadingIcon = if (isSelected) {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize), tint = priorityColor) }
+                            } else null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = priorityColor.copy(alpha = 0.15f),
+                                selectedLabelColor = priorityColor
+                            )
+                        )
+                    }
                 }
             }
 
+            // Arıza Açıklaması
             OutlinedTextField(
-                value = issueDescription, onValueChange = { issueDescription = it; showError = false },
-                label = { Text("Arıza Açıklaması") }, modifier = Modifier.fillMaxWidth(),
-                minLines = 3, maxLines = 5
+                value = issueDescription,
+                onValueChange = { issueDescription = it; showError = false },
+                label = { Text("Arıza Açıklaması") },
+                leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                maxLines = 5,
+                shape = RoundedCornerShape(12.dp)
             )
 
             if (showError) {
-                Text(text = "Lütfen tüm alanları doldurun.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = "Lütfen tüm alanları eksiksiz doldurun.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
+            // Kaydet Butonu (Mevcut mantığı korur)
             Button(
                 onClick = {
                     if (companyName.isBlank() || deviceType.isBlank() || deviceModel.isBlank() ||
                         serialNumber.isBlank() || location.isBlank() || issueDescription.isBlank()) {
                         showError = true
                     } else {
-                        // Otomatik Tarih Oluşturma
                         val currentDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())
 
                         val newRecord = ServiceRecord(
@@ -123,16 +192,20 @@ fun AddServiceScreen(
                             location = location.trim(),
                             priority = selectedPriority,
                             issueDescription = issueDescription.trim(),
-                            status = ServiceStatus.BEKLIYOR, // Otomatik Bekliyor
-                            date = currentDate // Otomatik Tarih
+                            status = ServiceStatus.BEKLIYOR,
+                            date = currentDate
                         )
                         viewModel.insertRecord(newRecord)
-                        onNavigateBack() // Dashboard'a dön
+                        onNavigateBack()
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
+                Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Kaydet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         }

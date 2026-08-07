@@ -95,7 +95,13 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             _selectedRecord.value = _selectedRecord.value?.copy(status = newStatus)
         }
     }
+
+    // Düzenleme ekranı için ID'ye göre tekil kayıt getirme (suspend kaldırıldı)
+    suspend fun getServiceById(id: Int): ServiceRecord? {
+        return repository.getServiceById(id)
+    }
 }
+
 
 // Çökme sorununu engelleyen Factory sınıfımız
 class ServiceViewModelFactory(private val repository: ServiceRepository) : ViewModelProvider.Factory {

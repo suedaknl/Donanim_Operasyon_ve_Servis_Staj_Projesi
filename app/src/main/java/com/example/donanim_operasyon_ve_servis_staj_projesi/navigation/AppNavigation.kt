@@ -11,8 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavType // YENİ EKLENDİ
-import androidx.navigation.navArgument // YENİ EKLENDİ
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -22,7 +22,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.Pe
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.WelcomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home.HomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.AddServiceScreen
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceDetailScreen // YENİ EKLENDİ
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceDetailScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.StandaloneUserFormScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.AddPersonnelScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelListScreen
@@ -94,7 +94,6 @@ fun AppNavigation() {
 
         // --- ADMIN HOME EKRANI ---
         composable("home") {
-            // StateFlow verisi Shared ViewModel'den okunur
             val serviceList by sharedServiceViewModel.serviceRecords.collectAsState()
 
             HomeScreen(
@@ -102,7 +101,9 @@ fun AppNavigation() {
                 searchQuery = sharedServiceViewModel.searchQuery,
                 onSearchQueryChange = { sharedServiceViewModel.updateSearchQuery(it) },
                 selectedFilter = sharedServiceViewModel.selectedFilter,
-                onFilterSelected = { sharedServiceViewModel.updateSelectedFilter(it) },
+                onFilterSelected = { filterValue ->
+                    sharedServiceViewModel.updateSelectedFilter(filterValue ?: "")
+                },
                 onNavigateToPersonnel = {
                     navController.navigate("personnel_list")
                 },
@@ -110,7 +111,6 @@ fun AppNavigation() {
                     navController.navigate("add_service")
                 },
                 onServiceClick = { service ->
-                    // GÜNCELLENDİ: Gerçek detay ekranına yönlendirme
                     navController.navigate("service_detail/${service.id}")
                 },
                 onLogOut = {
@@ -121,7 +121,6 @@ fun AppNavigation() {
             )
         }
 
-        // --- İŞ EMRİ DETAY ROTASI (YENİ EKLENDİ) ---
         composable(
             route = "service_detail/{serviceId}",
             arguments = listOf(navArgument("serviceId") { type = NavType.IntType })
@@ -133,23 +132,17 @@ fun AppNavigation() {
                 serviceId = serviceId,
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onNavigateToEdit = { id ->
+                    navController.navigate("add_service?serviceId=$id")
                 }
             )
         }
 
-        // --- İŞ EMRİ EKLEME ROTASI ---
-        composable("add_service") {
-            // Home ekranıyla tamamen aynı ViewModel instance'ı aktarılır
-            AddServiceScreen(
-                viewModel = sharedServiceViewModel,
-                onNavigateBack = {
-                    navController.popBackStack()
-                }
-            )
-        }
 
-// --- PERSONEL YÖNETİMİ ROUTE'LARI ---
+        // --- PERSONEL YÖNETİMİ ROUTE'LARI ---
         composable("personnel_list") {
+            // DÜZELTME: Factory eklendi, artık çökme olmayacak
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
 
             PersonnelListScreen(
@@ -160,7 +153,31 @@ fun AppNavigation() {
             )
         }
 
-        // Çökmeleri önlemek için güvenli String tabanlı argüman tanımı
+        // --- İŞ EMRİ EKLEME VE DÜZENLEME ROTASI ---
+        composable(
+            route = "add_service?serviceId={serviceId}",
+            arguments = listOf(
+                navArgument("serviceId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val serviceIdStr = backStackEntry.arguments?.getString("serviceId")
+            val actualServiceId = serviceIdStr?.toIntOrNull()
+
+            AddServiceScreen(
+                viewModel = sharedServiceViewModel,
+                serviceId = actualServiceId ?: -1,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+
+        }
+
+        // Çökmeleri önlemek için güvenli String tabanlı argüman tanımı (Ekleme ve Düzenleme için Tek Rota)
         composable(
             route = "add_personnel?personnelId={personnelId}",
             arguments = listOf(
@@ -178,40 +195,6 @@ fun AppNavigation() {
             AddPersonnelScreen(
                 viewModel = personnelViewModel,
                 personnelId = actualId,
-                onNavigateBack = {
-                    navController.popBackStack()
-                }
-            )
-        }
-
-        // Yeni Ekleme ve Düzenleme için Tek Rota (Opsiyonel Argüman)
-        composable(
-            route = "add_personnel?personnelId={personnelId}",
-            arguments = listOf(
-                navArgument("personnelId") {
-                    type = NavType.IntType
-                    defaultValue = -1 // ID gelmezse -1 (Yeni kayıt modu)
-                }
-            )
-        ) { backStackEntry ->
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
-            val personnelIdArg = backStackEntry.arguments?.getInt("personnelId") ?: -1
-            val actualId = if (personnelIdArg == -1) null else personnelIdArg
-
-            AddPersonnelScreen(
-                viewModel = personnelViewModel,
-                personnelId = actualId, // ID aktarıldı (Düzenleme veya Ekleme modu otomatik seçilecek)
-                onNavigateBack = {
-                    navController.popBackStack()
-                }
-            )
-        }
-
-        composable("add_personnel") {
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
-
-            AddPersonnelScreen(
-                viewModel = personnelViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }

@@ -24,4 +24,7 @@ interface ServiceDao {
 
     @Update
     suspend fun updateService(service: ServiceRecord)
+
+    @Query("SELECT * FROM service_records WHERE id = :id")
+    suspend fun getServiceById(id: Int): ServiceRecord?
 }

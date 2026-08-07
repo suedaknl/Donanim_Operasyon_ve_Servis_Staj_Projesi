@@ -25,4 +25,9 @@ class ServiceRepository(private val serviceDao: ServiceDao) {
     suspend fun updateService(service: ServiceRecord) {
         serviceDao.updateService(service)
     }
+
+    suspend fun getServiceById(id: Int): ServiceRecord? {
+        return serviceDao.getServiceById(id)
+    }
+
 }

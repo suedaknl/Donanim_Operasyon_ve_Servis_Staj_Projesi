@@ -1,5 +1,6 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,19 +8,18 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,179 +27,212 @@ fun HomeScreen(
     serviceList: List<ServiceRecord>,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    selectedFilter: String,
-    onFilterSelected: (String) -> Unit,
+    selectedFilter: String?,
+    onFilterSelected: (String?) -> Unit,
     onNavigateToPersonnel: () -> Unit,
     onNavigateToAddService: () -> Unit,
     onServiceClick: (ServiceRecord) -> Unit,
     onLogOut: () -> Unit
 ) {
-    var expandedMenu by remember { mutableStateOf(false) }
+    // Dashboard hesaplamaları (Arama/Filtreden bağımsız, tüm liste üzerinden hesaplanır)
+    val totalCount = serviceList.size
+    val pendingCount = serviceList.count { it.status == ServiceStatus.BEKLIYOR || it.status == ServiceStatus.PARCA_BEKLENIYOR }
+    val inProgressCount = serviceList.count { it.status == ServiceStatus.YOLDA || it.status == ServiceStatus.ISLEME_BASLANDI }
+    val completedCount = serviceList.count { it.status == ServiceStatus.TAMAMLANDI }
 
-    // 1. Güncellenmiş Filtreleme Mantığı
-    val filteredList = serviceList.filter { service ->
-        val matchesSearch = searchQuery.isBlank() ||
-                service.companyName.contains(searchQuery, ignoreCase = true) ||
-                service.deviceType.contains(searchQuery, ignoreCase = true) ||
-                service.serialNumber.contains(searchQuery, ignoreCase = true)
+// Arama ve filtrelemenin birlikte yapıldığı liste
+    val filteredList = serviceList.filter { record ->
 
+        // 1. Arama kontrolü (Büyük/küçük harf duyarsız ve boşluksuz)
+        val q = searchQuery.trim().lowercase()
+        val matchesSearch = if (q.isEmpty()) {
+            true
+        } else {
+            record.companyName.lowercase().contains(q) ||
+                    record.deviceType.lowercase().contains(q) ||
+                    record.deviceModel.lowercase().contains(q) ||
+                    record.serialNumber.lowercase().contains(q)
+        }
+
+        // 2. Kategori/Filtre kontrolü (Tüm varyasyonlar desteklendi)
         val matchesFilter = when (selectedFilter) {
-            "Bekleyen" -> service.status == "Bekliyor" || service.status == "Parça Bekleniyor"
-            "Devam Eden" -> service.status == "Yolda" || service.status == "İşleme Başlandı"
-            "Tamamlanan" -> service.status == "Tamamlandı"
-            else -> true // "Hepsi" ve diğer durumlar için
+            "Hepsi", "Tümü", "", null -> true
+            "Bekleyen" -> record.status == ServiceStatus.BEKLIYOR || record.status == ServiceStatus.PARCA_BEKLENIYOR
+            "Devam Eden" -> record.status == ServiceStatus.YOLDA || record.status == ServiceStatus.ISLEME_BASLANDI
+            "Tamamlanan" -> record.status == ServiceStatus.TAMAMLANDI
+            else -> record.status == selectedFilter
         }
 
         matchesSearch && matchesFilter
     }
 
-    // 2. Güncellenmiş Dashboard Sayaç Hesaplamaları
-    val totalCount = serviceList.size
-    val bekleyenCount = serviceList.count { it.status == "Bekliyor" || it.status == "Parça Bekleniyor" }
-    val devamEdenCount = serviceList.count { it.status == "Yolda" || it.status == "İşleme Başlandı" }
-    val tamamlananCount = serviceList.count { it.status == "Tamamlandı" }
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Aktif Operasyonlar (Admin)", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                ),
+                title = {
+                    Column {
+                        Text("Teknik Servis Paneli", fontWeight = FontWeight.Bold)
+                        Text("Yönetim ve Operasyon", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
                 actions = {
-                    IconButton(onClick = { expandedMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Menü")
+                    IconButton(onClick = onNavigateToPersonnel) {
+                        Icon(Icons.Default.Group, contentDescription = "Personel Yönetimi")
                     }
-
-                    DropdownMenu(
-                        expanded = expandedMenu,
-                        onDismissRequest = { expandedMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Personel Yönetimi") },
-                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Personel Yönetimi") },
-                            onClick = {
-                                expandedMenu = false
-                                onNavigateToPersonnel()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Çıkış Yap") },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Çıkış Yap") },
-                            onClick = {
-                                expandedMenu = false
-                                onLogOut()
-                            }
-                        )
+                    IconButton(onClick = onLogOut) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Çıkış Yap")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
+            ExtendedFloatingActionButton(
                 onClick = onNavigateToAddService,
-                containerColor = MaterialTheme.colorScheme.primary,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Yeni İş Emri")
-            }
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text("Yeni İş Emri") },
+                containerColor = MaterialTheme.colorScheme.primary
+            )
         }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                placeholder = { Text("Firma, cihaz veya seri no ara...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { onSearchQueryChange("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Temizle")
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(14.dp),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                )
+            )
 
-            // 3. Renkleri ve Değişkenleri Güncellenmiş Dashboard Kartları
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                DashboardCard(
-                    title = "Toplam",
-                    count = totalCount,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.weight(1f)
-                )
-                DashboardCard(
-                    title = "Bekleyen",
-                    count = bekleyenCount,
-                    containerColor = Color(0xFFFF9800), // Turuncu
-                    modifier = Modifier.weight(1f)
-                )
-                DashboardCard(
-                    title = "Devam Eden",
-                    count = devamEdenCount,
-                    containerColor = Color(0xFF2196F3), // Mavi
-                    modifier = Modifier.weight(1f)
-                )
-                DashboardCard(
-                    title = "Tamamlanan",
-                    count = tamamlananCount,
-                    containerColor = Color(0xFF4CAF50), // Yeşil
-                    modifier = Modifier.weight(1f)
-                )
+                item {
+                    DashboardCard(title = "Toplam", count = totalCount, color = MaterialTheme.colorScheme.primary, icon = Icons.Default.Dashboard)
+                }
+                item {
+                    DashboardCard(title = "Bekleyen", count = pendingCount, color = Color(0xFFE65100), icon = Icons.Default.HourglassEmpty)
+                }
+                item {
+                    DashboardCard(title = "Devam Eden", count = inProgressCount, color = Color(0xFF0277BD), icon = Icons.Default.Sync)
+                }
+                item {
+                    DashboardCard(title = "Tamamlanan", count = completedCount, color = Color(0xFF2E7D32), icon = Icons.Default.CheckCircle)
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchQueryChange,
-                placeholder = { Text("İş emri ara (Firma, Cihaz, Seri No)...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Ara") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // 4. Güncellenmiş Filtreleme Çipleri
-            val filters = listOf("Hepsi", "Bekleyen", "Devam Eden", "Tamamlanan")
             LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(filters) { filter ->
+                // Filtre grupları
+// Filtre grupları (null yerine doğrudan "Hepsi" gönderiyoruz)
+                val filters = listOf(
+                    "Hepsi" to "Hepsi",
+                    "Bekleyen" to "Bekleyen",
+                    "Devam Eden" to "Devam Eden",
+                    "Tamamlanan" to "Tamamlanan",
+                    ServiceStatus.IPTAL to ServiceStatus.IPTAL
+                )
+
+                items(filters) { (status, label) ->
+
+                    // Eğer label "Hepsi" ise; null, boş veya "Tümü" olma durumlarında da seçili görünsün
+                    val isSelected = if (label == "Hepsi") {
+                        selectedFilter.isNullOrEmpty() || selectedFilter == "Hepsi" || selectedFilter == "Tümü"
+                    } else {
+                        selectedFilter == status
+                    }
+
+                    val chipColor = when (label) {
+                        "Bekleyen" -> Color(0xFFE65100)
+                        "Devam Eden" -> Color(0xFF0277BD)
+                        "Tamamlanan" -> Color(0xFF2E7D32)
+                        ServiceStatus.IPTAL -> Color(0xFFC62828)
+                        else -> MaterialTheme.colorScheme.primary
+                    }
+
                     FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = { onFilterSelected(filter) },
-                        label = { Text(filter) }
+                        selected = isSelected,
+                        onClick = { onFilterSelected(status) }, // Artık null değil "Hepsi" gidiyor
+                        label = {
+                            Text(
+                                label,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        leadingIcon = if (isSelected) {
+                            {
+                                Icon(
+                                    Icons.Default.Done,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                    tint = chipColor
+                                )
+                            }
+                        } else null,
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = chipColor.copy(alpha = 0.15f),
+                            selectedLabelColor = chipColor
+                        )
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
+            // Ham serviceList yerine filteredList kullanılıyor
             if (filteredList.isEmpty()) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                        .fillMaxSize()
+                        .padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "Kayıtlı iş emri bulunamadı.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Inbox, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outline)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Kayıtlı iş emri bulunamadı.", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodyLarge)
+                    }
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                        .weight(1f)
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
-                    items(filteredList) { service ->
-                        ServiceItemCard(
-                            service = service,
-                            onClick = { onServiceClick(service) }
-                        )
+                    items(filteredList) { record ->
+                        ServiceCardItem(record = record, onClick = { onServiceClick(record) })
                     }
                 }
             }
@@ -208,49 +241,56 @@ fun HomeScreen(
 }
 
 @Composable
-fun DashboardCard(title: String, count: Int, containerColor: Color, modifier: Modifier = Modifier) {
-    ElevatedCard(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = containerColor),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+fun DashboardCard(title: String, count: Int, color: Color, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Card(
+        modifier = Modifier.width(110.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.12f))
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp, horizontal = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(12.dp)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = if (containerColor != MaterialTheme.colorScheme.primaryContainer) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = if (containerColor != MaterialTheme.colorScheme.primaryContainer) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+            Text(text = count.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = color)
+            Text(text = title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
 @Composable
-fun ServiceItemCard(service: ServiceRecord, onClick: () -> Unit) {
-    ElevatedCard(
+fun ServiceCardItem(record: ServiceRecord, onClick: () -> Unit) {
+    val statusColor = when (record.status) {
+        ServiceStatus.BEKLIYOR -> Color(0xFFE65100)
+        ServiceStatus.YOLDA -> Color(0xFFEF6C00)
+        ServiceStatus.ISLEME_BASLANDI -> Color(0xFF0277BD)
+        ServiceStatus.PARCA_BEKLENIYOR -> Color(0xFF7B1FA2)
+        ServiceStatus.TAMAMLANDI -> Color(0xFF2E7D32)
+        ServiceStatus.IPTAL -> Color(0xFFC62828)
+        else -> Color.Gray
+    }
+
+    val priorityColor = when (record.priority) {
+        "Yüksek" -> Color(0xFFC62828)
+        "Orta" -> Color(0xFFEF6C00)
+        else -> Color(0xFF2E7D32)
+    }
+
+    Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -258,38 +298,60 @@ fun ServiceItemCard(service: ServiceRecord, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = service.companyName,
+                    text = record.companyName,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
 
-                // 5. Liste Öğelerindeki Rozet Renklerinin Yeni Durumlara Göre Eşlenmesi
-                val badgeColor = when (service.status) {
-                    "Bekliyor" -> Color(0xFFFF9800)
-                    "Yolda" -> Color(0xFF2196F3)
-                    "İşleme Başlandı" -> Color(0xFF9C27B0)
-                    "Parça Bekleniyor" -> Color(0xFFFBC02D)
-                    "Tamamlandı" -> Color(0xFF4CAF50)
-                    "İptal" -> Color(0xFFF44336)
-                    else -> Color.Gray
-                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = statusColor.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = record.status,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = statusColor,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
 
-                Surface(
-                    color = badgeColor,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = service.status,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = priorityColor.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = record.priority,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = priorityColor,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Cihaz: ${service.deviceType} (${service.deviceModel})", style = MaterialTheme.typography.bodyMedium)
-            Text(text = "Seri No: ${service.serialNumber}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "${record.deviceType} - ${record.deviceModel}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = record.date,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
         }
     }
 }

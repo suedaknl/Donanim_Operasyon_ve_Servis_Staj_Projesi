@@ -24,7 +24,8 @@ import kotlinx.coroutines.launch
 fun ServiceDetailScreen(
     viewModel: ServiceViewModel,
     serviceId: Int,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToEdit: (Int) -> Unit
 ) {
     val serviceList by viewModel.serviceRecords.collectAsState()
     val service = serviceList.find { it.id == serviceId }
@@ -159,7 +160,7 @@ fun ServiceDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedButton(
-                    onClick = { /* Düzenle İşlevi Sonra Eklenecek */ },
+                    onClick = { onNavigateToEdit(service.id) },
                     modifier = Modifier.weight(1f).height(50.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -211,12 +212,10 @@ fun ServiceDetailScreen(
                 Button(
                     onClick = {
                         if (selectedStatus == service.status) {
-                            // Durum aynıysa güncelleme yapma, sadece mesaj ver
                             coroutineScope.launch {
                                 snackbarHostState.showSnackbar("İş emrinin durumu zaten aynı.")
                             }
                         } else {
-                            // Farklı bir durum seçildiyse güncelle
                             val updatedRecord = service.copy(status = selectedStatus)
                             viewModel.updateRecord(updatedRecord)
 
@@ -224,7 +223,7 @@ fun ServiceDetailScreen(
                                 snackbarHostState.showSnackbar("İş emri durumu güncellendi.")
                             }
                         }
-                        showStatusDialog = false // İşlem bitince diyaloğu kapat
+                        showStatusDialog = false
                     }
                 ) {
                     Text("Kaydet")
