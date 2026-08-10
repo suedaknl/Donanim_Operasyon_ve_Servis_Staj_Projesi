@@ -33,7 +33,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelV
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModelFactory
-
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.camera.CameraScreen
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -129,21 +129,31 @@ fun AppNavigation() {
             )
         }
 
-        // Admin Detay Rotası
-        composable(
-            route = "service_detail/{serviceId}",
-            arguments = listOf(navArgument("serviceId") { type = NavType.IntType })
-        ) { backStackEntry ->
-            val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: return@composable
+        // --- ADMIN DETAY ROTASI (GÜNCELLENDİ) ---
+        composable("service_detail/{serviceId}") { backStackEntry ->
+            val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
+
+            // Admin ekranından da kamera/fotoğraf verisini dinleyebilmesi için eklendi
+            val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>("photo_uri", null).collectAsState()
+
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
 
             ServiceDetailScreen(
                 viewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
                 serviceId = serviceId,
-                personnelId = null, // Admin modunda personel ID null geçer
+                personnelId = null, // Admin için null olmalı
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToEdit = { id -> navController.navigate("add_service?serviceId=$id") }
+                onNavigateToEdit = { id -> navController.navigate("edit_service/$id") }, // (Senin düzenleme rotan neyse o kalabilir)
+
+                // KİTLENMEYİ ÖNLEMEK İÇİN BU PARAMETRELER ADMIN ROTASINA DA EKLENDİ:
+                returnedPhotoUri = returnedPhotoUri,
+                onPhotoSaved = {
+                    backStackEntry.savedStateHandle.remove<String>("photo_uri")
+                },
+                onNavigateToCamera = {
+                    navController.navigate("camera")
+                }
             )
         }
 
@@ -219,26 +229,46 @@ fun AppNavigation() {
                 }
             )
         }
-
-        // YENİ: Personel Güvenli Detay Ekranı Rotası
-        composable(
-            route = "personnel_service_detail/{serviceId}/{personnelId}",
-            arguments = listOf(
-                navArgument("serviceId") { type = NavType.IntType },
-                navArgument("personnelId") { type = NavType.IntType }
+// --- 2. CAMERA ROTASI GÜNCELLEMESİ ---
+        composable("camera") {
+            CameraScreen(
+                onPhotoCaptured = { uri ->
+                    // Fotoğraf çekildiğinde URI'yi bir önceki ekrana (Detail) parametre olarak gönder
+                    navController.previousBackStackEntry?.savedStateHandle?.set("photo_uri", uri)
+                    navController.popBackStack()
+                },
+                onCancel = {
+                    navController.popBackStack()
+                }
             )
-        ) { backStackEntry ->
-            val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: return@composable
-            val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: return@composable
+        }
+
+        composable("personnel_service_detail/{serviceId}") { backStackEntry ->
+            val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
+
+            val returnedPhotoUri = backStackEntry.savedStateHandle.get<String>("photo_uri")
+
+            // EKSİK OLAN TANIMLAMA BURAYA EKLENDİ
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
 
             ServiceDetailScreen(
                 viewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
                 serviceId = serviceId,
-                personnelId = personnelId, // Personel ID gönderilerek güvenlik kontrolü tetiklenir
+
+                // TEMSİLİ İSİM YERİNE KENDİ DEĞİŞKENİNİ VEYA TEST İÇİN SABİT BİR SAYI YAZ
+                personnelId = 1, // Kendi değişkenin varsa (örneğin activePersonnelId) onu yaz.
+
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToEdit = { /* Personel düzenleme yapamaz */ }
+                onNavigateToEdit = { /* Personelin düzenleme yetkisi yok */ },
+
+                returnedPhotoUri = returnedPhotoUri,
+                onPhotoSaved = {
+                    backStackEntry.savedStateHandle.remove<String>("photo_uri")
+                },
+                onNavigateToCamera = {
+                    navController.navigate("camera")
+                }
             )
         }
     }

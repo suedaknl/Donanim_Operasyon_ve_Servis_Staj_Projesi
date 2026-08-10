@@ -9,9 +9,10 @@ import androidx.room.RoomDatabase
     entities = [
         ServiceRecord::class,
         Personnel::class,
-        ServiceNote::class // YENİ EKLENEN: Servis Notları tablosu eklendi
+        ServiceNote::class,
+        ServicePhoto::class // YENİ: Fotoğraf tablosu eklendi
     ],
-    version = 5, // Versiyon 4'ten 5'e güncellendi
+    version = 6, // Versiyon 5'ten 6'ya güncellendi
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

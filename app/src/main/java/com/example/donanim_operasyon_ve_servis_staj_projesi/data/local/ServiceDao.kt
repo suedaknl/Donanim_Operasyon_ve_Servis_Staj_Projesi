@@ -46,5 +46,21 @@ interface ServiceDao {
         WHERE serviceRecordId = :serviceRecordId 
         ORDER BY createdAt DESC
     """)
-    fun getNotesForService(serviceRecordId: Int): Flow<List<ServiceNote>>
+    fun getNotesForService(serviceRecordId: Int): Flow<List<ServiceNote>> // EKSİK OLAN SATIR BURASIYDI!
+
+    // --- FAZ 2.5 İÇİN EKLENEN FOTOĞRAF METOTLARI ---
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertServicePhoto(photo: ServicePhoto)
+
+    @Query("""
+        SELECT * FROM service_photos 
+        WHERE serviceRecordId = :serviceRecordId 
+        ORDER BY timestamp DESC
+    """)
+    fun getPhotosForService(serviceRecordId: Int): Flow<List<ServicePhoto>>
+
+    // DİKKAT: Buradaki @Delete anotasyonu ve suspend fun yapısı aynen bu şekilde olmalı.
+    @Delete
+    suspend fun deleteServicePhoto(photo: ServicePhoto)
 }

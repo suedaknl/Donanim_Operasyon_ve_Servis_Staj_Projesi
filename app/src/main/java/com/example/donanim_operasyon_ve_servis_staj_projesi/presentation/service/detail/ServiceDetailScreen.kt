@@ -1,8 +1,10 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,20 +14,30 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePhoto
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.PhotoCategory
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,19 +47,23 @@ fun ServiceDetailScreen(
     serviceId: Int,
     personnelId: Int? = null,
     onNavigateBack: () -> Unit,
-    onNavigateToEdit: (Int) -> Unit
+    onNavigateToEdit: (Int) -> Unit,
+    returnedPhotoUri: String? = null,
+    onPhotoSaved: () -> Unit = {},
+    onNavigateToCamera: () -> Unit = {}
 ) {
     // --- Lifecycle / ViewModel Veri Yükleme ---
     LaunchedEffect(serviceId) {
         viewModel.loadServiceNotes(serviceId)
+        viewModel.loadServicePhotos(serviceId)
     }
 
     val serviceRecords by viewModel.serviceRecords.collectAsState()
     val service = serviceRecords.find { it.id == serviceId }
 
     val personnelList by personnelViewModel.personnelList.collectAsState()
-
     val serviceNotes by viewModel.serviceNotes.collectAsState()
+    val servicePhotos by viewModel.servicePhotos.collectAsState()
 
     var showAssignDialog by remember { mutableStateOf(false) }
     var showStatusDialog by remember { mutableStateOf(false) }
@@ -57,11 +73,30 @@ fun ServiceDetailScreen(
     var newNoteText by remember { mutableStateOf("") }
     var noteError by remember { mutableStateOf(false) }
 
-    // --- YENİ: Admin not detayı diyalog state'i ---
+    var showCategoryDialog by remember { mutableStateOf(false) }
+    var pendingCategory by rememberSaveable { mutableStateOf("") }
+
     var selectedNoteForDialog by remember { mutableStateOf<ServiceNote?>(null) }
+    var selectedImageUri by remember { mutableStateOf<String?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+
+    // --- Kamera'dan dönen URI'yi yakalayıp kaydetme ---
+    LaunchedEffect(returnedPhotoUri) {
+        if (returnedPhotoUri != null && pendingCategory.isNotEmpty()) {
+            val photo = ServicePhoto(
+                serviceRecordId = serviceId,
+                personnelId = personnelId ?: 0,
+                photoType = pendingCategory,
+                localUri = returnedPhotoUri,
+                timestamp = System.currentTimeMillis()
+            )
+            viewModel.addServicePhoto(photo)
+            pendingCategory = ""
+            onPhotoSaved()
+        }
+    }
 
     if (service == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -98,6 +133,11 @@ fun ServiceDetailScreen(
         "Atanmadı"
     }
 
+    val canAddPhoto = personnelId != null &&
+            service.assignedPersonnelId == personnelId &&
+            service.status != ServiceStatus.TAMAMLANDI &&
+            service.status != ServiceStatus.IPTAL
+
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
@@ -122,10 +162,7 @@ fun ServiceDetailScreen(
         ) {
 
             // --- BİLGİ KARTI ---
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
+            ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(text = "İş No: #${service.id}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     Text(text = "Firma: ${service.companyName}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -229,7 +266,6 @@ fun ServiceDetailScreen(
                         )
                     } else {
                         if (personnelId == null) {
-                            // --- YENİ: ADMIN SERVİS NOTLARI GÖRÜNÜMÜ ---
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 serviceNotes.forEach { note ->
                                     val dateStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(note.createdAt))
@@ -267,7 +303,6 @@ fun ServiceDetailScreen(
                                 }
                             }
                         } else {
-                            // --- MEVCUT: PERSONEL SERVİS NOTLARI GÖRÜNÜMÜ (Değiştirilmedi) ---
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 serviceNotes.forEach { note ->
                                     Surface(
@@ -289,6 +324,66 @@ fun ServiceDetailScreen(
                                             }
                                             Spacer(modifier = Modifier.height(6.dp))
                                             Text(text = note.note, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- SERVİS FOTOĞRAFLARI KARTI ---
+            ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Servis Fotoğrafları", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
+                        if (canAddPhoto) {
+                            TextButton(onClick = { showCategoryDialog = true }) {
+                                Icon(Icons.Default.Add, contentDescription = "Fotoğraf Ekle")
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Fotoğraf Ekle")
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    if (servicePhotos.isEmpty()) {
+                        Text(
+                            text = "Henüz fotoğraf eklenmemiş.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        val groupedPhotos = servicePhotos.groupBy { it.photoType }
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            groupedPhotos.forEach { (category, photos) ->
+                                Column {
+                                    Text(
+                                        text = category,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        items(photos) { photo ->
+                                            AsyncImage(
+                                                model = photo.localUri,
+                                                contentDescription = "Servis Fotoğrafı",
+                                                modifier = Modifier
+                                                    .size(100.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clickable { selectedImageUri = photo.localUri }, // <-- Tıklama özelliği eklendi
+                                                contentScale = ContentScale.Crop
+                                            )
                                         }
                                     }
                                 }
@@ -376,7 +471,89 @@ fun ServiceDetailScreen(
 
     // --- DİYALOGLAR ---
 
-    // YENİ: ADMIN İÇİN SEÇİLİ NOT DETAYI DİYALOĞU
+    // FOTOĞRAF KATEGORİSİ SEÇİM DİYALOĞU
+    if (showCategoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showCategoryDialog = false },
+            title = { Text("Fotoğraf Kategorisi", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    PhotoCategory.values().forEach { category ->
+                        TextButton(
+                            onClick = {
+                                pendingCategory = category.name
+                                showCategoryDialog = false
+                                onNavigateToCamera()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(category.name, textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCategoryDialog = false }) {
+                    Text("İptal", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        )
+    }
+
+    // FOTOĞRAFI BÜYÜTME (TAM EKRAN) DİYALOĞU
+    selectedImageUri?.let { uri ->
+        Dialog(
+            onDismissRequest = { selectedImageUri = null },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.9f))
+                    .clickable { selectedImageUri = null },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(
+                            onClick = { selectedImageUri = null },
+                            modifier = Modifier
+                                .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(50))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Kapat",
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = "Büyük Servis Fotoğrafı",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(8.dp),
+                        contentScale = ContentScale.Fit
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
+            }
+        }
+    }
+
     selectedNoteForDialog?.let { note ->
         val dateStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(note.createdAt))
         val noteWriterName = personnelList.find { it.id == note.personnelId }?.fullName ?: "Personel ID: ${note.personnelId}"
@@ -416,7 +593,6 @@ fun ServiceDetailScreen(
         )
     }
 
-    // NOT EKLEME DİYALOĞU
     if (showAddNoteDialog) {
         AlertDialog(
             onDismissRequest = {
@@ -485,7 +661,6 @@ fun ServiceDetailScreen(
         )
     }
 
-    // PERSONEL ATA DİYALOĞU
     if (showAssignDialog) {
         var selectedPersonnelId by remember { mutableStateOf(service.assignedPersonnelId) }
         val activePersonnelList = personnelList.filter { it.isActive }
@@ -537,7 +712,6 @@ fun ServiceDetailScreen(
         )
     }
 
-    // DURUM GÜNCELLE DİYALOĞU
     if (showStatusDialog) {
         val availableStatuses = if (personnelId == null) {
             ServiceStatus.all
@@ -611,7 +785,6 @@ fun ServiceDetailScreen(
         )
     }
 
-    // SİLME ONAY DİYALOĞU
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },

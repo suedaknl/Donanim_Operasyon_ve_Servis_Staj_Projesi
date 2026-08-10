@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePhoto
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import kotlinx.coroutines.Dispatchers
@@ -35,14 +36,17 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     private val _serviceNotes = MutableStateFlow<List<ServiceNote>>(emptyList())
     val serviceNotes: StateFlow<List<ServiceNote>> = _serviceNotes.asStateFlow()
 
+    // --- FAZ 2.5: FOTOĞRAF STATE ---
+    private val _servicePhotos = MutableStateFlow<List<ServicePhoto>>(emptyList())
+    val servicePhotos: StateFlow<List<ServicePhoto>> = _servicePhotos.asStateFlow()
+
     private var notesJob: Job? = null
+    private var photosJob: Job? = null // YENİ: Fotoğraf dinleme job'ı
 
     // Reaktif Filtre StateFlow'ları
     private val _searchQueryFlow = MutableStateFlow("")
     private val _selectedFilterFlow = MutableStateFlow("Hepsi")
     private val _selectedPriorityFilterFlow = MutableStateFlow("Hepsi")
-
-    // YENİ: Admin UI için Sekme (Tab) StateFlow'u
     private val _selectedTabFlow = MutableStateFlow("Tümü")
 
     // UI State'leri
@@ -55,7 +59,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     var selectedPriorityFilter by mutableStateOf("Hepsi")
         private set
 
-    // YENİ: Admin UI için Sekme State'i
     var selectedTab by mutableStateOf("Tümü")
         private set
 
@@ -219,9 +222,43 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             }
         }
     }
+
+    // --- FAZ 2.5: FOTOĞRAF İŞLEMLERİ ---
+
+    fun loadServicePhotos(serviceRecordId: Int) {
+        photosJob?.cancel()
+        photosJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.getPhotosForService(serviceRecordId).collect { photos ->
+                    _servicePhotos.value = photos
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun addServicePhoto(photo: ServicePhoto) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.insertServicePhoto(photo)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun deleteServicePhoto(photo: ServicePhoto) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.deleteServicePhoto(photo)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 }
 
-// FABRİKA SINIFI (HATANIN KAYNAĞI BURASIYDI, ŞİMDİ DOSYANIN İÇİNDE GÜVENDE)
 class ServiceViewModelFactory(private val repository: ServiceRepository) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
         if (modelClass.isAssignableFrom(ServiceViewModel::class.java)) {

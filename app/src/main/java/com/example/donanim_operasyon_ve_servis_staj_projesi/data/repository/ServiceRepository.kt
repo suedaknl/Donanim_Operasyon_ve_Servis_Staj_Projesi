@@ -4,6 +4,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceDa
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import kotlinx.coroutines.flow.Flow
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePhoto
 
 class ServiceRepository(private val serviceDao: ServiceDao) {
 
@@ -48,5 +49,20 @@ class ServiceRepository(private val serviceDao: ServiceDao) {
 
     fun getNotesForService(serviceRecordId: Int): Flow<List<ServiceNote>> {
         return serviceDao.getNotesForService(serviceRecordId)
+    }
+    // ... mevcut repository fonksiyonları
+
+    // --- FAZ 2.5 İÇİN EKLENEN FOTOĞRAF FONKSİYONLARI ---
+
+    suspend fun insertServicePhoto(photo: ServicePhoto) {
+        serviceDao.insertServicePhoto(photo)
+    }
+
+    fun getPhotosForService(serviceRecordId: Int): Flow<List<ServicePhoto>> {
+        return serviceDao.getPhotosForService(serviceRecordId)
+    }
+
+    suspend fun deleteServicePhoto(photo: ServicePhoto) {
+        serviceDao.deleteServicePhoto(photo)
     }
 }
