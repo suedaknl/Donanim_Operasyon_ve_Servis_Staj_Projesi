@@ -31,8 +31,8 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModelFactory
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModelFactory
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModelFactory
 
 @Composable
 fun AppNavigation() {
@@ -91,16 +91,34 @@ fun AppNavigation() {
             )
         }
 
+        // AppNavigation.kt içindeki composable("home") bloğunu bununla değiştirin:
+
         composable("home") {
-            val serviceList by sharedServiceViewModel.serviceRecords.collectAsState()
+            val serviceList by sharedServiceViewModel.filteredServiceRecords.collectAsState()
+
+            // YENİ: Personel isimlerini bulabilmek için listeyi Home'a aktarıyoruz
+            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelList by personnelViewModel.personnelList.collectAsState()
 
             HomeScreen(
                 serviceList = serviceList,
+                personnelList = personnelList, // Yeni Parametre
+                selectedTab = sharedServiceViewModel.selectedTab, // Yeni Parametre
+                onTabSelected = { sharedServiceViewModel.updateSelectedTab(it) }, // Yeni Parametre
                 searchQuery = sharedServiceViewModel.searchQuery,
                 onSearchQueryChange = { sharedServiceViewModel.updateSearchQuery(it) },
                 selectedFilter = sharedServiceViewModel.selectedFilter,
                 onFilterSelected = { filterValue ->
-                    sharedServiceViewModel.updateSelectedFilter(filterValue ?: "")
+                    sharedServiceViewModel.updateSelectedFilter(filterValue ?: "Hepsi")
+                },
+                selectedPriority = sharedServiceViewModel.selectedPriorityFilter,
+                onPrioritySelected = { priorityValue ->
+                    sharedServiceViewModel.updateSelectedPriorityFilter(priorityValue)
+                },
+                onClearFilters = {
+                    sharedServiceViewModel.updateSearchQuery("")
+                    sharedServiceViewModel.updateSelectedFilter("Hepsi")
+                    sharedServiceViewModel.updateSelectedPriorityFilter("Hepsi")
                 },
                 onNavigateToPersonnel = { navController.navigate("personnel_list") },
                 onNavigateToAddService = { navController.navigate("add_service") },
