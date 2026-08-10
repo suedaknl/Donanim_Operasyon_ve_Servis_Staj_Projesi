@@ -16,11 +16,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,14 +37,28 @@ fun ServiceDetailScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit
 ) {
+    // --- Lifecycle / ViewModel Veri Yükleme ---
+    LaunchedEffect(serviceId) {
+        viewModel.loadServiceNotes(serviceId)
+    }
+
     val serviceRecords by viewModel.serviceRecords.collectAsState()
     val service = serviceRecords.find { it.id == serviceId }
 
     val personnelList by personnelViewModel.personnelList.collectAsState()
 
+    val serviceNotes by viewModel.serviceNotes.collectAsState()
+
     var showAssignDialog by remember { mutableStateOf(false) }
     var showStatusDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    var showAddNoteDialog by remember { mutableStateOf(false) }
+    var newNoteText by remember { mutableStateOf("") }
+    var noteError by remember { mutableStateOf(false) }
+
+    // --- YENİ: Admin not detayı diyalog state'i ---
+    var selectedNoteForDialog by remember { mutableStateOf<ServiceNote?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -51,7 +70,6 @@ fun ServiceDetailScreen(
         return
     }
 
-    // GÜVENLİK KONTROLÜ: Personel başka bir personelin işine erişemez
     if (personnelId != null && service.assignedPersonnelId != personnelId) {
         Box(
             modifier = Modifier
@@ -136,7 +154,6 @@ fun ServiceDetailScreen(
                     Text("Planlanan Ziyaret: ${service.plannedDate ?: "Belirtilmedi"}")
                     Text("Öncelik: ${service.priority}", color = MaterialTheme.colorScheme.error)
 
-                    // MEVCUT DURUM BİLGİSİ
                     Spacer(modifier = Modifier.height(4.dp))
                     Surface(
                         color = MaterialTheme.colorScheme.tertiaryContainer,
@@ -151,7 +168,6 @@ fun ServiceDetailScreen(
                         )
                     }
 
-                    // ATANAN PERSONEL BİLGİSİ
                     Spacer(modifier = Modifier.height(4.dp))
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,
@@ -180,10 +196,111 @@ fun ServiceDetailScreen(
                 }
             }
 
+            // --- SERVİS NOTLARI BÖLÜMÜ ---
+            ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Servis Notları", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
+                        if (personnelId != null &&
+                            service.assignedPersonnelId == personnelId &&
+                            service.status != ServiceStatus.TAMAMLANDI &&
+                            service.status != ServiceStatus.IPTAL
+                        ) {
+                            TextButton(onClick = { showAddNoteDialog = true }) {
+                                Icon(Icons.Default.Add, contentDescription = "Not Ekle")
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Not Ekle")
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (serviceNotes.isEmpty()) {
+                        Text(
+                            text = "Henüz servis notu eklenmemiş.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        if (personnelId == null) {
+                            // --- YENİ: ADMIN SERVİS NOTLARI GÖRÜNÜMÜ ---
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                serviceNotes.forEach { note ->
+                                    val dateStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(note.createdAt))
+                                    val noteWriterName = personnelList.find { it.id == note.personnelId }?.fullName ?: "Personel ID: ${note.personnelId}"
+
+                                    ElevatedCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { selectedNoteForDialog = note },
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.PersonOutline, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(text = noteWriterName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                }
+                                                Text(text = dateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = note.note,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // --- MEVCUT: PERSONEL SERVİS NOTLARI GÖRÜNÜMÜ (Değiştirilmedi) ---
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                serviceNotes.forEach { note ->
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            val dateStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(note.createdAt))
+                                            val noteWriterName = personnelList.find { it.id == note.personnelId }?.fullName ?: "Personel ID: ${note.personnelId}"
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(text = noteWriterName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                Text(text = dateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(text = note.note, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // --- BUTONLAR BÖLÜMÜ ---
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (personnelId == null) {
-                    // --- ADMIN GÖRÜNÜMÜ ---
                     Button(
                         onClick = { showAssignDialog = true },
                         modifier = Modifier.fillMaxWidth(),
@@ -225,8 +342,6 @@ fun ServiceDetailScreen(
                         }
                     }
                 } else {
-                    // --- PERSONEL GÖRÜNÜMÜ (FAZ 2.2 SAHA AKIŞI) ---
-                    // Eğer durum TAMAMLANDI veya IPTAL ise durum güncelleme butonu gizlenir (kilitlenir)
                     val isLocked = service.status == ServiceStatus.TAMAMLANDI || service.status == ServiceStatus.IPTAL
 
                     if (!isLocked) {
@@ -261,7 +376,116 @@ fun ServiceDetailScreen(
 
     // --- DİYALOGLAR ---
 
-    // 1. PERSONEL ATA DİYALOĞU (Admin)
+    // YENİ: ADMIN İÇİN SEÇİLİ NOT DETAYI DİYALOĞU
+    selectedNoteForDialog?.let { note ->
+        val dateStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(note.createdAt))
+        val noteWriterName = personnelList.find { it.id == note.personnelId }?.fullName ?: "Personel ID: ${note.personnelId}"
+
+        AlertDialog(
+            onDismissRequest = { selectedNoteForDialog = null },
+            title = { Text("Servis Notu Detayı", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = noteWriterName, fontWeight = FontWeight.Medium)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = dateStr, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    HorizontalDivider()
+                    Text(
+                        text = note.note,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedNoteForDialog = null }) {
+                    Text("Kapat")
+                }
+            }
+        )
+    }
+
+    // NOT EKLEME DİYALOĞU
+    if (showAddNoteDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAddNoteDialog = false
+                newNoteText = ""
+                noteError = false
+            },
+            title = { Text("Servis Notu Ekle", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = newNoteText,
+                        onValueChange = {
+                            newNoteText = it
+                            noteError = false
+                        },
+                        placeholder = { Text("Yapılan işlem, gözlem veya servis notunu girin...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        maxLines = 5,
+                        isError = noteError
+                    )
+                    if (noteError) {
+                        Text(
+                            text = "Not boş bırakılamaz.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmedNote = newNoteText.trim()
+                        if (trimmedNote.isBlank()) {
+                            noteError = true
+                        } else {
+                            if (personnelId != null) {
+                                val newNote = ServiceNote(
+                                    serviceRecordId = service.id,
+                                    personnelId = personnelId,
+                                    note = trimmedNote,
+                                    createdAt = System.currentTimeMillis()
+                                )
+                                viewModel.addServiceNote(newNote)
+                                showAddNoteDialog = false
+                                newNoteText = ""
+                            }
+                        }
+                    }
+                ) {
+                    Text("Kaydet")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showAddNoteDialog = false
+                    newNoteText = ""
+                    noteError = false
+                }) {
+                    Text("İptal")
+                }
+            }
+        )
+    }
+
+    // PERSONEL ATA DİYALOĞU
     if (showAssignDialog) {
         var selectedPersonnelId by remember { mutableStateOf(service.assignedPersonnelId) }
         val activePersonnelList = personnelList.filter { it.isActive }
@@ -313,13 +537,11 @@ fun ServiceDetailScreen(
         )
     }
 
-    // 2. DURUM GÜNCELLE DİYALOĞU (Admin ve Personel Ortak / Dinamik Filtreli)
+    // DURUM GÜNCELLE DİYALOĞU
     if (showStatusDialog) {
-        // İlgili duruma göre seçilebilir sonraki listeyi belirliyoruz
         val availableStatuses = if (personnelId == null) {
-            ServiceStatus.all // Admin tüm durumlara geçebilir
+            ServiceStatus.all
         } else {
-            // Personel için FAZ 2.2 Kurallarına göre dinamik sonraki durumlar
             when (service.status) {
                 ServiceStatus.BEKLIYOR -> listOf(ServiceStatus.YOLDA, ServiceStatus.IPTAL)
                 ServiceStatus.YOLDA -> listOf(ServiceStatus.ISLEME_BASLANDI, ServiceStatus.IPTAL)
@@ -362,7 +584,6 @@ fun ServiceDetailScreen(
                 if (availableStatuses.isNotEmpty()) {
                     Button(
                         onClick = {
-                            // GÜVENLİK KONTROLÜ: İşlem anında personelin hâlâ bu işe atanmış olduğunu doğrula
                             if (personnelId != null && service.assignedPersonnelId != personnelId) {
                                 showStatusDialog = false
                                 return@Button
@@ -390,7 +611,7 @@ fun ServiceDetailScreen(
         )
     }
 
-    // 3. SİLME ONAY DİYALOĞU (Admin)
+    // SİLME ONAY DİYALOĞU
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },

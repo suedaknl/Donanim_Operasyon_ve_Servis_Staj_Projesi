@@ -6,8 +6,12 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [ServiceRecord::class, Personnel::class],
-    version = 4, // YENİ EKLENEN: Versiyon 3'ten 4'e güncellendi
+    entities = [
+        ServiceRecord::class,
+        Personnel::class,
+        ServiceNote::class // YENİ EKLENEN: Servis Notları tablosu eklendi
+    ],
+    version = 5, // Versiyon 4'ten 5'e güncellendi
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,7 +28,7 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "app_database" // Eğer kendi projende buradaki veritabanı adın farklıysa (örneğin "service_db"), onu aynı bırakabilirsin.
+                    "app_database"
                 )
                     .fallbackToDestructiveMigration()
                     .build()

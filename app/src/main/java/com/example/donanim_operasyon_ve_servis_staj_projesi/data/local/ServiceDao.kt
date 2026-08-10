@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ServiceDao {
@@ -34,4 +35,16 @@ interface ServiceDao {
     // --- AŞAMA 2.1 İÇİN EKLENEN DAO METODU ---
     @Query("SELECT * FROM service_records WHERE assignedPersonnelId = :personnelId")
     suspend fun getRecordsByPersonnelId(personnelId: Int): List<ServiceRecord>
+
+    // --- FAZ 2.3 İÇİN EKLENEN SERVİS NOTU METOTLARI ---
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertServiceNote(note: ServiceNote)
+
+    @Query("""
+        SELECT * FROM service_notes 
+        WHERE serviceRecordId = :serviceRecordId 
+        ORDER BY createdAt DESC
+    """)
+    fun getNotesForService(serviceRecordId: Int): Flow<List<ServiceNote>>
 }

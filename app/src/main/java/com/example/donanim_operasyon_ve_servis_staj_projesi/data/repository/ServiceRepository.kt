@@ -1,7 +1,9 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository
 
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceDao
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
+import kotlinx.coroutines.flow.Flow
 
 class ServiceRepository(private val serviceDao: ServiceDao) {
 
@@ -36,5 +38,15 @@ class ServiceRepository(private val serviceDao: ServiceDao) {
     // --- AŞAMA 2.1 İÇİN EKLENEN REPOSITORY FONKSİYONU ---
     suspend fun getRecordsByPersonnelId(personnelId: Int): List<ServiceRecord> {
         return serviceDao.getRecordsByPersonnelId(personnelId)
+    }
+
+    // --- FAZ 2.3 İÇİN EKLENEN SERVİS NOTU FONKSİYONLARI ---
+
+    suspend fun insertServiceNote(note: ServiceNote) {
+        serviceDao.insertServiceNote(note)
+    }
+
+    fun getNotesForService(serviceRecordId: Int): Flow<List<ServiceNote>> {
+        return serviceDao.getNotesForService(serviceRecordId)
     }
 }

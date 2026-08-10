@@ -8,8 +8,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,14 +21,21 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
 
     // Admin tarafı için mevcut akış
     private val _serviceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
-    val serviceRecords: StateFlow<List<ServiceRecord>> = _serviceRecords
+    val serviceRecords: StateFlow<List<ServiceRecord>> = _serviceRecords.asStateFlow()
 
-    // --- AŞAMA 2.1: PERSONEL TARAFI İÇİN STATEFLOW ---
+    // Personel tarafı için StateFlow
     private val _personnelServiceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
     val personnelServiceRecords: StateFlow<List<ServiceRecord>> = _personnelServiceRecords.asStateFlow()
 
     private val _selectedRecord = MutableStateFlow<ServiceRecord?>(null)
     val selectedRecord: StateFlow<ServiceRecord?> = _selectedRecord.asStateFlow()
+
+    // --- FAZ 2.3 İÇİN EKLENEN STATEFLOW VE JOB (SERVİS NOTLARI) ---
+    private val _serviceNotes = MutableStateFlow<List<ServiceNote>>(emptyList())
+    val serviceNotes: StateFlow<List<ServiceNote>> = _serviceNotes.asStateFlow()
+
+    private var notesJob: Job? = null
+    // -------------------------------------------------------------
 
     var searchQuery by mutableStateOf("")
         private set
@@ -45,7 +54,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    // --- AŞAMA 2.1: SADECE BELİRLİ PERSONELE AİT İŞLERİ YÜKLEME ---
     fun loadRecordsForPersonnel(personnelId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             val records = repository.getRecordsByPersonnelId(personnelId)
@@ -106,6 +114,32 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         viewModelScope.launch(Dispatchers.IO) {
             repository.clearAssignedPersonnel(personnelId)
             loadRecords()
+        }
+    }
+
+    // --- FAZ 2.3 İÇİN EKLENEN SERVİS NOTU FONKSİYONLARI ---
+
+    fun loadServiceNotes(serviceRecordId: Int) {
+        // Yeni bir iş emrine tıklandığında, önceki iş emrinin notlarını dinlemeyi iptal et
+        notesJob?.cancel()
+        notesJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.getNotesForService(serviceRecordId).collect { notes ->
+                    _serviceNotes.value = notes
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun addServiceNote(note: ServiceNote) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.insertServiceNote(note)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }
