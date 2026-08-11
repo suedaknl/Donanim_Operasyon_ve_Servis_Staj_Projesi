@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -13,6 +14,22 @@ interface ServiceDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecord(record: ServiceRecord)
+
+    // --- KAPANIŞ İŞLEMİ İÇİN EKSİK OLAN METOT EKLENDİ ---
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSignature(signature: ServiceClosingSignature)
+
+    // ATOMİK İŞLEM: Ya hepsi gerçekleşir, ya hiçbiri!
+    @Transaction
+    suspend fun completeServiceTransaction(
+        updatedRecord: ServiceRecord,
+        closingNote: ServiceNote,
+        signature: ServiceClosingSignature
+    ) {
+        updateService(updatedRecord)
+        insertServiceNote(closingNote)
+        insertSignature(signature)
+    }
 
     @Delete
     suspend fun deleteRecord(record: ServiceRecord)
@@ -46,7 +63,7 @@ interface ServiceDao {
         WHERE serviceRecordId = :serviceRecordId 
         ORDER BY createdAt DESC
     """)
-    fun getNotesForService(serviceRecordId: Int): Flow<List<ServiceNote>> // EKSİK OLAN SATIR BURASIYDI!
+    fun getNotesForService(serviceRecordId: Int): Flow<List<ServiceNote>>
 
     // --- FAZ 2.5 İÇİN EKLENEN FOTOĞRAF METOTLARI ---
 
@@ -60,7 +77,9 @@ interface ServiceDao {
     """)
     fun getPhotosForService(serviceRecordId: Int): Flow<List<ServicePhoto>>
 
-    // DİKKAT: Buradaki @Delete anotasyonu ve suspend fun yapısı aynen bu şekilde olmalı.
     @Delete
     suspend fun deleteServicePhoto(photo: ServicePhoto)
+
+    @Query("SELECT * FROM service_closing_signatures WHERE serviceRecordId = :serviceId LIMIT 1")
+    suspend fun getClosingSignature(serviceId: Int): ServiceClosingSignature?
 }

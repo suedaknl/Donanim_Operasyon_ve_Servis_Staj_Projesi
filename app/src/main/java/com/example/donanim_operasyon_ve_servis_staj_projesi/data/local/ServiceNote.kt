@@ -25,5 +25,6 @@ data class ServiceNote(
     val serviceRecordId: Int,
     val personnelId: Int,
     val note: String,
-    val createdAt: Long
+    val createdAt: Long,
+    val noteType: String = "NORMAL" // "NORMAL" veya "CLOSING" değerlerini alacak
 )

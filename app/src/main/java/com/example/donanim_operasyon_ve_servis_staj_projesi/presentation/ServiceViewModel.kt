@@ -41,13 +41,16 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     val servicePhotos: StateFlow<List<ServicePhoto>> = _servicePhotos.asStateFlow()
 
     private var notesJob: Job? = null
-    private var photosJob: Job? = null // YENİ: Fotoğraf dinleme job'ı
+    private var photosJob: Job? = null
 
     // Reaktif Filtre StateFlow'ları
     private val _searchQueryFlow = MutableStateFlow("")
     private val _selectedFilterFlow = MutableStateFlow("Hepsi")
     private val _selectedPriorityFilterFlow = MutableStateFlow("Hepsi")
     private val _selectedTabFlow = MutableStateFlow("Tümü")
+
+    private val _serviceClosingSignature = MutableStateFlow<com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceClosingSignature?>(null)
+    val serviceClosingSignature = _serviceClosingSignature.asStateFlow()
 
     // UI State'leri
     var searchQuery by mutableStateOf("")
@@ -61,6 +64,32 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
 
     var selectedTab by mutableStateOf("Tümü")
         private set
+
+    // --- KAPANIŞ FORMU STATE'LERİ ---
+
+    private val _closingNote = MutableStateFlow("")
+    val closingNote = _closingNote.asStateFlow()
+
+    private val _closingSignatureUri = MutableStateFlow<String?>(null)
+    val closingSignatureUri = _closingSignatureUri.asStateFlow()
+
+    // UI'ın anlayacağı işlem sonuç state'i
+    sealed class ClosingState {
+        object Idle : ClosingState()
+        object Loading : ClosingState()
+        object Success : ClosingState()
+        data class Error(val message: String) : ClosingState()
+    }
+
+    private val _closingState = MutableStateFlow<ClosingState>(ClosingState.Idle)
+    val closingState = _closingState.asStateFlow()
+
+    private val _closingAfterPhotoUri = MutableStateFlow<String?>(null)
+    val closingAfterPhotoUri = _closingAfterPhotoUri.asStateFlow()
+
+    fun updateClosingAfterPhotoUri(uri: String?) {
+        _closingAfterPhotoUri.value = uri
+    }
 
     // Ortak Filtreleme Algoritması
     private fun filterRecords(
@@ -255,6 +284,80 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    // --- KAPANIŞ FORMU FONKSİYONLARI ---
+
+    fun updateClosingNote(note: String) {
+        _closingNote.value = note
+    }
+
+    fun updateClosingSignatureUri(uri: String?) {
+        _closingSignatureUri.value = uri
+    }
+
+    fun resetClosingState() {
+        _closingState.value = ClosingState.Idle
+        _closingNote.value = ""
+        _closingSignatureUri.value = null
+        _closingAfterPhotoUri.value = null
+    }
+
+    fun loadClosingSignature(serviceId: Int) {
+        viewModelScope.launch {
+            try {
+                val signature = repository.getClosingSignatureByServiceId(serviceId)
+                _serviceClosingSignature.value = signature
+            } catch (e: Exception) {
+                _serviceClosingSignature.value = null
+            }
+        }
+    }
+
+    fun submitClosingForm(serviceId: Int, personnelId: Int) {
+        viewModelScope.launch {
+            _closingState.value = ClosingState.Loading
+
+            val record = serviceRecords.value.find { it.id == serviceId }
+            if (record == null) {
+                _closingState.value = ClosingState.Error("İş emri bulunamadı.")
+                return@launch
+            }
+
+            val note = _closingNote.value.trim()
+            val signature = _closingSignatureUri.value
+
+            if (note.isEmpty() || signature.isNullOrEmpty()) {
+                _closingState.value = ClosingState.Error("Kapanış formunda eksik bilgiler var.")
+                return@launch
+            }
+
+            val result = repository.completeServiceWork(record, personnelId, note, signature)
+
+            result.fold(
+                onSuccess = {
+                    _closingAfterPhotoUri.value?.let { uri ->
+                        viewModelScope.launch {
+                            val afterPhoto = ServicePhoto(
+                                id = 0,
+                                serviceRecordId = serviceId,
+                                personnelId = personnelId,
+                                localUri = uri,
+                                photoType = "SONRASI",
+                                timestamp = System.currentTimeMillis(),
+                                photoUri = uri,
+                                photoCategory = "SONRASI"
+                            )
+                            repository.insertServicePhoto(afterPhoto)
+                        }
+                    }
+                    _closingState.value = ClosingState.Success
+                },
+                onFailure = { error ->
+                    _closingState.value = ClosingState.Error(error.message ?: "İşlem başarısız.")
+                }
+            )
         }
     }
 }

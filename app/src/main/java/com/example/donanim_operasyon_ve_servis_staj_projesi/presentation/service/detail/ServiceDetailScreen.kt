@@ -38,6 +38,7 @@ import java.util.Locale
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.border
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,12 +51,14 @@ fun ServiceDetailScreen(
     onNavigateToEdit: (Int) -> Unit,
     returnedPhotoUri: String? = null,
     onPhotoSaved: () -> Unit = {},
-    onNavigateToCamera: () -> Unit = {}
+    onNavigateToCamera: () -> Unit = {},
+    onNavigateToClosingForm: (Int, Int) -> Unit = { _, _ -> }
 ) {
     // --- Lifecycle / ViewModel Veri Yükleme ---
-    LaunchedEffect(serviceId) {
+    LaunchedEffect(key1 = serviceId) {
         viewModel.loadServiceNotes(serviceId)
         viewModel.loadServicePhotos(serviceId)
+        viewModel.loadClosingSignature(serviceId)
     }
 
     val serviceRecords by viewModel.serviceRecords.collectAsState()
@@ -64,6 +67,7 @@ fun ServiceDetailScreen(
     val personnelList by personnelViewModel.personnelList.collectAsState()
     val serviceNotes by viewModel.serviceNotes.collectAsState()
     val servicePhotos by viewModel.servicePhotos.collectAsState()
+    val closingSignature by viewModel.serviceClosingSignature.collectAsState()
 
     var showAssignDialog by remember { mutableStateOf(false) }
     var showStatusDialog by remember { mutableStateOf(false) }
@@ -90,7 +94,9 @@ fun ServiceDetailScreen(
                 personnelId = personnelId ?: 0,
                 photoType = pendingCategory,
                 localUri = returnedPhotoUri,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                photoUri = returnedPhotoUri,
+                photoCategory = pendingCategory
             )
             viewModel.addServicePhoto(photo)
             pendingCategory = ""
@@ -218,6 +224,138 @@ fun ServiceDetailScreen(
                                 text = "Atanan Personel: $assignedPersonnelName",
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+
+            // --- KAPANIŞ BİLGİLERİ KARTI (DÜZELTİLMİŞ) ---
+            if (service.status == ServiceStatus.TAMAMLANDI) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 2.dp
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Kapanış Bilgileri",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        HorizontalDivider()
+
+                        Text(
+                            text = "Durum: Tamamlandı",
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        val assignedPersonnel = personnelList.find {
+                            it.id == service.assignedPersonnelId
+                        }
+
+                        Text(
+                            text = "Tamamlayan Personel: ${
+                                assignedPersonnel?.fullName ?: "Bilinmiyor"
+                            }"
+                        )
+
+                        // Smart Cast ile güvenli imza/tarih kontrolü
+                        val signature = closingSignature
+                        if (signature != null) {
+                            val dateFormat = SimpleDateFormat(
+                                "dd.MM.yyyy",
+                                Locale.getDefault()
+                            )
+
+                            val timeFormat = SimpleDateFormat(
+                                "HH:mm",
+                                Locale.getDefault()
+                            )
+
+                            val completionDate = Date(signature.createdAt)
+
+                            Text(
+                                text = "Tamamlanma Tarihi: ${
+                                    dateFormat.format(completionDate)
+                                }"
+                            )
+
+                            Text(
+                                text = "Tamamlanma Saati: ${
+                                    timeFormat.format(completionDate)
+                                }"
+                            )
+                        }
+
+                        // Doğru liste adı (serviceNotes) kullanıldı
+                        val lastNote = serviceNotes.lastOrNull()
+                        if (lastNote != null) {
+                            Text(
+                                text = "Kapanış Notu:",
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            Text(text = lastNote.note)
+                        }
+
+                        // Doğru liste adı (servicePhotos) kullanıldı
+                        val afterPhoto = servicePhotos.find {
+                            it.photoType == "SONRASI" || it.photoCategory == "SONRASI"
+                        }
+
+                        if (afterPhoto != null) {
+                            Text(
+                                text = "Sonrası Fotoğrafı:",
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+
+                            AsyncImage(
+                                model = afterPhoto.localUri,
+                                contentDescription = "Sonrası Fotoğrafı",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outline,
+                                        RoundedCornerShape(8.dp)
+                                    ),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+
+                        if (signature != null) {
+                            Text(
+                                text = "Müşteri/Yetkili İmzası:",
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+
+                            AsyncImage(
+                                model = signature.signatureLocalUri,
+                                contentDescription = "Dijital İmza",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(150.dp)
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outline,
+                                        RoundedCornerShape(8.dp)
+                                    ),
+                                contentScale = ContentScale.Fit
                             )
                         }
                     }
@@ -381,7 +519,7 @@ fun ServiceDetailScreen(
                                                 modifier = Modifier
                                                     .size(100.dp)
                                                     .clip(RoundedCornerShape(8.dp))
-                                                    .clickable { selectedImageUri = photo.localUri }, // <-- Tıklama özelliği eklendi
+                                                    .clickable { selectedImageUri = photo.localUri },
                                                 contentScale = ContentScale.Crop
                                             )
                                         }
@@ -471,7 +609,6 @@ fun ServiceDetailScreen(
 
     // --- DİYALOGLAR ---
 
-    // FOTOĞRAF KATEGORİSİ SEÇİM DİYALOĞU
     if (showCategoryDialog) {
         AlertDialog(
             onDismissRequest = { showCategoryDialog = false },
@@ -500,7 +637,6 @@ fun ServiceDetailScreen(
         )
     }
 
-    // FOTOĞRAFI BÜYÜTME (TAM EKRAN) DİYALOĞU
     selectedImageUri?.let { uri ->
         Dialog(
             onDismissRequest = { selectedImageUri = null },
@@ -768,7 +904,11 @@ fun ServiceDetailScreen(
                                     snackbarHostState.showSnackbar("İş emrinin durumu zaten aynı.")
                                 }
                             } else {
-                                viewModel.updateStatus(service.id, selectedStatus)
+                                if (selectedStatus == ServiceStatus.TAMAMLANDI && personnelId != null) {
+                                    onNavigateToClosingForm(service.id, personnelId)
+                                } else {
+                                    viewModel.updateStatus(service.id, selectedStatus)
+                                }
                             }
                             showStatusDialog = false
                         }

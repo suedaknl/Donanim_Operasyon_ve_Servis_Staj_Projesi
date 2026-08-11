@@ -10,15 +10,18 @@ import androidx.room.RoomDatabase
         ServiceRecord::class,
         Personnel::class,
         ServiceNote::class,
-        ServicePhoto::class // YENİ: Fotoğraf tablosu eklendi
+        ServicePhoto::class,
+        ServiceClosingSignature::class
     ],
-    version = 6, // Versiyon 5'ten 6'ya güncellendi
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun serviceDao(): ServiceDao
     abstract fun personnelDao(): PersonnelDao
+
+    abstract fun closingSignatureDao(): ClosingSignatureDao
 
     companion object {
         @Volatile
@@ -29,7 +32,7 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "app_database"
+                    "service_database"
                 )
                     .fallbackToDestructiveMigration()
                     .build()
