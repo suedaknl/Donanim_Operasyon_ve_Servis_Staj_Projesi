@@ -83,7 +83,7 @@ fun ServiceDetailScreen(
 
     // --- ACCORDION STATE'LERİ ---
     var isInfoExpanded by remember { mutableStateOf(false) }
-    var isClosingExpanded by remember { mutableStateOf(false) } // Kural gereği varsayılan KAPALI
+    var isClosingExpanded by remember { mutableStateOf(false) } // Kapanış bilgileri varsayılan kapalı
     var isIssueExpanded by remember { mutableStateOf(false) }
     var isNotesExpanded by remember { mutableStateOf(false) }
     var isPhotosExpanded by remember { mutableStateOf(false) }
@@ -146,16 +146,15 @@ fun ServiceDetailScreen(
     val isCompleted = service.status == ServiceStatus.TAMAMLANDI
     val isCancelled = service.status == ServiceStatus.IPTAL
 
-    // Tamamlanmış veya iptal edilmiş işlerde personel için tamamen salt okunur
-    val isLockedForPersonnel = personnelId != null && (isCompleted || isCancelled)
+    // Tamamlanmış iş hem personel hem admin için salt okunur operasyonlara tabidir
+    val isLocked = isCompleted || isCancelled
 
-    // Not/Fotoğraf ekleme yetkisi kuralı
+    // İçerik ekleme yetkisi (Not, Fotoğraf)
     val canAddContent = personnelId != null &&
             service.assignedPersonnelId == personnelId &&
-            !isCompleted &&
-            !isCancelled
+            !isLocked
 
-    // Personel atama butonu kuralı: Sadece BEKLIYOR durumunda VE henüz atanmamışsa
+    // Personel atama kuralı: Yalnızca BEKLIYOR ve henüz atanmamışsa
     val canAssignPersonnel = personnelId == null &&
             service.status == ServiceStatus.BEKLIYOR &&
             service.assignedPersonnelId == null
@@ -261,10 +260,10 @@ fun ServiceDetailScreen(
                 }
             }
 
-            // --- 2. İŞLEMLER ALANI ---
-            if (personnelId == null) {
-                // Admin İşlem Butonları (Tamamlanmış işte Durum, Düzenle, Sil, Personel Ata GİZLİ)
-                if (!isCompleted) {
+            // --- 2. İŞLEMLER ALANI (YALNIZCA KİLİTLİ DEĞİLSE GÖRÜNÜR) ---
+            if (!isLocked) {
+                if (personnelId == null) {
+                    // Admin İşlem Butonları
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (canAssignPersonnel) {
@@ -311,10 +310,8 @@ fun ServiceDetailScreen(
                             }
                         }
                     }
-                }
-            } else {
-                // Personel İşlem Butonları (Tamamlanmış/İptal işlerde gizli)
-                if (!isLockedForPersonnel) {
+                } else {
+                    // Personel İşlem Butonları
                     Button(
                         onClick = { showStatusDialog = true },
                         modifier = Modifier.fillMaxWidth(),
@@ -327,7 +324,7 @@ fun ServiceDetailScreen(
                 }
             }
 
-            // --- 3. KAPANIŞ BİLGİLERİ (VARSAYILAN KAPALI) ---
+            // --- 3. KAPANIŞ BİLGİLERİ (VARSAYILAN KAPALI & ÖZET GÖRÜNÜM) ---
             if (isCompleted) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -342,7 +339,7 @@ fun ServiceDetailScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
                                     text = "Kapanış Bilgileri",
                                     style = MaterialTheme.typography.titleMedium,
@@ -354,6 +351,22 @@ fun ServiceDetailScreen(
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold
                                 )
+                                // KART KAPALIYKEN ÖZET BİLGİ GÖSTERİMİ
+                                if (!isClosingExpanded) {
+                                    val assignedPersonnel = personnelList.find { it.id == service.assignedPersonnelId }
+                                    Text(
+                                        text = "Tamamlayan: ${assignedPersonnel?.fullName ?: "Bilinmiyor"}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    val signature = closingSignature
+                                    if (signature != null) {
+                                        val shortDateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+                                        Text(
+                                            text = "Tarih: ${shortDateFormat.format(Date(signature.createdAt))}",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                }
                             }
                             Text(text = if (isClosingExpanded) "⌃" else "⌄", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
@@ -658,7 +671,7 @@ fun ServiceDetailScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Alignment.End as Any as Arrangement.Horizontal) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.End) {
                         IconButton(
                             onClick = { selectedImageUri = null },
                             modifier = Modifier.background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(50))

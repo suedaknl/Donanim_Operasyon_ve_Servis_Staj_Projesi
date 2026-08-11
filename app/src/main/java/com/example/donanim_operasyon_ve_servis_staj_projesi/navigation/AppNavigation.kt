@@ -93,25 +93,23 @@ fun AppNavigation() {
             )
         }
 
-        // --- KAPANIŞ FORMU ROTASI (GÜNCELLENDİ) ---
         composable("closing_form/{serviceId}/{personnelId}") { backStackEntry ->
             val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
             val personnelId = backStackEntry.arguments?.getString("personnelId")?.toIntOrNull() ?: 0
 
-            // YENİ: Kameradan dönen fotoğrafı yakala
             val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>("photo_uri", null).collectAsState()
 
             ClosingFormScreen(
                 viewModel = sharedServiceViewModel,
                 serviceId = serviceId,
                 personnelId = personnelId,
-                returnedPhotoUri = returnedPhotoUri, // YENİ
+                returnedPhotoUri = returnedPhotoUri,
                 onPhotoSaved = {
                     backStackEntry.savedStateHandle.remove<String>("photo_uri")
-                }, // YENİ
+                },
                 onNavigateToCamera = {
                     navController.navigate("camera")
-                }, // YENİ
+                },
                 onNavigateBack = { navController.popBackStack() },
                 onSuccess = {
                     navController.popBackStack()
@@ -122,7 +120,6 @@ fun AppNavigation() {
         composable("home") {
             val serviceList by sharedServiceViewModel.filteredServiceRecords.collectAsState()
 
-            // Personel isimlerini bulabilmek için listeyi Home'a aktarıyoruz
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
             val personnelList by personnelViewModel.personnelList.collectAsState()
 
@@ -155,7 +152,6 @@ fun AppNavigation() {
             )
         }
 
-        // --- PERSONEL İÇİN DETAY ROTASI ---
         composable("personnel_service_detail/{serviceId}/{personnelId}") { backStackEntry ->
             val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
             val pId = backStackEntry.arguments?.getString("personnelId")?.toIntOrNull()
@@ -168,7 +164,7 @@ fun AppNavigation() {
                 serviceId = serviceId,
                 personnelId = pId,
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToEdit = { id -> navController.navigate("edit_service/$id") },
+                onNavigateToEdit = { id -> navController.navigate("add_service?serviceId=$id") },
                 returnedPhotoUri = returnedPhotoUri,
                 onPhotoSaved = {
                     backStackEntry.savedStateHandle.remove<String>("photo_uri")
@@ -235,7 +231,6 @@ fun AppNavigation() {
             )
         }
 
-        // Personel Ana Ekranı Rotası
         composable(
             route = "user_form/{personnelId}",
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
@@ -254,7 +249,6 @@ fun AppNavigation() {
             )
         }
 
-        // --- CAMERA ROTASI ---
         composable("camera") {
             CameraScreen(
                 onPhotoCaptured = { uri ->
@@ -267,7 +261,6 @@ fun AppNavigation() {
             )
         }
 
-        // --- YENİ DÜZELTİLEN ADMİN DETAY ROTASI ---
         composable("service_detail/{serviceId}") { backStackEntry ->
             val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
             val returnedPhotoUri = backStackEntry.savedStateHandle.get<String>("photo_uri")
@@ -277,9 +270,9 @@ fun AppNavigation() {
                 viewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
                 serviceId = serviceId,
-                personnelId = null, // ADMIN OLDUĞUNU BELİRTİYOR
+                personnelId = null,
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToEdit = { id -> navController.navigate("edit_service/$id") },
+                onNavigateToEdit = { id -> navController.navigate("add_service?serviceId=$id") },
                 returnedPhotoUri = returnedPhotoUri,
                 onPhotoSaved = {
                     backStackEntry.savedStateHandle.remove<String>("photo_uri")
@@ -288,7 +281,6 @@ fun AppNavigation() {
                     navController.navigate("camera")
                 },
                 onNavigateToClosingForm = { _, _ ->
-                    // Admin kapanış yapamaz.
                 }
             )
         }

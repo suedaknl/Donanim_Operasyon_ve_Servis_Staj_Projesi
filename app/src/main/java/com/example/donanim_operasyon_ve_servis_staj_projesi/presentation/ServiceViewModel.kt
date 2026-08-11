@@ -22,13 +22,24 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+class ServiceViewModelFactory(private val repository: ServiceRepository) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
+        if (modelClass.isAssignableFrom(ServiceViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return ServiceViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Bilinmeyen ViewModel sınıfı")
+    }
+}
+
 class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() {
 
     private val _serviceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
     val serviceRecords: StateFlow<List<ServiceRecord>> = _serviceRecords.asStateFlow()
 
     private val _personnelServiceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
-    val personnelServiceRecords: StateFlow<List<ServiceRecord>> = _personnelServiceRecords.asStateFlow()
+    val personnelServiceRecords: StateFlow<List<ServiceRecord>> =
+        _personnelServiceRecords.asStateFlow()
 
     private val _selectedRecord = MutableStateFlow<ServiceRecord?>(null)
     val selectedRecord: StateFlow<ServiceRecord?> = _selectedRecord.asStateFlow()
@@ -49,7 +60,10 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     private val _selectedPriorityFilterFlow = MutableStateFlow("Hepsi")
     private val _selectedTabFlow = MutableStateFlow("Tümü")
 
-    private val _serviceClosingSignature = MutableStateFlow<com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceClosingSignature?>(null)
+    private val _serviceClosingSignature =
+        MutableStateFlow<com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceClosingSignature?>(
+            null
+        )
     val serviceClosingSignature = _serviceClosingSignature.asStateFlow()
 
     // UI State'leri
@@ -203,9 +217,32 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    fun updateRecord(service: ServiceRecord) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.updateService(service)
+    fun updateRecord(record: ServiceRecord) {
+        viewModelScope.launch {
+            // İş kurallarını doğrulamak için veritabanındaki (veya state'deki) mevcut kaydı al
+            val currentRecord = _serviceRecords.value.find { it.id == record.id }
+
+            if (currentRecord != null) {
+                // 1. KURAL: Tamamlanmış (veya İptal) iş emri üzerinde operasyonel güncelleme yapılamaz.
+                if (currentRecord.status == ServiceStatus.TAMAMLANDI || currentRecord.status == ServiceStatus.IPTAL) {
+                    return@launch
+                }
+
+                // 2. KURAL: Personel Atama Değişikliği
+                if (currentRecord.assignedPersonnelId != record.assignedPersonnelId) {
+                    // Yalnızca BEKLİYOR durumundaysa VE henüz personel atanmamışsa izin ver
+                    val canAssign =
+                        currentRecord.status == ServiceStatus.BEKLIYOR && currentRecord.assignedPersonnelId == null
+                    if (!canAssign) {
+                        return@launch // Kurallara uymayan atama girişimi reddedildi
+                    }
+                }
+            }
+
+            // Veritabanını güncelliyoruz
+            repository.updateService(record)
+
+            // EKSİK OLAN SATIR BURASIYDI: Ekranın kendini yenilemesi için verileri tekrar yüklüyoruz!
             loadRecords()
         }
     }
@@ -352,6 +389,11 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                             repository.insertServicePhoto(afterPhoto)
                         }
                     }
+
+                    // EKSİK OLAN SATIRLAR BURASI: Verileri yeniden yüklüyoruz!
+                    loadRecords() // Admin listelerini günceller
+                    loadRecordsForPersonnel(personnelId) // Personel listesini günceller
+
                     _closingState.value = ClosingState.Success
                 },
                 onFailure = { error ->
@@ -360,14 +402,15 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             )
         }
     }
-}
 
-class ServiceViewModelFactory(private val repository: ServiceRepository) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        if (modelClass.isAssignableFrom(ServiceViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ServiceViewModel(repository) as T
+    class ServiceViewModelFactory(private val repository: ServiceRepository) :
+        ViewModelProvider.Factory {
+        override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
+            if (modelClass.isAssignableFrom(ServiceViewModel::class.java)) {
+                @Suppress("UNCHECKED_CAST")
+                return ServiceViewModel(repository) as T
+            }
+            throw IllegalArgumentException("Bilinmeyen ViewModel sınıfı")
         }
-        throw IllegalArgumentException("Bilinmeyen ViewModel sınıfı")
     }
 }
