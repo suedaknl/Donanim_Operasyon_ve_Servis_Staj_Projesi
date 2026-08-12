@@ -260,24 +260,32 @@ fun ServiceDetailScreen(
                 }
             }
 
-            // --- 2. İŞLEMLER ALANI (YALNIZCA KİLİTLİ DEĞİLSE GÖRÜNÜR) ---
-            if (!isLocked) {
-                if (personnelId == null) {
-                    // Admin İşlem Butonları
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (canAssignPersonnel) {
-                                Button(
-                                    onClick = { showAssignDialog = true },
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                                ) {
-                                    Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Personel Ata")
-                                }
-                            }
+            // --- 2. İŞLEMLER ALANI ---
+            if (personnelId == null) {
+                // Admin İşlem Butonları
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
 
+                        // YENİ KURAL: Personel Ata / Değiştir (Sadece BEKLIYOR durumunda görünür)
+                        if (service.status == ServiceStatus.BEKLIYOR) {
+                            val isAssigned = service.assignedPersonnelId != null
+                            Button(
+                                onClick = { showAssignDialog = true },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                Icon(
+                                    imageVector = if (isAssigned) Icons.Default.ManageAccounts else Icons.Default.PersonAdd,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (isAssigned) "Personeli Değiştir" else "Personel Ata")
+                            }
+                        }
+
+                        // Durum Güncelle (Tamamlandı veya İptal ise gizli)
+                        if (!isCompleted && !isCancelled) {
                             Button(
                                 onClick = { showStatusDialog = true },
                                 modifier = Modifier.weight(1f),
@@ -288,8 +296,12 @@ fun ServiceDetailScreen(
                                 Text("Durum Güncelle")
                             }
                         }
+                    }
 
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                        // Düzenle (Tamamlandı veya İptal ise gizli)
+                        if (!isCompleted && !isCancelled) {
                             Button(
                                 onClick = { onNavigateToEdit(service.id) },
                                 modifier = Modifier.weight(1f)
@@ -298,20 +310,23 @@ fun ServiceDetailScreen(
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Düzenle")
                             }
+                        }
 
-                            Button(
-                                onClick = { showDeleteDialog = true },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Sil")
-                            }
+                        // YENİ KURAL: Silme Butonu Admin İçin Her Zaman Görünür
+                        Button(
+                            onClick = { showDeleteDialog = true },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Sil")
                         }
                     }
-                } else {
-                    // Personel İşlem Butonları
+                }
+            } else {
+                // Personel İşlem Butonları (Tamamlanmış/İptal işlerde kilitli)
+                if (!isLocked) {
                     Button(
                         onClick = { showStatusDialog = true },
                         modifier = Modifier.fillMaxWidth(),
@@ -793,19 +808,39 @@ fun ServiceDetailScreen(
         )
     }
 
+// Personel Atama / Değiştirme Diyaloğu Güncellemesi (Başlık ve Buton Metni)
     if (showAssignDialog) {
         var selectedPersonnelId by remember { mutableStateOf(service.assignedPersonnelId) }
-        val activePersonnelList = personnelList.filter { it.isActive }
+
+        // Personel listesini alıyoruz (Eğer aktiflik filtresi personelleri yok ediyorsa diye direkt tüm listeyi kullanıyoruz)
+        val displayList = personnelList
+        val isAssigned = service.assignedPersonnelId != null
 
         AlertDialog(
             onDismissRequest = { showAssignDialog = false },
-            title = { Text("Personel Ata", fontWeight = FontWeight.Bold) },
+            title = {
+                Text(
+                    text = if (isAssigned) "Personeli Değiştir" else "Personel Ata",
+                    fontWeight = FontWeight.Bold
+                )
+            },
             text = {
-                if (activePersonnelList.isEmpty()) {
-                    Text("Şu anda sistemde atanabilir aktif personel bulunmuyor.")
+                if (displayList.isEmpty()) {
+                    // Liste boşsa net bir hata mesajı göster
+                    Text(
+                        text = "Kayıtlı personel bulunamadı.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        items(activePersonnelList) { personnel ->
+                    // LazyColumn'un AlertDialog içinde 0 piksele çökmemesi için heightIn ile sınır veriyoruz
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp), // Ekrana taşmayı önler ve kaydırılabilir liste yapar
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(displayList) { personnel ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -819,7 +854,10 @@ fun ServiceDetailScreen(
                                     colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = personnel.fullName, style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    text = personnel.fullName,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
                             }
                         }
                     }
@@ -828,15 +866,16 @@ fun ServiceDetailScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        // Kural: Sadece BEKLIYOR durumunda ve henüz atanmamışsa atamaya izin ver
-                        if (service.status == ServiceStatus.BEKLIYOR && service.assignedPersonnelId == null) {
+                        if (service.status == ServiceStatus.BEKLIYOR && selectedPersonnelId != null) {
                             val updatedRecord = service.copy(assignedPersonnelId = selectedPersonnelId)
                             viewModel.updateRecord(updatedRecord)
                         }
                         showAssignDialog = false
-                    }
+                    },
+                    // KURAL: Personel seçilmeden buton aktif olmasın
+                    enabled = selectedPersonnelId != null
                 ) {
-                    Text("Ata")
+                    Text(if (isAssigned) "Değiştir" else "Ata")
                 }
             },
             dismissButton = {

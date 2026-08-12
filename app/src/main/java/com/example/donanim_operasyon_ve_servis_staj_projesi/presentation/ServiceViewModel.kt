@@ -219,7 +219,7 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
 
     fun updateRecord(record: ServiceRecord) {
         viewModelScope.launch {
-            // İş kurallarını doğrulamak için veritabanındaki (veya state'deki) mevcut kaydı al
+            // İş kurallarını doğrulamak için veritabanındaki mevcut kaydı al
             val currentRecord = _serviceRecords.value.find { it.id == record.id }
 
             if (currentRecord != null) {
@@ -228,22 +228,18 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                     return@launch
                 }
 
-                // 2. KURAL: Personel Atama Değişikliği
+                // 2. KURAL: Personel Atama / Değiştirme
                 if (currentRecord.assignedPersonnelId != record.assignedPersonnelId) {
-                    // Yalnızca BEKLİYOR durumundaysa VE henüz personel atanmamışsa izin ver
-                    val canAssign =
-                        currentRecord.status == ServiceStatus.BEKLIYOR && currentRecord.assignedPersonnelId == null
-                    if (!canAssign) {
-                        return@launch // Kurallara uymayan atama girişimi reddedildi
+                    // YENİ KURAL: Yalnızca BEKLIYOR durumundaysa atamaya veya mevcut personeli değiştirmeye izin ver
+                    val canAssignOrChange = currentRecord.status == ServiceStatus.BEKLIYOR
+                    if (!canAssignOrChange) {
+                        return@launch // İşleme Başlandı, Yolda vb. ise reddet
                     }
                 }
             }
 
-            // Veritabanını güncelliyoruz
             repository.updateService(record)
-
-            // EKSİK OLAN SATIR BURASIYDI: Ekranın kendini yenilemesi için verileri tekrar yüklüyoruz!
-            loadRecords()
+            loadRecords() // Ekranın yenilenmesi için
         }
     }
 
