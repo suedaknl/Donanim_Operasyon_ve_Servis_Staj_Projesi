@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+    id("com.google.gms.google-services")
 }
 android {
     namespace = "com.example.donanim_operasyon_ve_servis_staj_projesi"
@@ -54,6 +55,14 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
     // Coil - Modern resim yükleme kütüphanesi
     implementation("io.coil-kt:coil-compose:2.6.0")
+    // Firebase BoM (Tüm Firebase paketlerinin sürümlerini otomatik uyumlu tutar)
+    implementation(platform("com.google.firebase:firebase-bom:32.8.0"))
+
+    // Firebase Auth (Güncel kütüphane, -ktx DEĞİL)
+    implementation("com.google.firebase:firebase-auth")
+
+    // Firebase task'lerini Coroutine ile (await) temiz bir şekilde kullanabilmek için
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
 
     testImplementation("junit:junit:4.13.2")

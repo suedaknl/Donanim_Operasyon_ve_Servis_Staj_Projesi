@@ -12,15 +12,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 
 @Composable
 fun SplashScreen(
-    onSplashFinished: () -> Unit
+    // DİKKAT: Artık yönlendirilecek rotayı (String) dışarı iletiyor
+    onSplashFinished: (String) -> Unit
 ) {
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager(context) }
+    val authRepository = remember { AuthRepository() }
+
     // Animasyonların tetikleyicisi olarak kullanılacak state
     var startAnimation by remember { mutableStateOf(false) }
 
@@ -38,11 +46,36 @@ fun SplashScreen(
         label = "ScaleAnimation"
     )
 
-    // Ekran açıldığı an animasyonu başlatıp 2 saniye bekler, sonra ana ekrana geçer
+    // Ekran açıldığı an animasyonu başlatıp 2 saniye bekler, sonra duruma göre yönlendirir
     LaunchedEffect(key1 = true) {
         startAnimation = true
         delay(2000L)
-        onSplashFinished()
+
+        // --- YENİ EKLENEN KISIM: Auth ve Beni Hatırla Kontrolü ---
+        val currentUser = authRepository.getCurrentUser()
+        val isRememberMe = sessionManager.isRememberMe()
+
+        if (currentUser != null && isRememberMe) {
+            // Firebase Auth geçerli ve kullanıcı beni hatırla demiş
+            val role = sessionManager.getUserRole()
+            if (role == "ADMIN") {
+                onSplashFinished("home")
+            } else if (role == "PERSONNEL") {
+                val pId = sessionManager.getPersonnelId()
+                onSplashFinished("user_form/$pId")
+            } else {
+                onSplashFinished("welcome")
+            }
+        } else {
+            // Kullanıcı oturumu Firebase'de açık kalmış ama cihazda "Beni Hatırla" DEMEMİŞ.
+            // Güvenlik gereği oturumu temizliyoruz.
+            if (currentUser != null && !isRememberMe) {
+                authRepository.signOut()
+                sessionManager.clearSession()
+            }
+            // Standart giriş seçim ekranına yönlendir
+            onSplashFinished("welcome")
+        }
     }
 
     Column(

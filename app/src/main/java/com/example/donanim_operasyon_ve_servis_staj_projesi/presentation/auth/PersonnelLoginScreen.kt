@@ -3,8 +3,9 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
@@ -13,7 +14,10 @@ fun PersonnelLoginScreen(
     onLoginSuccess: (Int) -> Unit, // Başarılı girişte Personnel ID dışarı aktarılıyor
     onNavigateBack: () -> Unit
 ) {
-    var username by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager(context) }
+
+    var username by remember { mutableStateOf(sessionManager.getLastUsername()) }
     var password by remember { mutableStateOf("") }
     var rememberMe by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -67,6 +71,13 @@ fun PersonnelLoginScreen(
 
                     if (matchedPersonnel != null && matchedPersonnel.password == password.trim()) {
                         if (matchedPersonnel.isActive) {
+                            // YENİ EKLENEN KISIM: Beni Hatırla tercihi, Personel Rolü ve Personel ID saklanıyor
+                            sessionManager.saveSession(
+                                isRememberMe = rememberMe,
+                                role = "PERSONNEL",
+                                personnelId = matchedPersonnel.id
+                            )
+                            sessionManager.saveLastUsername(username)
                             onLoginSuccess(matchedPersonnel.id) // Doğru ID route'a aktarılıyor
                         } else {
                             generalError = "Hesabınız pasif durumdadır."

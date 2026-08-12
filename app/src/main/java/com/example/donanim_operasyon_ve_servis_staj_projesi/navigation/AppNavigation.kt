@@ -35,6 +35,9 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.Serv
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModelFactory
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.camera.CameraScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.ClosingFormScreen
+import androidx.compose.ui.platform.LocalContext
+import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
 
 @Composable
 fun AppNavigation() {
@@ -50,13 +53,18 @@ fun AppNavigation() {
     val serviceFactory = remember { ServiceViewModelFactory(serviceRepository) }
 
     val sharedServiceViewModel: ServiceViewModel = viewModel(factory = serviceFactory)
+    val sessionManager = remember { SessionManager(context) }
+    val authRepository = remember { AuthRepository() }
+
 
     NavHost(navController = navController, startDestination = "splash") {
 
+        // 1. SPLASH GÜNCELLEMESİ
         composable("splash") {
             SplashScreen(
-                onSplashFinished = {
-                    navController.navigate("welcome") {
+                onSplashFinished = { destination ->
+                    navController.navigate(destination) {
+                        // Splash ekranını backstack'ten tamamen sil
                         popUpTo("splash") { inclusive = true }
                     }
                 }
@@ -118,9 +126,14 @@ fun AppNavigation() {
         }
 
         composable("home") {
+            // Çıkış işlemi için gerekli referanslar (Eğer dosyanın en üstünde tanımladıysan bu 3 satırı silebilirsin)
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val sessionManager = androidx.compose.runtime.remember { com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager(context) }
+            val authRepository = androidx.compose.runtime.remember { com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository() }
+
             val serviceList by sharedServiceViewModel.filteredServiceRecords.collectAsState()
 
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelViewModel: PersonnelViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = personnelFactory)
             val personnelList by personnelViewModel.personnelList.collectAsState()
 
             HomeScreen(
@@ -147,6 +160,10 @@ fun AppNavigation() {
                 onNavigateToAddService = { navController.navigate("add_service") },
                 onServiceClick = { service -> navController.navigate("service_detail/${service.id}") },
                 onLogOut = {
+                    // YENİ EKLENEN KISIM: Firebase'den çıkış yap ve yerel oturum tercihlerini sil
+                    authRepository.signOut()
+                    sessionManager.clearSession()
+
                     navController.navigate("welcome") { popUpTo(0) }
                 }
             )
@@ -233,8 +250,13 @@ fun AppNavigation() {
 
         composable(
             route = "user_form/{personnelId}",
-            arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
+            arguments = listOf(androidx.navigation.navArgument("personnelId") { type = androidx.navigation.NavType.IntType })
         ) { backStackEntry ->
+            // Çıkış işlemi için gerekli referanslar (Eğer dosyanın en üstünde tanımladıysan bu 3 satırı silebilirsin)
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val sessionManager = androidx.compose.runtime.remember { com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager(context) }
+            val authRepository = androidx.compose.runtime.remember { com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository() }
+
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
 
             StandaloneUserFormScreen(
@@ -244,6 +266,10 @@ fun AppNavigation() {
                     navController.navigate("personnel_service_detail/$serviceId/$personnelId")
                 },
                 onLogOut = {
+                    // YENİ EKLENEN KISIM: Firebase'den çıkış yap ve yerel oturum tercihlerini sil
+                    authRepository.signOut()
+                    sessionManager.clearSession()
+
                     navController.navigate("welcome") { popUpTo(0) }
                 }
             )

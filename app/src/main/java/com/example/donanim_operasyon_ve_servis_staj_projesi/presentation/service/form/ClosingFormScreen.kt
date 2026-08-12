@@ -19,9 +19,9 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage // Coil eklendi
 // Paket isimlerini projenizdeki gerçek yollara göre kontrol edin:
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.common.SignaturePad
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.common.rememberSignatureController
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.common.saveSignatureToInternalStorage
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.utils.SignaturePad
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.utils.rememberSignatureController
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.utils.saveSignatureToInternalStorage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
