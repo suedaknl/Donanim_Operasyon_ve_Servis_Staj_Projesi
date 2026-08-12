@@ -22,4 +22,4 @@ data class ServiceClosingSignature(
     val personnelId: Int,
     val signatureLocalUri: String,
     val createdAt: Long = System.currentTimeMillis()
-)
+    )

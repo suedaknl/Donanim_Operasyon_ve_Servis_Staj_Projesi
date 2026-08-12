@@ -24,11 +24,14 @@ interface PersonnelDao {
     fun getAllPersonnel(): Flow<List<Personnel>>
 
     // Kullanıcı adı benzersizlik kontrolü ve ileride Login ekranı için kullanılacak sorgu
-    @Query("SELECT * FROM personnel_table WHERE username = :username LIMIT 1")
+    @Query("SELECT * FROM personnel_table WHERE fullname = :username LIMIT 1")
     suspend fun getPersonnelByUsername(username: String): Personnel?
 
     @Query("SELECT * FROM personnel_table WHERE id = :id LIMIT 1")
     suspend fun getPersonnelById(id: Int): Personnel?
+
+    @Query("SELECT * FROM personnel_table WHERE email = :email LIMIT 1")
+    suspend fun getPersonnelByEmail(email: String): Personnel?
 
 
 }

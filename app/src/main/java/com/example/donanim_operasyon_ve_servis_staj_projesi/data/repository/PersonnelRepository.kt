@@ -30,4 +30,9 @@ class PersonnelRepository(private val personnelDao: PersonnelDao) {
     suspend fun getPersonnelById(id: Int): Personnel? {
         return personnelDao.getPersonnelById(id)
     }
+
+    suspend fun getPersonnelByEmail(email: String): Personnel? {
+        return personnelDao.getPersonnelByEmail(email)
+    }
+
 }

@@ -33,7 +33,26 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
         repository.insertPersonnel(personnel)
         return true
     }
+    suspend fun syncPersonnelWithFirebase(email: String, firebaseUid: String): Result<Personnel> {
+        val personnel = repository.getPersonnelByEmail(email)
 
+        return if (personnel != null) {
+            if (!personnel.isActive) {
+                Result.failure(Exception("Hesabınız pasif durumdadır."))
+            } else {
+                // İlk kez giriş yapıyorsa veya UID eksikse Room'a yaz
+                if (personnel.firebaseUid != firebaseUid) {
+                    val updatedPersonnel = personnel.copy(firebaseUid = firebaseUid)
+                    repository.updatePersonnel(updatedPersonnel)
+                    Result.success(updatedPersonnel)
+                } else {
+                    Result.success(personnel)
+                }
+            }
+        } else {
+            Result.failure(Exception("Bu hesap sisteme kayıtlı bir personelle eşleşmiyor."))
+        }
+    }
     fun updatePersonnel(personnel: Personnel, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {

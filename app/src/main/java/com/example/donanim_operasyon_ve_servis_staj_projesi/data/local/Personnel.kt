@@ -5,12 +5,14 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "personnel_table")
 data class Personnel(
-    @PrimaryKey(autoGenerate = true)
-    val id: Int = 0,
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val fullName: String,
     val username: String,
-    val password: String, // Gerçek projelerde şifre hash'lenerek tutulmalıdır
     val phoneNumber: String,
     val role: String,
-    val isActive: Boolean
+    val password: String,
+    val isActive: Boolean = true,
+    // Arayüzdeki kurucu (constructor) metodun çökmemesi için varsayılan değer atadık:
+    val email: String = "",
+    val firebaseUid: String? = null
 )
