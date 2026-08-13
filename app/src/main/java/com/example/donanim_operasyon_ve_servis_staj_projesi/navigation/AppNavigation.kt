@@ -35,7 +35,6 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.Serv
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModelFactory
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.camera.CameraScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.ClosingFormScreen
-import androidx.compose.ui.platform.LocalContext
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
 
@@ -49,7 +48,13 @@ fun AppNavigation() {
     val personnelRepository = remember { PersonnelRepository(database.personnelDao()) }
     val personnelFactory = remember { PersonnelViewModelFactory(personnelRepository) }
 
-    val serviceRepository = remember { ServiceRepository(database.serviceDao()) }
+    val serviceRepository = remember {
+        ServiceRepository(
+            serviceDao = database.serviceDao(),
+            personnelDao = database.personnelDao()
+        )
+    }
+
     val serviceFactory = remember { ServiceViewModelFactory(serviceRepository) }
 
     val sharedServiceViewModel: ServiceViewModel = viewModel(factory = serviceFactory)
@@ -105,7 +110,10 @@ fun AppNavigation() {
             val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
             val personnelId = backStackEntry.arguments?.getString("personnelId")?.toIntOrNull() ?: 0
 
-            val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>("photo_uri", null).collectAsState()
+            val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>(
+                "photo_uri",
+                null
+            ).collectAsState()
 
             ClosingFormScreen(
                 viewModel = sharedServiceViewModel,
@@ -126,14 +134,8 @@ fun AppNavigation() {
         }
 
         composable("home") {
-            // Çıkış işlemi için gerekli referanslar (Eğer dosyanın en üstünde tanımladıysan bu 3 satırı silebilirsin)
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val sessionManager = androidx.compose.runtime.remember { com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager(context) }
-            val authRepository = androidx.compose.runtime.remember { com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository() }
-
             val serviceList by sharedServiceViewModel.filteredServiceRecords.collectAsState()
-
-            val personnelViewModel: PersonnelViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = personnelFactory)
+            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
             val personnelList by personnelViewModel.personnelList.collectAsState()
 
             HomeScreen(
@@ -144,12 +146,12 @@ fun AppNavigation() {
                 searchQuery = sharedServiceViewModel.searchQuery,
                 onSearchQueryChange = { sharedServiceViewModel.updateSearchQuery(it) },
                 selectedFilter = sharedServiceViewModel.selectedFilter,
-                onFilterSelected = { filterValue ->
-                    sharedServiceViewModel.updateSelectedFilter(filterValue ?: "Hepsi")
+                onFilterSelected = { filter ->
+                    sharedServiceViewModel.updateSelectedFilter(filter)
                 },
                 selectedPriority = sharedServiceViewModel.selectedPriorityFilter,
-                onPrioritySelected = { priorityValue ->
-                    sharedServiceViewModel.updateSelectedPriorityFilter(priorityValue)
+                onPrioritySelected = { priority ->
+                    sharedServiceViewModel.updateSelectedPriorityFilter(priority)
                 },
                 onClearFilters = {
                     sharedServiceViewModel.updateSearchQuery("")
@@ -158,21 +160,27 @@ fun AppNavigation() {
                 },
                 onNavigateToPersonnel = { navController.navigate("personnel_list") },
                 onNavigateToAddService = { navController.navigate("add_service") },
-                onServiceClick = { service -> navController.navigate("service_detail/${service.id}") },
+                onServiceClick = { clickedService ->
+                    navController.navigate("service_detail/${clickedService.id}")
+                },
                 onLogOut = {
-                    // YENİ EKLENEN KISIM: Firebase'den çıkış yap ve yerel oturum tercihlerini sil
                     authRepository.signOut()
                     sessionManager.clearSession()
-
                     navController.navigate("welcome") { popUpTo(0) }
-                }
+                },
+                serviceViewModel = sharedServiceViewModel,
+                firebaseUid = null,
+                localPersonnelId = null
             )
-        }
+        } // <-- home rotasının düzgün kapanış süslü parantezi
 
         composable("personnel_service_detail/{serviceId}/{personnelId}") { backStackEntry ->
             val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
             val pId = backStackEntry.arguments?.getString("personnelId")?.toIntOrNull()
-            val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>("photo_uri", null).collectAsState()
+            val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>(
+                "photo_uri",
+                null
+            ).collectAsState()
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
 
             ServiceDetailScreen(
@@ -250,35 +258,63 @@ fun AppNavigation() {
 
         composable(
             route = "user_form/{personnelId}",
-            arguments = listOf(androidx.navigation.navArgument("personnelId") { type = androidx.navigation.NavType.IntType })
+            arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
-            // Çıkış işlemi için gerekli referanslar (Eğer dosyanın en üstünde tanımladıysan bu 3 satırı silebilirsin)
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val sessionManager = androidx.compose.runtime.remember { com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager(context) }
-            val authRepository = androidx.compose.runtime.remember { com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository() }
-
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
 
+            // DİKKAT: Artık tüm servisler değil, sadece bu personele ait olanlar filtreleniyor
+            val allServiceList by sharedServiceViewModel.filteredServiceRecords.collectAsState()
+            val serviceList = remember(allServiceList, personnelId) {
+                allServiceList.filter { it.assignedPersonnelId == personnelId }
+            }
+
+            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelList by personnelViewModel.personnelList.collectAsState()
+
             StandaloneUserFormScreen(
-                viewModel = sharedServiceViewModel,
-                personnelId = personnelId,
-                onServiceClick = { serviceId ->
-                    navController.navigate("personnel_service_detail/$serviceId/$personnelId")
+                serviceList = serviceList, // <-- Filtrelenmiş liste buraya veriliyor
+                personnelList = personnelList,
+                selectedTab = sharedServiceViewModel.selectedTab,
+                onTabSelected = { sharedServiceViewModel.updateSelectedTab(it) },
+                searchQuery = sharedServiceViewModel.searchQuery,
+                onSearchQueryChange = { sharedServiceViewModel.updateSearchQuery(it) },
+                selectedFilter = sharedServiceViewModel.selectedFilter,
+                onFilterSelected = { filter ->
+                    sharedServiceViewModel.updateSelectedFilter(filter)
+                },
+                selectedPriority = sharedServiceViewModel.selectedPriorityFilter,
+                onPrioritySelected = { priority ->
+                    sharedServiceViewModel.updateSelectedPriorityFilter(priority)
+                },
+                onClearFilters = {
+                    sharedServiceViewModel.updateSearchQuery("")
+                    sharedServiceViewModel.updateSelectedFilter("Hepsi")
+                    sharedServiceViewModel.updateSelectedPriorityFilter("Hepsi")
+                },
+                onNavigateToPersonnel = { },
+                onNavigateToAddService = { },
+                onServiceClick = { service ->
+                    // Personel kendi işine tıkladığı için kendi ID'siyle detay sayfasına gider
+                    navController.navigate("personnel_service_detail/${service.id}/$personnelId")
                 },
                 onLogOut = {
-                    // YENİ EKLENEN KISIM: Firebase'den çıkış yap ve yerel oturum tercihlerini sil
                     authRepository.signOut()
                     sessionManager.clearSession()
-
                     navController.navigate("welcome") { popUpTo(0) }
-                }
+                },
+                serviceViewModel = sharedServiceViewModel,
+                firebaseUid = null,
+                localPersonnelId = personnelId
             )
         }
 
         composable("camera") {
             CameraScreen(
                 onPhotoCaptured = { uri ->
-                    navController.previousBackStackEntry?.savedStateHandle?.set("photo_uri", uri)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                        "photo_uri",
+                        uri
+                    )
                     navController.popBackStack()
                 },
                 onCancel = {

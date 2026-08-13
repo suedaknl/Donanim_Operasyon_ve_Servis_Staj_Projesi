@@ -3,8 +3,11 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -21,15 +24,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     serviceList: List<ServiceRecord>,
-    personnelList: List<Personnel>, // YENİ: Personel isimlerini göstermek için eklendi
+    personnelList: List<Personnel>,
     selectedTab: String,
     onTabSelected: (String) -> Unit,
     searchQuery: String,
@@ -42,15 +42,26 @@ fun HomeScreen(
     onNavigateToPersonnel: () -> Unit,
     onNavigateToAddService: () -> Unit,
     onServiceClick: (ServiceRecord) -> Unit,
-    onLogOut: () -> Unit
+    onLogOut: () -> Unit,
+
+    // YENİ EKLENEN PARAMETRELER: Senkronizasyon için gerekli veriler
+    serviceViewModel: ServiceViewModel,
+    firebaseUid: String? = null,
+    localPersonnelId: Int? = null
 ) {
     val statusOptions = listOf("Hepsi") + ServiceStatus.all
     val priorityOptions = listOf("Hepsi", "Düşük", "Normal", "Yüksek", "Acil")
     val tabs = listOf("Tümü", "Atanmamış", "Atanan", "Devam Eden", "Tamamlanan")
 
-    // YENİ: Filtre BottomSheet state'leri
     var showFilterSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // --- FAZ 3: SENKRONİZASYON TETİKLEYİCİSİ EKLENDİ ---
+    // Ekran açıldığında Firestore'daki gerçek verileri Room'a indirir
+    LaunchedEffect(Unit) {
+        serviceViewModel.syncAdminData()
+    }
+    // ---------------------------------------------------
 
     Scaffold(
         topBar = {
@@ -81,7 +92,6 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // --- ÜST SEKMELER (TABS) ---
             ScrollableTabRow(
                 selectedTabIndex = tabs.indexOf(selectedTab),
                 edgePadding = 8.dp,
@@ -97,7 +107,6 @@ fun HomeScreen(
                 }
             }
 
-            // --- ARAMA ÇUBUĞU VE FİLTRE İKONU ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -122,7 +131,6 @@ fun HomeScreen(
                     shape = RoundedCornerShape(12.dp)
                 )
 
-                // Filtre aktifse ikonu farklı renkte gösterelim
                 val isFilterActive = selectedFilter != "Hepsi" || selectedPriority != "Hepsi"
                 FilledIconButton(
                     onClick = { showFilterSheet = true },
@@ -138,7 +146,6 @@ fun HomeScreen(
 
             HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
 
-            // --- İŞ EMRİ LİSTESİ ---
             if (serviceList.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -163,7 +170,7 @@ fun HomeScreen(
                         .fillMaxSize()
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 80.dp) // FAB için alt boşluk
+                    contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     items(serviceList) { record ->
                         val assignedPersonnelName = personnelList.find { it.id == record.assignedPersonnelId }?.fullName ?: "Atanmadı"
@@ -198,7 +205,6 @@ fun HomeScreen(
 
                                 Spacer(modifier = Modifier.height(2.dp))
 
-                                // ŞU ANDA HANGİ İŞTE GÖRÜNÜMÜ (Mevcut kartı zenginleştirdik)
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -228,61 +234,6 @@ fun HomeScreen(
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-
-    // --- FİLTRE BOTTOM SHEET ---
-    if (showFilterSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showFilterSheet = false },
-            sheetState = sheetState
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("Detaylı Filtreleme", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-
-                HorizontalDivider()
-
-                Text("Durum", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(statusOptions) { status ->
-                        FilterChip(
-                            selected = (selectedFilter == status),
-                            onClick = { onFilterSelected(status) },
-                            label = { Text(status) }
-                        )
-                    }
-                }
-
-                Text("Öncelik", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(priorityOptions) { priority ->
-                        FilterChip(
-                            selected = (selectedPriority == priority),
-                            onClick = { onPrioritySelected(priority) },
-                            label = { Text(priority) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = {
-                        onClearFilters()
-                        showFilterSheet = false
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Filtreleri Temizle")
                 }
             }
         }

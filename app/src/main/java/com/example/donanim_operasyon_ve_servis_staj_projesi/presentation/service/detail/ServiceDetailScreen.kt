@@ -38,6 +38,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.border
+import androidx.compose.ui.platform.LocalContext
+import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
+import kotlinx.coroutines.NonCancellable.isCancelled
+import android.widget.Toast
+import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +71,28 @@ fun ServiceDetailScreen(
     val serviceNotes by viewModel.serviceNotes.collectAsState()
     val servicePhotos by viewModel.servicePhotos.collectAsState()
     val closingSignature by viewModel.serviceClosingSignature.collectAsState()
+
+    // 1. SessionManager'ı tanımlıyoruz (Compose ortamına uygun şekilde)
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager(context) }
+
+    // Parametrelerden veya SessionManager'dan gelen mevcut kullanıcı bilgileri
+    val currentUserRole = sessionManager.getUserRole() // "ADMIN" veya "PERSONNEL"
+    val currentPersonnelId = sessionManager.getPersonnelId()
+
+    // 2. 'service' değişkeni nullable olduğu için (?.) ile güvenli çağrı yapıyoruz.
+    // "COMPLETED" yerine projendeki ServiceStatus'ü kullanıyoruz.
+    val isCompleted = service?.status == ServiceStatus.TAMAMLANDI
+    val isAssignedToMe = service?.assignedPersonnelId == currentPersonnelId
+    val isAdmin = currentUserRole == "ADMIN"
+
+    // 3. Bu değişkenleri kullanarak UI bileşenlerini enabled/disabled veya visible/hidden yap
+    val canEditStatus = !isCompleted && (isAdmin || isAssignedToMe)
+    // Sadece "BEKLIYOR" durumundaki işler yeni birine atanabilsin:
+    val canAssignPersonnel = !isCompleted && isAdmin && service?.status == ServiceStatus.BEKLIYOR
+    val canAddNoteOrPhoto = !isCompleted && (isAdmin || isAssignedToMe)
+
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     var showAssignDialog by remember { mutableStateOf(false) }
     var showStatusDialog by remember { mutableStateOf(false) }
@@ -108,6 +135,13 @@ fun ServiceDetailScreen(
         }
     }
 
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            viewModel.clearErrorMessage() // Mesaj gösterildikten sonra sıfırla ki tekrar tekrar çıkmasın
+        }
+    }
+
     if (service == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("İş emri bulunamadı veya silindi.")
@@ -143,9 +177,6 @@ fun ServiceDetailScreen(
         "Atanmadı"
     }
 
-    val isCompleted = service.status == ServiceStatus.TAMAMLANDI
-    val isCancelled = service.status == ServiceStatus.IPTAL
-
     // Tamamlanmış iş hem personel hem admin için salt okunur operasyonlara tabidir
     val isLocked = isCompleted || isCancelled
 
@@ -154,10 +185,6 @@ fun ServiceDetailScreen(
             service.assignedPersonnelId == personnelId &&
             !isLocked
 
-    // Personel atama kuralı: Yalnızca BEKLIYOR ve henüz atanmamışsa
-    val canAssignPersonnel = personnelId == null &&
-            service.status == ServiceStatus.BEKLIYOR &&
-            service.assignedPersonnelId == null
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },

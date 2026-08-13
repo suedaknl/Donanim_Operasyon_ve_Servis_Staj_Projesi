@@ -6,28 +6,112 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRe
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePhoto
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceClosingSignature
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.PersonnelDao
 import kotlinx.coroutines.flow.Flow
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.remote.FirestoreServiceDataSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-class ServiceRepository(private val serviceDao: ServiceDao) {
+class ServiceRepository(
+    private val serviceDao: ServiceDao,
+    private val personnelDao: PersonnelDao, // PersonnelDao eklendi (UID eşlemesi için)
+    private val firestoreDataSource: FirestoreServiceDataSource = FirestoreServiceDataSource()
+) {
 
     suspend fun insertRecord(record: ServiceRecord) {
-        serviceDao.insertRecord(record)
+        // 1. Seçilen personelin Room ID'sinden gerçek Firebase UID değerini bul
+        val personnelUid = record.assignedPersonnelId?.let { personnelId ->
+            try {
+                val personnel = personnelDao.getPersonnelById(personnelId)
+                personnel?.firebaseUid
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        // 2. assignedPersonnelUid alanını eşlenen Firebase UID ile doldur
+        val recordWithPersonnel = record.copy(assignedPersonnelUid = personnelUid)
+
+        // 3. Önce Room'a kaydet (Single Source of Truth)
+        serviceDao.insertRecord(recordWithPersonnel)
+
+        // 4. Firestore'a otomatik gönder ve dönen document ID'yi Room kaydına firestoreId olarak güncelle
+        withContext(Dispatchers.IO) {
+            try {
+                // Room'a en son eklenen veya ilgili kaydı bulmak için (veya eşleşen kaydı seçmek)
+                val allRecords = serviceDao.getAllRecords()
+                val savedRecord = allRecords.find {
+                    it.companyName == recordWithPersonnel.companyName &&
+                            it.serialNumber == recordWithPersonnel.serialNumber &&
+                            it.firestoreId == null
+                } ?: recordWithPersonnel
+
+                val result = firestoreDataSource.saveServiceRecord(savedRecord)
+
+                result.onSuccess { firestoreId ->
+                    val updatedRecord = savedRecord.copy(firestoreId = firestoreId)
+                    serviceDao.updateService(updatedRecord)
+                }
+            } catch (e: Exception) {
+                // Firestore hatası yerel kaydı bozmaz, uygulama çökmEz
+                e.printStackTrace()
+            }
+        }
     }
 
     suspend fun deleteRecord(record: ServiceRecord) {
+        // 1. Önce Room'dan sil
         serviceDao.deleteRecord(record)
+
+        // 2. Firebase'den sil (firestoreId varsa)
+        withContext(Dispatchers.IO) {
+            try {
+                val firestoreId = record.firestoreId
+                if (!firestoreId.isNullOrEmpty()) {
+                    firestoreDataSource.deleteService(firestoreId)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     suspend fun updateStatus(recordId: Int, newStatus: String) {
+        // 1. Önce Room'daki status güncellensin
         serviceDao.updateStatus(recordId, newStatus)
-    }
 
+        // 2. Güncellenen kaydı alarak firestoreId değerine ulaşıyoruz ve Firebase'i güncelliyoruz
+        withContext(Dispatchers.IO) {
+            try {
+                val record = serviceDao.getServiceById(recordId)
+                val firestoreId = record?.firestoreId
+
+                if (!firestoreId.isNullOrEmpty()) {
+                    firestoreDataSource.updateServiceStatus(firestoreId, newStatus)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
     suspend fun getAllRecords(): List<ServiceRecord> {
         return serviceDao.getAllRecords()
     }
 
     suspend fun updateService(service: ServiceRecord) {
+        // 1. Önce Room'da güncelle
         serviceDao.updateService(service)
+
+        // 2. Firebase'de güncelle (firestoreId varsa)
+        withContext(Dispatchers.IO) {
+            try {
+                if (!service.firestoreId.isNullOrEmpty()) {
+                    firestoreDataSource.updateService(service)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     suspend fun getServiceById(id: Int): ServiceRecord? {
@@ -48,6 +132,7 @@ class ServiceRepository(private val serviceDao: ServiceDao) {
     suspend fun insertServiceNote(note: ServiceNote) {
         serviceDao.insertServiceNote(note)
     }
+
     suspend fun getClosingSignatureByServiceId(serviceId: Int): ServiceClosingSignature? {
         return serviceDao.getClosingSignature(serviceId)
     }
@@ -89,12 +174,12 @@ class ServiceRepository(private val serviceDao: ServiceDao) {
                 throw Exception("Hata: Kapanış notu ve imza zorunludur.")
             }
 
-            // 2. KAPANIŞ NOTU NESNESİ OLUŞTURMA
+            // 2. KAPANIŞ NOTu NESNESİ OLUŞTURMA
             val closingNote = ServiceNote(
                 serviceRecordId = serviceRecord.id,
                 personnelId = personnelId,
                 note = closingNoteText,
-                noteType = "CLOSING", // Kapanış notu olduğunu belirtiyoruz
+                noteType = "CLOSING",
                 createdAt = System.currentTimeMillis()
             )
 
@@ -112,13 +197,74 @@ class ServiceRepository(private val serviceDao: ServiceDao) {
             // 5. ATOMİK İŞLEMİ ÇAĞIRMA (DAO'daki transaction metodu)
             serviceDao.completeServiceTransaction(updatedRecord, closingNote, signature)
 
-            // İşlem başarılıysa Unit döndür
             Result.success(Unit)
         } catch (e: Exception) {
-            // Herhangi bir adımda hata olursa yakala ve UI'a bildir
             Result.failure(e)
         }
     }
 
+    // --- FAZ 3: ADMİN İÇİN TÜM FİREBASE SERVİSLERİNİ ROOM'A SENKRONİZE ETME ---
+    suspend fun syncAllServices() {
+        val result = firestoreDataSource.getAllServices()
 
+        result.onSuccess { remoteServices ->
+            // Doğrudan yeni eklediğimiz suspend fonksiyonu çağırıyoruz
+            val allPersonnel = try {
+                personnelDao.getAllPersonnelList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+
+            remoteServices.forEach { remoteService ->
+                val firestoreId = remoteService.firestoreId
+                if (!firestoreId.isNullOrEmpty()) {
+                    val existingLocalService = serviceDao.getServiceByFirestoreId(firestoreId)
+
+                    val matchedPersonnelId: Int? = remoteService.assignedPersonnelUid?.let { uid ->
+                        allPersonnel.find { it.firebaseUid == uid }?.id
+                    }
+
+                    if (existingLocalService != null) {
+                        val serviceToUpdate = remoteService.copy(
+                            id = existingLocalService.id,
+                            assignedPersonnelId = matchedPersonnelId ?: existingLocalService.assignedPersonnelId
+                        )
+                        serviceDao.updateService(serviceToUpdate)
+                    } else {
+                        val serviceToInsert = remoteService.copy(
+                            assignedPersonnelId = matchedPersonnelId
+                        )
+                        serviceDao.insertRecord(serviceToInsert)
+                    }
+                }
+            }
+        }
+    }
+    // --- FIRESTORE SENKRONİZASYON FONKSİYONU (PERSONEL) ---
+    suspend fun syncServicesFromFirestore(
+        personnelUid: String,
+        localPersonnelId: Int
+    ) {
+        val result = firestoreDataSource.getServicesForPersonnel(personnelUid)
+
+        result.onSuccess { remoteServices ->
+            remoteServices.forEach { remoteService ->
+                val firestoreId = remoteService.firestoreId
+                if (!firestoreId.isNullOrEmpty()) {
+                    val existingLocalService = serviceDao.getServiceByFirestoreId(firestoreId)
+
+                    val serviceToSave = remoteService.copy(
+                        assignedPersonnelId = localPersonnelId,
+                        id = existingLocalService?.id ?: 0
+                    )
+
+                    if (existingLocalService != null) {
+                        serviceDao.updateService(serviceToSave)
+                    } else {
+                        serviceDao.insertRecord(serviceToSave)
+                    }
+                }
+            }
+        }
+    }
 }

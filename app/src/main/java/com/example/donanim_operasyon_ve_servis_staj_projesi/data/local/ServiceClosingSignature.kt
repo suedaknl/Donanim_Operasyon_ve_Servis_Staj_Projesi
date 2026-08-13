@@ -3,6 +3,7 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.data.local
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
+import androidx.room.Index // HATA VEREN KISMIN ÇÖZÜMÜ BU SATIR
 
 @Entity(
     tableName = "service_closing_signatures",
@@ -13,7 +14,8 @@ import androidx.room.PrimaryKey
             childColumns = ["serviceRecordId"],
             onDelete = ForeignKey.CASCADE
         )
-    ]
+    ],
+    indices = [Index(value = ["serviceRecordId"])]
 )
 data class ServiceClosingSignature(
     @PrimaryKey(autoGenerate = true)
@@ -22,4 +24,4 @@ data class ServiceClosingSignature(
     val personnelId: Int,
     val signatureLocalUri: String,
     val createdAt: Long = System.currentTimeMillis()
-    )
+)

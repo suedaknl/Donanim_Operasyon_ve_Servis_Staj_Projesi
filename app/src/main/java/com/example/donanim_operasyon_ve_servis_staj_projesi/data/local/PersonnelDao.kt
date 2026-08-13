@@ -33,6 +33,10 @@ interface PersonnelDao {
     @Query("SELECT * FROM personnel_table WHERE email = :email LIMIT 1")
     suspend fun getPersonnelByEmail(email: String): Personnel?
 
+    @Query("SELECT * FROM personnel_table WHERE firebaseUid = :firebaseUid LIMIT 1")
+    suspend fun getPersonnelByFirebaseUid(firebaseUid: String): Personnel?
 
+    @Query("SELECT * FROM personnel_table ORDER BY fullName ASC")
+    suspend fun getAllPersonnelList(): List<Personnel>
 }
 

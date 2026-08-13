@@ -1,4 +1,4 @@
-package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.utils // Paket adını kendi yapına göre uyarla
+package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.common // Paket adını kendi yapına göre uyarla
 
 import android.content.Context
 import android.graphics.Bitmap

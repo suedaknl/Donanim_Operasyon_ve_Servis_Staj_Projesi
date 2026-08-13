@@ -19,7 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.Lock // Zaten varsa ekleme
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.text.input.ImeAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +46,10 @@ fun AddPersonnelScreen(
 
     var username by remember { mutableStateOf("") }
     var usernameError by remember { mutableStateOf("") }
+
+    // --- YENİ EKLENEN E-POSTA STATE ---
+    var email by remember { mutableStateOf("") }
+    var emailError by remember { mutableStateOf("") }
 
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -69,12 +74,12 @@ fun AddPersonnelScreen(
                     originalPersonnel = personnel
                     fullName = personnel.fullName
                     username = personnel.username
+                    email = personnel.email // VERİTABANINDAN GELEN E-POSTAYI YÜKLE
                     password = personnel.password
                     phoneNumber = personnel.phoneNumber
                     role = personnel.role
                     isActive = personnel.isActive
                 } else {
-                    // KAYIT BULUNAMADI KURALI: Snackbar göster ve geri dön, INSERT YAPMA
                     coroutineScope.launch {
                         snackbarHostState.showSnackbar("Personel bilgisi bulunamadı.")
                         delay(1000)
@@ -132,11 +137,24 @@ fun AddPersonnelScreen(
                 supportingText = { if (usernameError.isNotEmpty()) Text(usernameError, color = MaterialTheme.colorScheme.error) }
             )
 
+            // --- YENİ EKLENEN E-POSTA UI ALANI ---
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it; emailError = "" },
+                label = { Text("E-posta Adresi") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next
+                ),
+                singleLine = true,
+                isError = emailError.isNotEmpty(),
+                supportingText = { if (emailError.isNotEmpty()) Text(emailError, color = MaterialTheme.colorScheme.error) }
+            )
+
             OutlinedTextField(
                 value = password,
-                onValueChange = { password = it;
-                    var showError = false
-                },
+                onValueChange = { password = it; passwordError = "" },
                 label = { Text("Şifre") },
                 leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                 trailingIcon = {
@@ -151,7 +169,9 @@ fun AddPersonnelScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                isError = passwordError.isNotEmpty(),
+                supportingText = { if (passwordError.isNotEmpty()) Text(passwordError, color = MaterialTheme.colorScheme.error) }
             )
 
             OutlinedTextField(
@@ -191,7 +211,6 @@ fun AddPersonnelScreen(
                 onClick = {
                     if (isSaving) return@Button
 
-                    // Düzenleme modunda olup ID gelmesine rağmen veri henüz yüklenmediyse / bulunamadıysa işlem yaptırma
                     if (isEditMode && originalPersonnel == null) {
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar("Personel bilgisi yüklenemediği için işlem yapılamaz.")
@@ -202,6 +221,7 @@ fun AddPersonnelScreen(
                     var isValid = true
                     if (fullName.isBlank()) { fullNameError = "Bu alan zorunludur."; isValid = false }
                     if (username.isBlank()) { usernameError = "Bu alan zorunludur."; isValid = false }
+                    if (email.isBlank()) { emailError = "Bu alan zorunludur."; isValid = false } // E-POSTA KONTROLÜ
                     if (password.isBlank()) { passwordError = "Bu alan zorunludur."; isValid = false }
                     if (phoneNumber.isBlank()) { phoneError = "Bu alan zorunludur."; isValid = false }
                     if (role.isBlank()) { roleError = "Bu alan zorunludur."; isValid = false }
@@ -210,9 +230,9 @@ fun AddPersonnelScreen(
                         isSaving = true
 
                         if (isEditMode && originalPersonnel != null) {
-                            // DÜZENLEME MODU (UPDATE)
                             val hasChanges = fullName.trim() != originalPersonnel!!.fullName ||
                                     username.trim() != originalPersonnel!!.username ||
+                                    email.trim() != originalPersonnel!!.email || // E-POSTA DEĞİŞİKLİK KONTROLÜ
                                     password.trim() != originalPersonnel!!.password ||
                                     phoneNumber.trim() != originalPersonnel!!.phoneNumber ||
                                     role.trim() != originalPersonnel!!.role ||
@@ -229,6 +249,7 @@ fun AddPersonnelScreen(
                             val updatedPersonnel = originalPersonnel!!.copy(
                                 fullName = fullName.trim(),
                                 username = username.trim(),
+                                email = email.trim(), // GÜNCELLENEN E-POSTA
                                 password = password.trim(),
                                 phoneNumber = phoneNumber.trim(),
                                 role = role.trim(),
@@ -249,12 +270,12 @@ fun AddPersonnelScreen(
                             }
 
                         } else if (!isEditMode) {
-                            // YENİ EKLEME MODU (INSERT) - Asla ID varsa buraya girmez
                             coroutineScope.launch {
                                 val success = viewModel.addPersonnel(
                                     Personnel(
                                         fullName = fullName.trim(),
                                         username = username.trim(),
+                                        email = email.trim(), // YENİ EKLENEN E-POSTA
                                         password = password.trim(),
                                         phoneNumber = phoneNumber.trim(),
                                         role = role.trim(),

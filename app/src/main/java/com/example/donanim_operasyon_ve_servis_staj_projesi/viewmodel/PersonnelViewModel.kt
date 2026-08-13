@@ -20,6 +20,22 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
             initialValue = emptyList()
         )
 
+    init {
+        // ViewModel ilk ayağa kalktığında Firebase'deki personelleri Room ile senkronize et
+        syncPersonnelData()
+    }
+
+    // --- FAZ 3: FİREBASE -> ROOM PERSONEL SENKRONİZASYONU ---
+    fun syncPersonnelData() {
+        viewModelScope.launch {
+            try {
+                repository.syncAllPersonnel()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     // Ekleme işlemi artık suspend ve Boolean döndürüyor (Benzersizlik kontrolü için)
     suspend fun addPersonnel(personnel: Personnel): Boolean {
         val existingUser = repository.getPersonnelByUsername(personnel.username)
@@ -33,6 +49,7 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
         repository.insertPersonnel(personnel)
         return true
     }
+
     suspend fun syncPersonnelWithFirebase(email: String, firebaseUid: String): Result<Personnel> {
         val personnel = repository.getPersonnelByEmail(email)
 
@@ -41,32 +58,42 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
                 Result.failure(Exception("Hesabınız pasif durumdadır."))
             } else {
                 // İlk kez giriş yapıyorsa veya UID eksikse Room'a yaz
-                if (personnel.firebaseUid != firebaseUid) {
+                val finalPersonnel = if (personnel.firebaseUid != firebaseUid) {
                     val updatedPersonnel = personnel.copy(firebaseUid = firebaseUid)
                     repository.updatePersonnel(updatedPersonnel)
-                    Result.success(updatedPersonnel)
+                    updatedPersonnel
                 } else {
-                    Result.success(personnel)
+                    personnel
                 }
+
+                // ---- FAZ 4: FIRESTORE WRITE TESTİ BAŞLANGICI ----
+                try {
+                    repository.testSyncPersonnelToFirestore(finalPersonnel)
+                    println("FIRESTORE TEST: Veri başarıyla gönderildi!")
+                } catch (e: Exception) {
+                    println("FIRESTORE TEST HATASI: ${e.message}")
+                }
+                // ---- FAZ 4: FIRESTORE WRITE TESTİ BİTİŞİ ----
+
+                Result.success(finalPersonnel)
             }
         } else {
             Result.failure(Exception("Bu hesap sisteme kayıtlı bir personelle eşleşmiyor."))
         }
     }
+
     fun updatePersonnel(personnel: Personnel, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 repository.updatePersonnel(personnel)
-                // Mevcut listeyi tazeleyen fonksiyonunu buraya ekle (örn: loadPersonnel() veya getPersonnelList())
-                // loadPersonnel()
                 onComplete(true)
             } catch (e: Exception) {
                 onComplete(false)
             }
         }
     }
+
     fun getPersonnelById(id: Int): Personnel? {
-        // personnelList StateFlow/LiveData adın neyse ona göre uyarla
         return personnelList.value.find { it.id == id }
     }
 

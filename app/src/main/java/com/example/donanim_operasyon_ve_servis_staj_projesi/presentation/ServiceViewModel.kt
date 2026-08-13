@@ -66,6 +66,14 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         )
     val serviceClosingSignature = _serviceClosingSignature.asStateFlow()
 
+    // --- HATA MESAJI STATE'İ (İŞ KURALLARI İÇİN) ---
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage = _errorMessage.asStateFlow()
+
+    fun clearErrorMessage() {
+        _errorMessage.value = null
+    }
+
     // UI State'leri
     var searchQuery by mutableStateOf("")
         private set
@@ -80,7 +88,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         private set
 
     // --- KAPANIŞ FORMU STATE'LERİ ---
-
     private val _closingNote = MutableStateFlow("")
     val closingNote = _closingNote.asStateFlow()
 
@@ -245,6 +252,34 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
 
     fun updateStatus(recordId: Int, newStatus: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            // İşlemi yapmadan önce mevcut kaydı bul
+            val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
+
+            // KURAL C: Tamamlanmış iş emri üzerinde durum değişikliği yapılamaz
+            if (currentRecord.status == ServiceStatus.TAMAMLANDI) {
+                _errorMessage.value = "Tamamlanmış bir iş emrinin durumu değiştirilemez."
+                return@launch
+            }
+
+            // KURAL A: Aynı personelin aynı anda birden fazla aktif iş almasını engelle
+            val activeStatuses = listOf(ServiceStatus.YOLDA, ServiceStatus.ISLEME_BASLANDI)
+            if (newStatus in activeStatuses && currentRecord.assignedPersonnelId != null) {
+
+                // Personelin şu anki aktif işlerini kontrol et (Kendisi hariç)
+                val activeJobs = _serviceRecords.value.filter {
+                    it.assignedPersonnelId == currentRecord.assignedPersonnelId &&
+                            it.status in activeStatuses &&
+                            it.id != recordId
+                }
+
+                if (activeJobs.isNotEmpty()) {
+                    _errorMessage.value =
+                        "Aynı anda birden fazla işleme başlanamaz veya yola çıkılamaz."
+                    return@launch
+                }
+            }
+
+            // Kurallar başarıyla geçilirse güncellemeyi yap
             repository.updateStatus(recordId, newStatus)
             loadRecords()
             _selectedRecord.value = _selectedRecord.value?.copy(status = newStatus)
@@ -347,7 +382,33 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             }
         }
     }
+    fun syncAdminData() {
+        viewModelScope.launch {
+            repository.syncAllServices()
+        }
+    }
 
+    fun syncPersonnelData(uid: String, personnelId: Int) {
+        viewModelScope.launch {
+            repository.syncServicesFromFirestore(
+                personnelUid = uid,
+                localPersonnelId = personnelId
+            )
+        }
+    }
+
+    fun syncMyServices(firebaseUid: String, localPersonnelId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.syncServicesFromFirestore(
+                    personnelUid = firebaseUid,
+                    localPersonnelId = localPersonnelId
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
     fun submitClosingForm(serviceId: Int, personnelId: Int) {
         viewModelScope.launch {
             _closingState.value = ClosingState.Loading
@@ -386,9 +447,9 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                         }
                     }
 
-                    // EKSİK OLAN SATIRLAR BURASI: Verileri yeniden yüklüyoruz!
-                    loadRecords() // Admin listelerini günceller
-                    loadRecordsForPersonnel(personnelId) // Personel listesini günceller
+                    // Verileri yeniden yüklüyoruz
+                    loadRecords()
+                    loadRecordsForPersonnel(personnelId)
 
                     _closingState.value = ClosingState.Success
                 },
@@ -396,17 +457,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                     _closingState.value = ClosingState.Error(error.message ?: "İşlem başarısız.")
                 }
             )
-        }
-    }
-
-    class ServiceViewModelFactory(private val repository: ServiceRepository) :
-        ViewModelProvider.Factory {
-        override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-            if (modelClass.isAssignableFrom(ServiceViewModel::class.java)) {
-                @Suppress("UNCHECKED_CAST")
-                return ServiceViewModel(repository) as T
-            }
-            throw IllegalArgumentException("Bilinmeyen ViewModel sınıfı")
         }
     }
 }

@@ -20,7 +20,11 @@ data class ServiceRecord(
     val contactPerson: String? = null,
     val contactPhone: String? = null,
     val address: String? = null,
-    val plannedDate: String? = null
+    val plannedDate: String? = null,
+
+    // YENİ EKLENEN SENKRONİZASYON ALANLARI BURADA OLMALI
+    val firestoreId: String? = null,
+    val assignedPersonnelUid: String? = null
 )
 
 object ServiceStatus {

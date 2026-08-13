@@ -82,4 +82,9 @@ interface ServiceDao {
 
     @Query("SELECT * FROM service_closing_signatures WHERE serviceRecordId = :serviceId LIMIT 1")
     suspend fun getClosingSignature(serviceId: Int): ServiceClosingSignature?
+
+    // --- FIRESTORE SENKRONİZASYONU İÇİN EKLENEN ---
+    @Query("SELECT * FROM service_records WHERE firestoreId = :firestoreId LIMIT 1")
+    suspend fun getServiceByFirestoreId(firestoreId: String): ServiceRecord?
+
 }

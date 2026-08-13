@@ -64,6 +64,9 @@ dependencies {
     // Firebase task'lerini Coroutine ile (await) temiz bir şekilde kullanabilmek için
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
+    // Firestore dependency (BoM kullanıldığı için versiyonsuz)
+    implementation("com.google.firebase:firebase-firestore")
+
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

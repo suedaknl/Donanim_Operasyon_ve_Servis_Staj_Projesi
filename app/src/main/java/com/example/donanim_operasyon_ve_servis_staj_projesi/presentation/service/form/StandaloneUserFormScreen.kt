@@ -3,14 +3,15 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.servic
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,64 +20,66 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StandaloneUserFormScreen(
-    viewModel: ServiceViewModel,
-    personnelId: Int,
-    onServiceClick: (Int) -> Unit,
-    onLogOut: () -> Unit
+    serviceList: List<ServiceRecord>,
+    personnelList: List<Personnel>,
+    selectedTab: String,
+    onTabSelected: (String) -> Unit,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    selectedFilter: String,
+    onFilterSelected: (String) -> Unit,
+    selectedPriority: String,
+    onPrioritySelected: (String) -> Unit,
+    onClearFilters: () -> Unit,
+    onNavigateToPersonnel: () -> Unit,
+    onNavigateToAddService: () -> Unit,
+    onServiceClick: (ServiceRecord) -> Unit,
+    onLogOut: () -> Unit,
+    serviceViewModel: ServiceViewModel,
+    firebaseUid: String? = null,
+    localPersonnelId: Int? = null
 ) {
-    // 1. Veritabanından sadece bu personele atanmış işleri çeker (GÜVENLİK)
-    LaunchedEffect(personnelId) {
-        viewModel.loadRecordsForPersonnel(personnelId)
-    }
+    val statusOptions = listOf("Hepsi") + ServiceStatus.all
+    val priorityOptions = listOf("Hepsi", "Düşük", "Normal", "Yüksek", "Acil")
+    val tabs = listOf("Tümü", "Atanmamış", "Atanan", "Devam Eden", "Tamamlanan")
 
-    // 2. ViewModel'den gelen ARAMA ve DETAYLI FİLTRE uygulanmış GÜVENLİ liste
-    val basePersonnelRecords by viewModel.filteredPersonnelServiceRecords.collectAsState()
-
-    // 3. UI State (Sekmeler ve BottomSheet için)
-    var selectedTab by remember { mutableStateOf("Tümü") }
     var showFilterSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val tabs = listOf("Tümü", "Bekleyen", "Devam Eden", "Tamamlanan")
-    val statusOptions = listOf("Hepsi") + ServiceStatus.all
-    val priorityOptions = listOf("Hepsi", "Düşük", "Normal", "Yüksek", "Acil")
-
-    // Mevcut filtre/arama state'leri
-    val searchQuery = viewModel.searchQuery
-    val selectedStatus = viewModel.selectedFilter
-    val selectedPriority = viewModel.selectedPriorityFilter
-
-    // 4. GÜVENLİ Sekme (Tab) Ayrıştırması
-    val finalRecords = remember(basePersonnelRecords, selectedTab) {
-        basePersonnelRecords.filter { record ->
-            when (selectedTab) {
-                "Bekleyen" -> record.status == ServiceStatus.BEKLIYOR
-                "Devam Eden" -> record.status == ServiceStatus.YOLDA ||
-                        record.status == ServiceStatus.ISLEME_BASLANDI ||
-                        record.status == ServiceStatus.PARCA_BEKLENIYOR
-                "Tamamlanan" -> record.status == ServiceStatus.TAMAMLANDI
-                else -> true // "Tümü"
-            }
-        }
+    LaunchedEffect(Unit) {
+        serviceViewModel.syncAdminData()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Atanan İş Emirlerim", fontWeight = FontWeight.Bold) },
+                title = { Text("Personel İş Paneli", fontWeight = FontWeight.Bold) },
                 actions = {
+                    IconButton(onClick = onNavigateToPersonnel) {
+                        Icon(Icons.Default.People, contentDescription = "Personel Yönetimi")
+                    }
                     IconButton(onClick = onLogOut) {
                         Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Çıkış Yap")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onNavigateToAddService,
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Yeni İş Emri Ekle")
+            }
         }
     ) { paddingValues ->
         Column(
@@ -84,8 +87,6 @@ fun StandaloneUserFormScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-
-            // --- ÜST SEKMELER (TABS) ---
             ScrollableTabRow(
                 selectedTabIndex = tabs.indexOf(selectedTab),
                 edgePadding = 8.dp,
@@ -95,13 +96,12 @@ fun StandaloneUserFormScreen(
                 tabs.forEach { tab ->
                     Tab(
                         selected = selectedTab == tab,
-                        onClick = { selectedTab = tab },
+                        onClick = { onTabSelected(tab) },
                         text = { Text(tab, fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Normal) }
                     )
                 }
             }
 
-            // --- ARAMA ÇUBUĞU VE FİLTRE İKONU ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -111,13 +111,13 @@ fun StandaloneUserFormScreen(
             ) {
                 OutlinedTextField(
                     value = searchQuery,
-                    onValueChange = { viewModel.updateSearchQuery(it) },
+                    onValueChange = onSearchQueryChange,
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Firma, cihaz, seri no veya lokasyon...") },
+                    placeholder = { Text("Firma, cihaz, seri no...") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Ara") },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                            IconButton(onClick = { onSearchQueryChange("") }) {
                                 Icon(Icons.Default.Clear, contentDescription = "Temizle")
                             }
                         }
@@ -126,7 +126,7 @@ fun StandaloneUserFormScreen(
                     shape = RoundedCornerShape(12.dp)
                 )
 
-                val isFilterActive = selectedStatus != "Hepsi" || selectedPriority != "Hepsi"
+                val isFilterActive = selectedFilter != "Hepsi" || selectedPriority != "Hepsi"
                 FilledIconButton(
                     onClick = { showFilterSheet = true },
                     colors = IconButtonDefaults.filledIconButtonColors(
@@ -141,8 +141,7 @@ fun StandaloneUserFormScreen(
 
             HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
 
-            // --- İŞ EMRİ LİSTESİ ---
-            if (finalRecords.isEmpty()) {
+            if (serviceList.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -150,10 +149,10 @@ fun StandaloneUserFormScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (searchQuery.isNotEmpty() || selectedStatus != "Hepsi" || selectedPriority != "Hepsi" || selectedTab != "Tümü") {
+                        text = if (searchQuery.isNotEmpty() || selectedFilter != "Hepsi" || selectedPriority != "Hepsi") {
                             "Arama veya filtreleme kriterlerine uygun iş emri bulunamadı."
                         } else {
-                            "Şu anda size atanmış aktif bir iş emri bulunmuyor."
+                            "Bu kategoride iş emri bulunmuyor."
                         },
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -166,20 +165,22 @@ fun StandaloneUserFormScreen(
                         .fillMaxSize()
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp)
+                    contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
-                    items(finalRecords) { record ->
+                    items(serviceList) { record ->
+                        val assignedPersonnelName = personnelList.find { it.id == record.assignedPersonnelId }?.fullName ?: "Atanmadı"
+
                         ElevatedCard(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onServiceClick(record.id) },
+                                .clickable { onServiceClick(record) },
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -197,80 +198,37 @@ fun StandaloneUserFormScreen(
                                 Text("Lokasyon: ${record.location}", style = MaterialTheme.typography.bodyMedium)
                                 Text("Öncelik: ${record.priority}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
 
-                                Surface(
-                                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.padding(top = 4.dp)
+                                Spacer(modifier = Modifier.height(2.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text(
-                                        text = "Durum: ${record.status}",
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                                    )
+                                    Surface(
+                                        color = if (record.assignedPersonnelId != null) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp)) {
+                                            Text("Atanan Personel", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(assignedPersonnelName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp)) {
+                                            Text("Durum", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(record.status, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-
-    // --- FİLTRE BOTTOM SHEET ---
-    if (showFilterSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showFilterSheet = false },
-            sheetState = sheetState
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("Detaylı Filtreleme", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-
-                HorizontalDivider()
-
-                Text("Durum", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(statusOptions) { status ->
-                        FilterChip(
-                            selected = (selectedStatus == status),
-                            onClick = { viewModel.updateSelectedFilter(status) },
-                            label = { Text(status) }
-                        )
-                    }
-                }
-
-                Text("Öncelik", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(priorityOptions) { priority ->
-                        FilterChip(
-                            selected = (selectedPriority == priority),
-                            onClick = { viewModel.updateSelectedPriorityFilter(priority) },
-                            label = { Text(priority) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = {
-                        viewModel.updateSearchQuery("")
-                        viewModel.updateSelectedFilter("Hepsi")
-                        viewModel.updateSelectedPriorityFilter("Hepsi")
-                        selectedTab = "Tümü"
-                        showFilterSheet = false
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Filtreleri Temizle")
                 }
             }
         }
