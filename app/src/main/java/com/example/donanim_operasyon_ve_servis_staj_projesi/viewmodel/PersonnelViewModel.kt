@@ -25,11 +25,9 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
         )
 
     init {
-        // ViewModel ilk ayağa kalktığında Firebase'deki personelleri Room ile senkronize et
         syncPersonnelData()
     }
 
-    // --- FAZ 3: FİREBASE -> ROOM PERSONEL SENKRONİZASYONU ---
     fun syncPersonnelData() {
         viewModelScope.launch {
             try {
@@ -40,29 +38,22 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
         }
     }
 
-    // Ekleme işlemi artık suspend ve Boolean döndürüyor (Benzersizlik kontrolü için)
     suspend fun addPersonnel(personnel: Personnel): Boolean {
         val existingUser = repository.getPersonnelByUsername(personnel.username)
-
         if (existingUser != null) {
-            // Kullanıcı adı zaten mevcut, kayıt başarısız
             return false
         }
-
-        // Kullanıcı adı boşta, kaydı tamamla
         repository.insertPersonnel(personnel)
         return true
     }
-    // --- YENİ EKLENEN FİREBASE + ROOM SENKRONİZASYON METODU ---
+
     suspend fun addPersonnelWithFirebase(personnel: Personnel, context: Context): Result<Unit> {
-        // 1. Kullanıcı adı benzersizlik kontrolü (Room üzerinden)
         val existingUser = repository.getPersonnelByUsername(personnel.username)
         if (existingUser != null) {
             return Result.failure(Exception("Bu kullanıcı adı zaten sistemde kayıtlı."))
         }
 
         return try {
-            // 2. SECONDARY FIREBASE APP (Admin oturumunu korumak için)
             val defaultApp = FirebaseApp.getInstance()
             val secondaryAppName = "PersonnelCreationApp"
 
@@ -71,20 +62,13 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
                 secondaryApp = FirebaseApp.initializeApp(context, defaultApp.options, secondaryAppName)
             }
 
-            // Geçici uygulamanın Auth instance'ını alıyoruz
             val secondaryAuth = FirebaseAuth.getInstance(secondaryApp!!)
-
-            // 3. Personeli Firebase Auth üzerinde oluştur ve UID'yi al
             val authResult = secondaryAuth.createUserWithEmailAndPassword(personnel.email, personnel.password).await()
             val generatedUid = authResult.user?.uid ?: throw Exception("Firebase UID oluşturulamadı.")
 
-            // 4. İkincil oturumu kapat (Admin'in ana instance'ı etkilenmez)
             secondaryAuth.signOut()
 
-            // 5. Üretilen gerçek UID'yi Personel nesnesine ekle
             val newPersonnel = personnel.copy(firebaseUid = generatedUid)
-
-            // 6. Firestore ve Room senkronizasyonunu başlat
             val syncResult = repository.addPersonnelWithFirebaseSync(newPersonnel)
 
             if (syncResult.isSuccess) {
@@ -97,6 +81,7 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
             Result.failure(Exception(e.localizedMessage ?: "Bilinmeyen bir hata oluştu."))
         }
     }
+
     suspend fun syncPersonnelWithFirebase(email: String, firebaseUid: String): Result<Personnel> {
         val personnel = repository.getPersonnelByEmail(email)
 
@@ -104,7 +89,6 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
             if (!personnel.isActive) {
                 Result.failure(Exception("Hesabınız pasif durumdadır."))
             } else {
-                // İlk kez giriş yapıyorsa veya UID eksikse Room'a yaz
                 val finalPersonnel = if (personnel.firebaseUid != firebaseUid) {
                     val updatedPersonnel = personnel.copy(firebaseUid = firebaseUid)
                     repository.updatePersonnel(updatedPersonnel)
@@ -113,14 +97,11 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
                     personnel
                 }
 
-                // ---- FAZ 4: FIRESTORE WRITE TESTİ BAŞLANGICI ----
                 try {
                     repository.testSyncPersonnelToFirestore(finalPersonnel)
-                    println("FIRESTORE TEST: Veri başarıyla gönderildi!")
                 } catch (e: Exception) {
-                    println("FIRESTORE TEST HATASI: ${e.message}")
+                    e.printStackTrace()
                 }
-                // ---- FAZ 4: FIRESTORE WRITE TESTİ BİTİŞİ ----
 
                 Result.success(finalPersonnel)
             }
@@ -129,13 +110,22 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
         }
     }
 
+    // --- GÜNCELLENEN GÜNCELLEME METODU (Firestore Sync Eklendi) ---
     fun updatePersonnel(personnel: Personnel, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // 1. Önce Room'da güncelle
                 repository.updatePersonnel(personnel)
-                onComplete(true)
+                // 2. Ardından Firestore'a senkronize et (gender, aktiflik vb. değişiklikler uçsun)
+                repository.testSyncPersonnelToFirestore(personnel)
+
+                withContext(Dispatchers.Main) {
+                    onComplete(true)
+                }
             } catch (e: Exception) {
-                onComplete(false)
+                withContext(Dispatchers.Main) {
+                    onComplete(false)
+                }
             }
         }
     }

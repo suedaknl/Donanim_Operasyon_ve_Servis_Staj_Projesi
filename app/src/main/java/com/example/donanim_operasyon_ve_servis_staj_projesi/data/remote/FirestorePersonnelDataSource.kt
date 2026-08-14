@@ -13,7 +13,7 @@ class FirestorePersonnelDataSource(
         return try {
             val uid = personnel.firebaseUid ?: return Result.failure(IllegalArgumentException("Firebase UID eksik"))
 
-            // Room Entity'sini Firestore formatına manuel mapliyoruz (Güvenlik için 'password' çıkarıldı)
+            // Room Entity'sini Firestore formatına manuel mapliyoruz (gender eklendi)
             val personnelMap = hashMapOf(
                 "id" to personnel.id,
                 "fullName" to personnel.fullName,
@@ -22,7 +22,8 @@ class FirestorePersonnelDataSource(
                 "role" to personnel.role,
                 "isActive" to personnel.isActive,
                 "email" to personnel.email,
-                "firebaseUid" to personnel.firebaseUid
+                "firebaseUid" to personnel.firebaseUid,
+                "gender" to personnel.gender // Cinsiyet bilgisi Firestore'a kaydediliyor
             )
 
             // UID'yi doküman ID'si olarak kullanıp kaydediyoruz
@@ -47,7 +48,8 @@ class FirestorePersonnelDataSource(
                     password = "", // Firestore'dan şifre gelmez
                     isActive = document.getBoolean("isActive") ?: false,
                     email = document.getString("email") ?: "",
-                    firebaseUid = document.getString("firebaseUid") ?: document.id
+                    firebaseUid = document.getString("firebaseUid") ?: document.id,
+                    gender = document.getString("gender") ?: "ERKEK" // Okunurken ekendi (Eski kayıtlarda yoksa güvenli varsayılan)
                 )
                 Result.success(personnel)
             } else {
@@ -58,8 +60,6 @@ class FirestorePersonnelDataSource(
         }
     }
 
-
-    // --- FAZ 3: EKSİK OLAN VE EKLENEN FONKSİYON ---
     suspend fun getAllPersonnel(): Result<List<Personnel>> {
         return try {
             val snapshot = collection.get().await()
@@ -73,7 +73,8 @@ class FirestorePersonnelDataSource(
                     password = "", // Firestore'dan şifre gelmez
                     isActive = document.getBoolean("isActive") ?: false,
                     email = document.getString("email") ?: "",
-                    firebaseUid = document.getString("firebaseUid") ?: document.id
+                    firebaseUid = document.getString("firebaseUid") ?: document.id,
+                    gender = document.getString("gender") ?: "ERKEK" // Toplu okumada da güvenli maplendi
                 )
             }
             Result.success(personnelList)

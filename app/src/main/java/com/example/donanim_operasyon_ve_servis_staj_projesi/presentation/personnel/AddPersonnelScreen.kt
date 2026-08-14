@@ -30,7 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
-import kotlinx.coroutines.launch
+import androidx.compose.foundation.clickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,7 +51,6 @@ fun AddPersonnelScreen(
     var username by remember { mutableStateOf("") }
     var usernameError by remember { mutableStateOf("") }
 
-    // --- YENİ EKLENEN E-POSTA STATE ---
     var email by remember { mutableStateOf("") }
     var emailError by remember { mutableStateOf("") }
 
@@ -64,6 +63,9 @@ fun AddPersonnelScreen(
 
     var role by remember { mutableStateOf("") }
     var roleError by remember { mutableStateOf("") }
+
+    // --- CİNSİYET STATE'İ EKLENDİ ---
+    var gender by remember { mutableStateOf("ERKEK") }
 
     var isActive by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
@@ -78,11 +80,12 @@ fun AddPersonnelScreen(
                     originalPersonnel = personnel
                     fullName = personnel.fullName
                     username = personnel.username
-                    email = personnel.email // VERİTABANINDAN GELEN E-POSTAYI YÜKLE
+                    email = personnel.email
                     password = personnel.password
                     phoneNumber = personnel.phoneNumber
                     role = personnel.role
                     isActive = personnel.isActive
+                    gender = personnel.gender // Kayıtlı cinsiyeti yükle
                 } else {
                     coroutineScope.launch {
                         snackbarHostState.showSnackbar("Personel bilgisi bulunamadı.")
@@ -151,7 +154,6 @@ fun AddPersonnelScreen(
                 }
             )
 
-            // --- YENİ EKLENEN E-POSTA UI ALANI ---
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it; emailError = "" },
@@ -229,6 +231,42 @@ fun AddPersonnelScreen(
                 }
             )
 
+            // --- CİNSİYET SEÇİM UI BİLEŞENİ (Erkek / Kadın) ---
+            Text("Cinsiyet", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clickable { gender = "ERKEK" }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = (gender == "ERKEK"),
+                        onClick = { gender = "ERKEK" }
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Erkek")
+                }
+
+                Row(
+                    modifier = Modifier
+                        .clickable { gender = "KADIN" }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = (gender == "KADIN"),
+                        onClick = { gender = "KADIN" }
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Kadın")
+                }
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -270,14 +308,14 @@ fun AddPersonnelScreen(
                         isSaving = true
 
                         if (isEditMode && originalPersonnel != null) {
-                            // --- DÜZENLEME MODU (Mevcut yapı tamamen korundu) ---
                             val hasChanges = fullName.trim() != originalPersonnel!!.fullName ||
                                     username.trim() != originalPersonnel!!.username ||
                                     email.trim() != originalPersonnel!!.email ||
                                     password.trim() != originalPersonnel!!.password ||
                                     phoneNumber.trim() != originalPersonnel!!.phoneNumber ||
                                     role.trim() != originalPersonnel!!.role ||
-                                    isActive != originalPersonnel!!.isActive
+                                    isActive != originalPersonnel!!.isActive ||
+                                    gender != originalPersonnel!!.gender
 
                             if (!hasChanges) {
                                 coroutineScope.launch {
@@ -294,7 +332,8 @@ fun AddPersonnelScreen(
                                 password = password.trim(),
                                 phoneNumber = phoneNumber.trim(),
                                 role = role.trim(),
-                                isActive = isActive
+                                isActive = isActive,
+                                gender = gender
                             )
 
                             viewModel.updatePersonnel(updatedPersonnel) { success ->
@@ -312,7 +351,6 @@ fun AddPersonnelScreen(
                             }
 
                         } else if (!isEditMode) {
-                            // --- YENİ EKLEME MODU (Firebase entegrasyonu uygulandı) ---
                             coroutineScope.launch {
                                 val newPersonnel = Personnel(
                                     fullName = fullName.trim(),
@@ -321,7 +359,8 @@ fun AddPersonnelScreen(
                                     password = password.trim(),
                                     phoneNumber = phoneNumber.trim(),
                                     role = role.trim(),
-                                    isActive = isActive
+                                    isActive = isActive,
+                                    gender = gender
                                 )
 
                                 val result =
@@ -335,7 +374,6 @@ fun AddPersonnelScreen(
                                     val errorMessage = result.exceptionOrNull()?.message
                                         ?: "Kayıt sırasında bir hata oluştu."
 
-                                    // Eğer hata kullanıcı adından kaynaklıysa doğrudan o alanı kızart
                                     if (errorMessage.contains("kullanıcı adı", ignoreCase = true)) {
                                         usernameError = errorMessage
                                     } else {

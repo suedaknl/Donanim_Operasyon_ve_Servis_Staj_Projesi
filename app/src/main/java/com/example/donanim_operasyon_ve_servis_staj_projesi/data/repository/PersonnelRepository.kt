@@ -26,7 +26,6 @@ class PersonnelRepository(private val personnelDao: PersonnelDao) {
         personnelDao.deletePersonnel(personnel)
     }
 
-
     // Kullanıcı adını veritabanında arayan fonksiyon
     suspend fun getPersonnelByUsername(username: String): Personnel? {
         return personnelDao.getPersonnelByUsername(username)
@@ -47,15 +46,15 @@ class PersonnelRepository(private val personnelDao: PersonnelDao) {
     suspend fun testGetPersonnelFromFirestore(uid: String): Result<Personnel?> {
         return firestoreDataSource.getPersonnel(uid)
     }
+
     // --- PERSONEL OLUŞTURMA: FIRESTORE VE ROOM SENKRONİZASYONU ---
     suspend fun addPersonnelWithFirebaseSync(personnel: Personnel): Result<Unit> {
         return try {
-            // 1. Önce Firestore'a kaydet (Single Source of Truth)
-            // firestoreDataSource.savePersonnel metodu, personnel objesindeki firebaseUid'yi document id olarak kullanmalıdır.
+            // 1. Önce Firestore'a kaydet (gender dahil otomatik kaydedilir)
             val firestoreResult = firestoreDataSource.savePersonnel(personnel)
 
             if (firestoreResult.isSuccess) {
-                // 2. Firestore kaydı başarılıysa Room'a ekle (Hatalı veya yarım kaydı önler)
+                // 2. Firestore kaydı başarılıysa Room'a ekle
                 personnelDao.insertPersonnel(personnel)
                 Result.success(Unit)
             } else {
@@ -65,6 +64,7 @@ class PersonnelRepository(private val personnelDao: PersonnelDao) {
             Result.failure(e)
         }
     }
+
     // --- FAZ 3: FİREBASE'DEKİ PERSONELLERİ ROOM'A SENKRONİZE ETME ---
     suspend fun syncAllPersonnel() {
         val result = firestoreDataSource.getAllPersonnel()
@@ -76,7 +76,8 @@ class PersonnelRepository(private val personnelDao: PersonnelDao) {
                     if (existingPersonnel != null) {
                         val personnelToUpdate = remotePersonnel.copy(
                             id = existingPersonnel.id,
-                            password = existingPersonnel.password
+                            password = existingPersonnel.password,
+                            gender = remotePersonnel.gender // Gender bilgisi senkronizasyonda korunuyor
                         )
                         personnelDao.updatePersonnel(personnelToUpdate)
                     } else {

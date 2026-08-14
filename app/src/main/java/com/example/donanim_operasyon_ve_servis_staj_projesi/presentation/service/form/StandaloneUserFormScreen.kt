@@ -6,12 +6,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,34 +55,14 @@ fun StandaloneUserFormScreen(
         serviceViewModel.syncAdminData()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Personel İş Paneli", fontWeight = FontWeight.Bold) },
-                actions = {
-                    IconButton(onClick = onNavigateToPersonnel) {
-                        Icon(Icons.Default.People, contentDescription = "Personel Yönetimi")
-                    }
-                    IconButton(onClick = onLogOut) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Çıkış Yap")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToAddService,
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Yeni İş Emri Ekle")
-            }
-        }
-    ) { paddingValues ->
+    // DİKKAT: Üstteki kafa karıştırıcı TopAppBar ve çakışan FAB bu ekrandan tamamen temizlendi.
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
         ) {
             ScrollableTabRow(
                 selectedTabIndex = tabs.indexOf(selectedTab),
@@ -165,7 +142,7 @@ fun StandaloneUserFormScreen(
                         .fillMaxSize()
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 80.dp)
+                    contentPadding = PaddingValues(bottom = 90.dp)
                 ) {
                     items(serviceList) { record ->
                         val assignedPersonnelName = personnelList.find { it.id == record.assignedPersonnelId }?.fullName ?: "Atanmadı"

@@ -23,9 +23,10 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.We
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home.HomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.AddServiceScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceDetailScreen
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.StandaloneUserFormScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.AddPersonnelScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelListScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelWelcomeScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelMainScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.splash.SplashScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.PersonnelRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
@@ -64,12 +65,10 @@ fun AppNavigation() {
 
     NavHost(navController = navController, startDestination = "splash") {
 
-        // 1. SPLASH GÜNCELLEMESİ
         composable("splash") {
             SplashScreen(
                 onSplashFinished = { destination ->
                     navController.navigate(destination) {
-                        // Splash ekranını backstack'ten tamamen sil
                         popUpTo("splash") { inclusive = true }
                     }
                 }
@@ -98,11 +97,30 @@ fun AppNavigation() {
             PersonnelLoginScreen(
                 viewModel = personnelViewModel,
                 onLoginSuccess = { personnelId ->
-                    navController.navigate("user_form/$personnelId") {
+                    navController.navigate("personnel_welcome/$personnelId") {
                         popUpTo("welcome") { inclusive = true }
                     }
                 },
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = "personnel_welcome/{personnelId}",
+            arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
+            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+
+            PersonnelWelcomeScreen(
+                personnelId = personnelId,
+                personnelViewModel = personnelViewModel,
+                serviceViewModel = sharedServiceViewModel,
+                onNavigateToHome = {
+                    navController.navigate("personnel_main/$personnelId") {
+                        popUpTo("personnel_welcome/$personnelId") { inclusive = true }
+                    }
+                }
             )
         }
 
@@ -172,7 +190,7 @@ fun AppNavigation() {
                 firebaseUid = null,
                 localPersonnelId = null
             )
-        } // <-- home rotasının düzgün kapanış süslü parantezi
+        }
 
         composable("personnel_service_detail/{serviceId}/{personnelId}") { backStackEntry ->
             val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
@@ -257,54 +275,24 @@ fun AppNavigation() {
         }
 
         composable(
-            route = "user_form/{personnelId}",
+            route = "personnel_main/{personnelId}",
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
-
-            // DİKKAT: Artık tüm servisler değil, sadece bu personele ait olanlar filtreleniyor
-            val allServiceList by sharedServiceViewModel.filteredServiceRecords.collectAsState()
-            val serviceList = remember(allServiceList, personnelId) {
-                allServiceList.filter { it.assignedPersonnelId == personnelId }
-            }
-
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
-            val personnelList by personnelViewModel.personnelList.collectAsState()
 
-            StandaloneUserFormScreen(
-                serviceList = serviceList, // <-- Filtrelenmiş liste buraya veriliyor
-                personnelList = personnelList,
-                selectedTab = sharedServiceViewModel.selectedTab,
-                onTabSelected = { sharedServiceViewModel.updateSelectedTab(it) },
-                searchQuery = sharedServiceViewModel.searchQuery,
-                onSearchQueryChange = { sharedServiceViewModel.updateSearchQuery(it) },
-                selectedFilter = sharedServiceViewModel.selectedFilter,
-                onFilterSelected = { filter ->
-                    sharedServiceViewModel.updateSelectedFilter(filter)
-                },
-                selectedPriority = sharedServiceViewModel.selectedPriorityFilter,
-                onPrioritySelected = { priority ->
-                    sharedServiceViewModel.updateSelectedPriorityFilter(priority)
-                },
-                onClearFilters = {
-                    sharedServiceViewModel.updateSearchQuery("")
-                    sharedServiceViewModel.updateSelectedFilter("Hepsi")
-                    sharedServiceViewModel.updateSelectedPriorityFilter("Hepsi")
-                },
-                onNavigateToPersonnel = { },
-                onNavigateToAddService = { },
-                onServiceClick = { service ->
-                    // Personel kendi işine tıkladığı için kendi ID'siyle detay sayfasına gider
-                    navController.navigate("personnel_service_detail/${service.id}/$personnelId")
+            PersonnelMainScreen(
+                personnelId = personnelId,
+                serviceViewModel = sharedServiceViewModel,
+                personnelViewModel = personnelViewModel,
+                onNavigateToServiceDetail = { serviceId ->
+                    navController.navigate("personnel_service_detail/$serviceId/$personnelId")
                 },
                 onLogOut = {
                     authRepository.signOut()
                     sessionManager.clearSession()
                     navController.navigate("welcome") { popUpTo(0) }
-                },
-                serviceViewModel = sharedServiceViewModel,
-                firebaseUid = null,
-                localPersonnelId = personnelId
+                }
             )
         }
 

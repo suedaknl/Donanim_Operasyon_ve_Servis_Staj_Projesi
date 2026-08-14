@@ -12,7 +12,7 @@ data class Personnel(
     val role: String,
     val password: String,
     val isActive: Boolean = true,
-    // Arayüzdeki kurucu (constructor) metodun çökmemesi için varsayılan değer atadık:
     val email: String = "",
-    val firebaseUid: String? = null
+    val firebaseUid: String? = null,
+    val gender: String = "ERKEK" // Yeni eklenen alan (Varsayılan güvenli değer)
 )
