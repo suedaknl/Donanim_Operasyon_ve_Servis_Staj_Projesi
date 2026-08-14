@@ -47,7 +47,24 @@ class PersonnelRepository(private val personnelDao: PersonnelDao) {
     suspend fun testGetPersonnelFromFirestore(uid: String): Result<Personnel?> {
         return firestoreDataSource.getPersonnel(uid)
     }
+    // --- PERSONEL OLUŞTURMA: FIRESTORE VE ROOM SENKRONİZASYONU ---
+    suspend fun addPersonnelWithFirebaseSync(personnel: Personnel): Result<Unit> {
+        return try {
+            // 1. Önce Firestore'a kaydet (Single Source of Truth)
+            // firestoreDataSource.savePersonnel metodu, personnel objesindeki firebaseUid'yi document id olarak kullanmalıdır.
+            val firestoreResult = firestoreDataSource.savePersonnel(personnel)
 
+            if (firestoreResult.isSuccess) {
+                // 2. Firestore kaydı başarılıysa Room'a ekle (Hatalı veya yarım kaydı önler)
+                personnelDao.insertPersonnel(personnel)
+                Result.success(Unit)
+            } else {
+                Result.failure(firestoreResult.exceptionOrNull() ?: Exception("Firestore'a kayıt başarısız oldu."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
     // --- FAZ 3: FİREBASE'DEKİ PERSONELLERİ ROOM'A SENKRONİZE ETME ---
     suspend fun syncAllPersonnel() {
         val result = firestoreDataSource.getAllPersonnel()

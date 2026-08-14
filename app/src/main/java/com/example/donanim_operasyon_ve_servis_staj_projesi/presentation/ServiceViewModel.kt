@@ -165,7 +165,14 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        loadRecords()
+        // Uygulama her açıldığında Firebase'deki iş emirlerini yerel veritabanına (Room) indir
+        viewModelScope.launch {
+            try {
+                repository.syncAllServices()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     fun loadRecords() {
@@ -382,9 +389,23 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             }
         }
     }
+
     fun syncAdminData() {
         viewModelScope.launch {
+            // 1. Arka planda Firebase'den verileri çek ve Room'u güncelle
             repository.syncAllServices()
+
+            // 2. EKRANI YENİLE
+            val updatedList = repository.getAllRecords()
+            _serviceRecords.value = updatedList
+        }
+    }
+
+    fun forceSync() {
+        viewModelScope.launch {
+            repository.syncAllServices()
+            val updatedList = repository.getAllRecords()
+            _serviceRecords.value = updatedList
         }
     }
 
@@ -409,54 +430,37 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             }
         }
     }
+
     fun submitClosingForm(serviceId: Int, personnelId: Int) {
         viewModelScope.launch {
+            // 1. UI'a yükleniyor durumunu bildir
             _closingState.value = ClosingState.Loading
 
-            val record = serviceRecords.value.find { it.id == serviceId }
-            if (record == null) {
-                _closingState.value = ClosingState.Error("İş emri bulunamadı.")
-                return@launch
-            }
-
-            val note = _closingNote.value.trim()
+            // 2. Gerekli verileri mevcut State'lerden ve listeden topla
+            val currentRecord = getServiceById(serviceId)
+            val note = _closingNote.value
             val signature = _closingSignatureUri.value
 
-            if (note.isEmpty() || signature.isNullOrEmpty()) {
-                _closingState.value = ClosingState.Error("Kapanış formunda eksik bilgiler var.")
+            if (currentRecord == null || signature == null || note.isBlank()) {
+                _closingState.value = ClosingState.Error("Eksik veri: Lütfen formu kontrol edin.")
                 return@launch
             }
 
-            val result = repository.completeServiceWork(record, personnelId, note, signature)
-
-            result.fold(
-                onSuccess = {
-                    _closingAfterPhotoUri.value?.let { uri ->
-                        viewModelScope.launch {
-                            val afterPhoto = ServicePhoto(
-                                id = 0,
-                                serviceRecordId = serviceId,
-                                personnelId = personnelId,
-                                localUri = uri,
-                                photoType = "SONRASI",
-                                timestamp = System.currentTimeMillis(),
-                                photoUri = uri,
-                                photoCategory = "SONRASI"
-                            )
-                            repository.insertServicePhoto(afterPhoto)
-                        }
-                    }
-
-                    // Verileri yeniden yüklüyoruz
-                    loadRecords()
-                    loadRecordsForPersonnel(personnelId)
-
-                    _closingState.value = ClosingState.Success
-                },
-                onFailure = { error ->
-                    _closingState.value = ClosingState.Error(error.message ?: "İşlem başarısız.")
-                }
+            // 3. Repository'deki işlemi çağır
+            val result = repository.completeServiceWork(
+                serviceRecord = currentRecord,
+                personnelId = personnelId,
+                closingNoteText = note,
+                signatureUri = signature
             )
+
+            // 4. Sonucu UI State'ine aktar
+            if (result.isSuccess) {
+                _closingState.value = ClosingState.Success
+                loadRecords() // İşlem bitince listeyi yenile
+            } else {
+                _closingState.value = ClosingState.Error(result.exceptionOrNull()?.message ?: "İşlem sırasında bir hata oluştu.")
+            }
         }
     }
 }

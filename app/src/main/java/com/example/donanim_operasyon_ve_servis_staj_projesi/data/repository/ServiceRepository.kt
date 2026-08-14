@@ -99,14 +99,26 @@ class ServiceRepository(
     }
 
     suspend fun updateService(service: ServiceRecord) {
-        // 1. Önce Room'da güncelle
-        serviceDao.updateService(service)
+        // 1. Eğer atanmış bir personel varsa, o personelin gerçek Firebase UID'sini bulalım
+        val personnelUid = service.assignedPersonnelId?.let { personnelId ->
+            try {
+                personnelDao.getPersonnelById(personnelId)?.firebaseUid
+            } catch (e: Exception) {
+                null
+            }
+        }
 
-        // 2. Firebase'de güncelle (firestoreId varsa)
+        // 2. Service nesnesini güncellenmiş UID ile kopyalayalım
+        val serviceToUpdate = service.copy(assignedPersonnelUid = personnelUid)
+
+        // 3. Önce Room'da güncelle
+        serviceDao.updateService(serviceToUpdate)
+
+        // 4. Firebase'de güncelle (firestoreId varsa)
         withContext(Dispatchers.IO) {
             try {
-                if (!service.firestoreId.isNullOrEmpty()) {
-                    firestoreDataSource.updateService(service)
+                if (!serviceToUpdate.firestoreId.isNullOrEmpty()) {
+                    firestoreDataSource.updateService(serviceToUpdate)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -205,12 +217,20 @@ class ServiceRepository(
 
     // --- FAZ 3: ADMİN İÇİN TÜM FİREBASE SERVİSLERİNİ ROOM'A SENKRONİZE ETME ---
     suspend fun syncAllServices() {
+        println("SYNC BAŞLADI: Firebase'den iş emirleri çekiliyor...")
         val result = firestoreDataSource.getAllServices()
 
         result.onSuccess { remoteServices ->
-            // Doğrudan yeni eklediğimiz suspend fonksiyonu çağırıyoruz
+            println("SYNC BAŞARILI: Firebase'den ${remoteServices.size} adet iş emri geldi!")
+
             val allPersonnel = try {
                 personnelDao.getAllPersonnelList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+
+            val allLocalServices = try {
+                serviceDao.getAllRecords()
             } catch (e: Exception) {
                 emptyList()
             }
@@ -230,14 +250,35 @@ class ServiceRepository(
                             assignedPersonnelId = matchedPersonnelId ?: existingLocalService.assignedPersonnelId
                         )
                         serviceDao.updateService(serviceToUpdate)
+                        println("SYNC: ${firestoreId} güncellendi.")
                     } else {
-                        val serviceToInsert = remoteService.copy(
-                            assignedPersonnelId = matchedPersonnelId
-                        )
-                        serviceDao.insertRecord(serviceToInsert)
+                        val ghostRecord = allLocalServices.find {
+                            it.firestoreId == null &&
+                                    it.companyName == remoteService.companyName &&
+                                    it.serialNumber == remoteService.serialNumber
+                        }
+
+                        if (ghostRecord != null) {
+                            val serviceToUpdate = remoteService.copy(
+                                id = ghostRecord.id,
+                                assignedPersonnelId = matchedPersonnelId
+                            )
+                            serviceDao.updateService(serviceToUpdate)
+                            println("SYNC: Hayalet kayıt eşleştirildi (${firestoreId}).")
+                        } else {
+                            val serviceToInsert = remoteService.copy(
+                                assignedPersonnelId = matchedPersonnelId
+                            )
+                            serviceDao.insertRecord(serviceToInsert)
+                            println("SYNC: Yeni kayıt Room'a eklendi (${firestoreId}).")
+                        }
                     }
+                } else {
+                    println("SYNC UYARI: Firebase'deki bir kaydın firestoreId'si null!")
                 }
             }
+        }.onFailure {
+            println("SYNC HATASI: Firebase'den veri çekilemedi. Hata: ${it.message}")
         }
     }
     // --- FIRESTORE SENKRONİZASYON FONKSİYONU (PERSONEL) ---

@@ -10,6 +10,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.content.Context
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.tasks.await
 
 class PersonnelViewModel(private val repository: PersonnelRepository) : ViewModel() {
 
@@ -49,7 +53,50 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
         repository.insertPersonnel(personnel)
         return true
     }
+    // --- YENİ EKLENEN FİREBASE + ROOM SENKRONİZASYON METODU ---
+    suspend fun addPersonnelWithFirebase(personnel: Personnel, context: Context): Result<Unit> {
+        // 1. Kullanıcı adı benzersizlik kontrolü (Room üzerinden)
+        val existingUser = repository.getPersonnelByUsername(personnel.username)
+        if (existingUser != null) {
+            return Result.failure(Exception("Bu kullanıcı adı zaten sistemde kayıtlı."))
+        }
 
+        return try {
+            // 2. SECONDARY FIREBASE APP (Admin oturumunu korumak için)
+            val defaultApp = FirebaseApp.getInstance()
+            val secondaryAppName = "PersonnelCreationApp"
+
+            var secondaryApp = FirebaseApp.getApps(context).find { it.name == secondaryAppName }
+            if (secondaryApp == null) {
+                secondaryApp = FirebaseApp.initializeApp(context, defaultApp.options, secondaryAppName)
+            }
+
+            // Geçici uygulamanın Auth instance'ını alıyoruz
+            val secondaryAuth = FirebaseAuth.getInstance(secondaryApp!!)
+
+            // 3. Personeli Firebase Auth üzerinde oluştur ve UID'yi al
+            val authResult = secondaryAuth.createUserWithEmailAndPassword(personnel.email, personnel.password).await()
+            val generatedUid = authResult.user?.uid ?: throw Exception("Firebase UID oluşturulamadı.")
+
+            // 4. İkincil oturumu kapat (Admin'in ana instance'ı etkilenmez)
+            secondaryAuth.signOut()
+
+            // 5. Üretilen gerçek UID'yi Personel nesnesine ekle
+            val newPersonnel = personnel.copy(firebaseUid = generatedUid)
+
+            // 6. Firestore ve Room senkronizasyonunu başlat
+            val syncResult = repository.addPersonnelWithFirebaseSync(newPersonnel)
+
+            if (syncResult.isSuccess) {
+                Result.success(Unit)
+            } else {
+                Result.failure(syncResult.exceptionOrNull() ?: Exception("Veritabanı kaydı sırasında hata oluştu."))
+            }
+
+        } catch (e: Exception) {
+            Result.failure(Exception(e.localizedMessage ?: "Bilinmeyen bir hata oluştu."))
+        }
+    }
     suspend fun syncPersonnelWithFirebase(email: String, firebaseUid: String): Result<Personnel> {
         val personnel = repository.getPersonnelByEmail(email)
 

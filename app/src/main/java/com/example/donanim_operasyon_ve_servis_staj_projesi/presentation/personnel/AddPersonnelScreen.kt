@@ -28,6 +28,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +41,7 @@ fun AddPersonnelScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var originalPersonnel by remember { mutableStateOf<Personnel?>(null) }
 
@@ -124,7 +128,12 @@ fun AddPersonnelScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = fullNameError.isNotEmpty(),
-                supportingText = { if (fullNameError.isNotEmpty()) Text(fullNameError, color = MaterialTheme.colorScheme.error) }
+                supportingText = {
+                    if (fullNameError.isNotEmpty()) Text(
+                        fullNameError,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             )
 
             OutlinedTextField(
@@ -134,7 +143,12 @@ fun AddPersonnelScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = usernameError.isNotEmpty(),
-                supportingText = { if (usernameError.isNotEmpty()) Text(usernameError, color = MaterialTheme.colorScheme.error) }
+                supportingText = {
+                    if (usernameError.isNotEmpty()) Text(
+                        usernameError,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             )
 
             // --- YENİ EKLENEN E-POSTA UI ALANI ---
@@ -149,7 +163,12 @@ fun AddPersonnelScreen(
                 ),
                 singleLine = true,
                 isError = emailError.isNotEmpty(),
-                supportingText = { if (emailError.isNotEmpty()) Text(emailError, color = MaterialTheme.colorScheme.error) }
+                supportingText = {
+                    if (emailError.isNotEmpty()) Text(
+                        emailError,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             )
 
             OutlinedTextField(
@@ -158,7 +177,8 @@ fun AddPersonnelScreen(
                 label = { Text("Şifre") },
                 leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                 trailingIcon = {
-                    val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                    val image =
+                        if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
                     val description = if (passwordVisible) "Şifreyi Gizle" else "Şifreyi Göster"
 
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -171,7 +191,12 @@ fun AddPersonnelScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 isError = passwordError.isNotEmpty(),
-                supportingText = { if (passwordError.isNotEmpty()) Text(passwordError, color = MaterialTheme.colorScheme.error) }
+                supportingText = {
+                    if (passwordError.isNotEmpty()) Text(
+                        passwordError,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             )
 
             OutlinedTextField(
@@ -181,7 +206,12 @@ fun AddPersonnelScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = phoneError.isNotEmpty(),
-                supportingText = { if (phoneError.isNotEmpty()) Text(phoneError, color = MaterialTheme.colorScheme.error) }
+                supportingText = {
+                    if (phoneError.isNotEmpty()) Text(
+                        phoneError,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             )
 
             OutlinedTextField(
@@ -191,7 +221,12 @@ fun AddPersonnelScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = roleError.isNotEmpty(),
-                supportingText = { if (roleError.isNotEmpty()) Text(roleError, color = MaterialTheme.colorScheme.error) }
+                supportingText = {
+                    if (roleError.isNotEmpty()) Text(
+                        roleError,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             )
 
             Row(
@@ -211,28 +246,34 @@ fun AddPersonnelScreen(
                 onClick = {
                     if (isSaving) return@Button
 
-                    if (isEditMode && originalPersonnel == null) {
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Personel bilgisi yüklenemediği için işlem yapılamaz.")
-                        }
-                        return@Button
-                    }
-
                     var isValid = true
-                    if (fullName.isBlank()) { fullNameError = "Bu alan zorunludur."; isValid = false }
-                    if (username.isBlank()) { usernameError = "Bu alan zorunludur."; isValid = false }
-                    if (email.isBlank()) { emailError = "Bu alan zorunludur."; isValid = false } // E-POSTA KONTROLÜ
-                    if (password.isBlank()) { passwordError = "Bu alan zorunludur."; isValid = false }
-                    if (phoneNumber.isBlank()) { phoneError = "Bu alan zorunludur."; isValid = false }
-                    if (role.isBlank()) { roleError = "Bu alan zorunludur."; isValid = false }
+                    if (fullName.isBlank()) {
+                        fullNameError = "Bu alan zorunludur."; isValid = false
+                    }
+                    if (username.isBlank()) {
+                        usernameError = "Bu alan zorunludur."; isValid = false
+                    }
+                    if (email.isBlank()) {
+                        emailError = "Bu alan zorunludur."; isValid = false
+                    }
+                    if (password.isBlank()) {
+                        passwordError = "Bu alan zorunludur."; isValid = false
+                    }
+                    if (phoneNumber.isBlank()) {
+                        phoneError = "Bu alan zorunludur."; isValid = false
+                    }
+                    if (role.isBlank()) {
+                        roleError = "Bu alan zorunludur."; isValid = false
+                    }
 
                     if (isValid) {
                         isSaving = true
 
                         if (isEditMode && originalPersonnel != null) {
+                            // --- DÜZENLEME MODU (Mevcut yapı tamamen korundu) ---
                             val hasChanges = fullName.trim() != originalPersonnel!!.fullName ||
                                     username.trim() != originalPersonnel!!.username ||
-                                    email.trim() != originalPersonnel!!.email || // E-POSTA DEĞİŞİKLİK KONTROLÜ
+                                    email.trim() != originalPersonnel!!.email ||
                                     password.trim() != originalPersonnel!!.password ||
                                     phoneNumber.trim() != originalPersonnel!!.phoneNumber ||
                                     role.trim() != originalPersonnel!!.role ||
@@ -249,7 +290,7 @@ fun AddPersonnelScreen(
                             val updatedPersonnel = originalPersonnel!!.copy(
                                 fullName = fullName.trim(),
                                 username = username.trim(),
-                                email = email.trim(), // GÜNCELLENEN E-POSTA
+                                email = email.trim(),
                                 password = password.trim(),
                                 phoneNumber = phoneNumber.trim(),
                                 role = role.trim(),
@@ -264,31 +305,42 @@ fun AddPersonnelScreen(
                                         onNavigateBack()
                                     }
                                 } else {
-                                    usernameError = "Güncelleme başarısız. Kullanıcı adı sistemde mevcut olabilir."
+                                    usernameError =
+                                        "Güncelleme başarısız. Kullanıcı adı sistemde mevcut olabilir."
                                     isSaving = false
                                 }
                             }
 
                         } else if (!isEditMode) {
+                            // --- YENİ EKLEME MODU (Firebase entegrasyonu uygulandı) ---
                             coroutineScope.launch {
-                                val success = viewModel.addPersonnel(
-                                    Personnel(
-                                        fullName = fullName.trim(),
-                                        username = username.trim(),
-                                        email = email.trim(), // YENİ EKLENEN E-POSTA
-                                        password = password.trim(),
-                                        phoneNumber = phoneNumber.trim(),
-                                        role = role.trim(),
-                                        isActive = isActive
-                                    )
+                                val newPersonnel = Personnel(
+                                    fullName = fullName.trim(),
+                                    username = username.trim(),
+                                    email = email.trim(),
+                                    password = password.trim(),
+                                    phoneNumber = phoneNumber.trim(),
+                                    role = role.trim(),
+                                    isActive = isActive
                                 )
 
-                                if (success) {
+                                val result =
+                                    viewModel.addPersonnelWithFirebase(newPersonnel, context)
+
+                                if (result.isSuccess) {
                                     snackbarHostState.showSnackbar("Personel başarıyla eklendi.")
                                     delay(500)
                                     onNavigateBack()
                                 } else {
-                                    usernameError = "Bu kullanıcı adı zaten kullanılmaktadır."
+                                    val errorMessage = result.exceptionOrNull()?.message
+                                        ?: "Kayıt sırasında bir hata oluştu."
+
+                                    // Eğer hata kullanıcı adından kaynaklıysa doğrudan o alanı kızart
+                                    if (errorMessage.contains("kullanıcı adı", ignoreCase = true)) {
+                                        usernameError = errorMessage
+                                    } else {
+                                        snackbarHostState.showSnackbar(errorMessage)
+                                    }
                                     isSaving = false
                                 }
                             }
