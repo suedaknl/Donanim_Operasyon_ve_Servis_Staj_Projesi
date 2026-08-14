@@ -27,7 +27,8 @@ class FirestoreServiceDataSource(
                 "address" to record.address,
                 "plannedDate" to record.plannedDate,
                 "assignedPersonnelUid" to record.assignedPersonnelUid,
-                "firestoreId" to record.firestoreId
+                "firestoreId" to record.firestoreId,
+                "rejectionReason" to record.rejectionReason // rejectionReason eklendi
             )
 
             if (!record.firestoreId.isNullOrEmpty()) {
@@ -38,7 +39,7 @@ class FirestoreServiceDataSource(
                 // Yoksa yeni doküman oluştur ve üretilen ID'yi dön
                 val docRef = collection.add(serviceMap).await()
 
-                // Dokümanın kendisine de kendi ID'sini alan olarak yazmak istersen (isteğe bağlı ama güvenli):
+                // Dokümanın kendisine de kendi ID'sini alan olarak yazıyoruz
                 docRef.update("firestoreId", docRef.id).await()
 
                 Result.success(docRef.id)
@@ -72,7 +73,8 @@ class FirestoreServiceDataSource(
                     address = document.getString("address"),
                     plannedDate = document.getString("plannedDate"),
                     firestoreId = document.id, // En önemli eşleştirme anahtarı
-                    assignedPersonnelUid = document.getString("assignedPersonnelUid")
+                    assignedPersonnelUid = document.getString("assignedPersonnelUid"),
+                    rejectionReason = document.getString("rejectionReason") // rejectionReason okunuyor
                 )
                 servicesList.add(service)
             }
@@ -103,7 +105,8 @@ class FirestoreServiceDataSource(
                 "plannedDate" to record.plannedDate,
                 "assignedPersonnelId" to record.assignedPersonnelId,
                 "assignedPersonnelUid" to record.assignedPersonnelUid,
-                "firestoreId" to firestoreId
+                "firestoreId" to firestoreId,
+                "rejectionReason" to record.rejectionReason // rejectionReason eklendi
             )
 
             collection.document(firestoreId).set(serviceMap).await()
@@ -120,6 +123,25 @@ class FirestoreServiceDataSource(
 
             collection.document(firestoreId)
                 .update("status", newStatus)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 2.1 Personel İş Reddetme Güncellemesi (Status + Rejection Reason)
+    suspend fun rejectService(firestoreId: String, rejectionReason: String): Result<Unit> {
+        return try {
+            if (firestoreId.isBlank()) return Result.failure(IllegalArgumentException("Firestore ID boş"))
+
+            val updates = mapOf(
+                "status" to "İptal Edildi", // Mevcut ServiceStatus.IPTAL değeriyle birebir uyumlu
+                "rejectionReason" to rejectionReason
+            )
+
+            collection.document(firestoreId)
+                .update(updates)
                 .await()
             Result.success(Unit)
         } catch (e: Exception) {
@@ -165,7 +187,8 @@ class FirestoreServiceDataSource(
                     address = document.getString("address"),
                     plannedDate = document.getString("plannedDate"),
                     firestoreId = document.id,
-                    assignedPersonnelUid = document.getString("assignedPersonnelUid")
+                    assignedPersonnelUid = document.getString("assignedPersonnelUid"),
+                    rejectionReason = document.getString("rejectionReason") // rejectionReason okunuyor
                 )
                 servicesList.add(service)
             }

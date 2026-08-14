@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ServicePhoto::class,
         ServiceClosingSignature::class
     ],
-    version = 10,
+    version = 12,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -35,11 +35,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        // FAZ 1 kapsamında eklenen güvenli 9 -> 10 migration tanımı
         val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE service_records ADD COLUMN firestoreId TEXT")
                 db.execSQL("ALTER TABLE service_records ADD COLUMN assignedPersonnelUid TEXT")
+            }
+        }
+
+        // Eksik olan 10 -> 11 geçişi eklendi (Veriyi koruyarak güvenli köprü)
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Eğer 10'dan 11'e geçerken tabloya eklenen bir sütun varsa buraya yazılabilir,
+                // yoksa mevcut yapıyı korumak adına boş bırakılabilir veya güvenli komut yazılabilir.
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE service_records ADD COLUMN rejectionReason TEXT")
             }
         }
 
@@ -50,7 +63,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "service_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
                     .build()
                 INSTANCE = instance
                 instance

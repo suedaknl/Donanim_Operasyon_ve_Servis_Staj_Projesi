@@ -21,6 +21,7 @@ data class ServiceRecord(
     val contactPhone: String? = null,
     val address: String? = null,
     val plannedDate: String? = null,
+    val rejectionReason: String? = null,
 
     // YENİ EKLENEN SENKRONİZASYON ALANLARI BURADA OLMALI
     val firestoreId: String? = null,

@@ -431,6 +431,49 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
+    // Personelin işi kabul etmesi (BEKLIYOR -> YOLDA geçişi ve aynı anda 2 aktif iş kontrolü)
+    fun acceptService(recordId: Int, personnelId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
+
+            // KURAL: Aynı anda birden fazla aktif iş (YOLDA veya ISLEME_BASLANDI) alınamaz.
+            val activeStatuses = listOf(ServiceStatus.YOLDA, ServiceStatus.ISLEME_BASLANDI)
+            val activeJobs = _serviceRecords.value.filter {
+                it.assignedPersonnelId == personnelId &&
+                        it.status in activeStatuses &&
+                        it.id != recordId
+            }
+
+            if (activeJobs.isNotEmpty()) {
+                _errorMessage.value = "Devam eden bir işiniz bulunmaktadır. Yeni bir iş kabul etmek için mevcut işinizi tamamlamanız gerekmektedir."
+                return@launch
+            }
+
+            // Kurallara uygunsa durumu YOLDA (Kabul Edildi / Sahaya çıkış) yap
+            repository.updateStatus(recordId, ServiceStatus.YOLDA)
+            loadRecords()
+            loadRecordsForPersonnel(personnelId)
+            _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.YOLDA)
+        }
+    }
+
+    // Personelin işi red nedeni ile reddetmesi (Room + Firestore sync)
+    fun rejectService(recordId: Int, rejectionReason: String, personnelId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = repository.rejectService(recordId, rejectionReason)
+            if (result.isSuccess) {
+                loadRecords()
+                loadRecordsForPersonnel(personnelId)
+                _selectedRecord.value = _selectedRecord.value?.copy(
+                    status = ServiceStatus.IPTAL,
+                    rejectionReason = rejectionReason
+                )
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "İş reddedilirken bir hata oluştu."
+            }
+        }
+    }
+
     fun submitClosingForm(serviceId: Int, personnelId: Int) {
         viewModelScope.launch {
             // 1. UI'a yükleniyor durumunu bildir

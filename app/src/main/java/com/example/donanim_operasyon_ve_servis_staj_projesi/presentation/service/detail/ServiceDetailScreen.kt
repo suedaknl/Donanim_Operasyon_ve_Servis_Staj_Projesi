@@ -40,9 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.border
 import androidx.compose.ui.platform.LocalContext
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
-import kotlinx.coroutines.NonCancellable.isCancelled
 import android.widget.Toast
-import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,27 +70,15 @@ fun ServiceDetailScreen(
     val servicePhotos by viewModel.servicePhotos.collectAsState()
     val closingSignature by viewModel.serviceClosingSignature.collectAsState()
 
-    // 1. SessionManager'ı tanımlıyoruz (Compose ortamına uygun şekilde)
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
 
-    // Parametrelerden veya SessionManager'dan gelen mevcut kullanıcı bilgileri
-    val currentUserRole = sessionManager.getUserRole() // "ADMIN" veya "PERSONNEL"
+    val currentUserRole = sessionManager.getUserRole()
     val currentPersonnelId = sessionManager.getPersonnelId()
 
-    // 2. 'service' değişkeni nullable olduğu için (?.) ile güvenli çağrı yapıyoruz.
-    // "COMPLETED" yerine projendeki ServiceStatus'ü kullanıyoruz.
     val isCompleted = service?.status == ServiceStatus.TAMAMLANDI
     val isAssignedToMe = service?.assignedPersonnelId == currentPersonnelId
     val isAdmin = currentUserRole == "ADMIN"
-
-    // 3. Bu değişkenleri kullanarak UI bileşenlerini enabled/disabled veya visible/hidden yap
-    val canEditStatus = !isCompleted && (isAdmin || isAssignedToMe)
-    // Sadece "BEKLIYOR" durumundaki işler yeni birine atanabilsin:
-    val canAssignPersonnel = !isCompleted && isAdmin && service?.status == ServiceStatus.BEKLIYOR
-    val canAddNoteOrPhoto = !isCompleted && (isAdmin || isAssignedToMe)
-
-    val errorMessage by viewModel.errorMessage.collectAsState()
 
     var showAssignDialog by remember { mutableStateOf(false) }
     var showStatusDialog by remember { mutableStateOf(false) }
@@ -108,12 +94,23 @@ fun ServiceDetailScreen(
     var selectedNoteForDialog by remember { mutableStateOf<ServiceNote?>(null) }
     var selectedImageUri by remember { mutableStateOf<String?>(null) }
 
-    // --- ACCORDION STATE'LERİ ---
     var isInfoExpanded by remember { mutableStateOf(false) }
-    var isClosingExpanded by remember { mutableStateOf(false) } // Kapanış bilgileri varsayılan kapalı
+    var isClosingExpanded by remember { mutableStateOf(false) }
     var isIssueExpanded by remember { mutableStateOf(false) }
     var isNotesExpanded by remember { mutableStateOf(false) }
     var isPhotosExpanded by remember { mutableStateOf(false) }
+
+    var showRejectDialog by remember { mutableStateOf(false) }
+    var rejectionReasonText by remember { mutableStateOf("") }
+    var rejectError by remember { mutableStateOf("") }
+
+    val errorMessage by viewModel.errorMessage.collectAsState()
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            viewModel.clearErrorMessage()
+        }
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -132,13 +129,6 @@ fun ServiceDetailScreen(
             viewModel.addServicePhoto(photo)
             pendingCategory = ""
             onPhotoSaved()
-        }
-    }
-
-    LaunchedEffect(errorMessage) {
-        errorMessage?.let { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-            viewModel.clearErrorMessage() // Mesaj gösterildikten sonra sıfırla ki tekrar tekrar çıkmasın
         }
     }
 
@@ -177,14 +167,11 @@ fun ServiceDetailScreen(
         "Atanmadı"
     }
 
-    // Tamamlanmış iş hem personel hem admin için salt okunur operasyonlara tabidir
-    val isLocked = isCompleted || isCancelled
+    val isLocked = isCompleted || service.status == ServiceStatus.IPTAL
 
-    // İçerik ekleme yetkisi (Not, Fotoğraf)
     val canAddContent = personnelId != null &&
             service.assignedPersonnelId == personnelId &&
             !isLocked
-
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -289,11 +276,8 @@ fun ServiceDetailScreen(
 
             // --- 2. İŞLEMLER ALANI ---
             if (personnelId == null) {
-                // Admin İşlem Butonları
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-
-                        // YENİ KURAL: Personel Ata / Değiştir (Sadece BEKLIYOR durumunda görünür)
                         if (service.status == ServiceStatus.BEKLIYOR) {
                             val isAssigned = service.assignedPersonnelId != null
                             Button(
@@ -311,8 +295,7 @@ fun ServiceDetailScreen(
                             }
                         }
 
-                        // Durum Güncelle (Tamamlandı veya İptal ise gizli)
-                        if (!isCompleted && !isCancelled) {
+                        if (!isCompleted && service.status != ServiceStatus.IPTAL) {
                             Button(
                                 onClick = { showStatusDialog = true },
                                 modifier = Modifier.weight(1f),
@@ -326,9 +309,7 @@ fun ServiceDetailScreen(
                     }
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-
-                        // Düzenle (Tamamlandı veya İptal ise gizli)
-                        if (!isCompleted && !isCancelled) {
+                        if (!isCompleted && service.status != ServiceStatus.IPTAL) {
                             Button(
                                 onClick = { onNavigateToEdit(service.id) },
                                 modifier = Modifier.weight(1f)
@@ -339,7 +320,6 @@ fun ServiceDetailScreen(
                             }
                         }
 
-                        // YENİ KURAL: Silme Butonu Admin İçin Her Zaman Görünür
                         Button(
                             onClick = { showDeleteDialog = true },
                             modifier = Modifier.weight(1f),
@@ -352,16 +332,48 @@ fun ServiceDetailScreen(
                     }
                 }
             } else {
-                // Personel İşlem Butonları (Tamamlanmış/İptal işlerde kilitli)
+                // Personel İşlem Butonları
                 if (!isLocked) {
-                    Button(
-                        onClick = { showStatusDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
-                    ) {
-                        Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Durum Güncelle")
+                    if (service.status == ServiceStatus.BEKLIYOR) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    viewModel.acceptService(
+                                        recordId = service.id,
+                                        personnelId = personnelId ?: 0
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("Kabul Et")
+                            }
+
+                            Button(
+                                onClick = {
+                                    rejectionReasonText = ""
+                                    rejectError = ""
+                                    showRejectDialog = true
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Text("Reddet")
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = { showStatusDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                        ) {
+                            Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Durum Güncelle")
+                        }
                     }
                 }
             }
@@ -393,7 +405,6 @@ fun ServiceDetailScreen(
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold
                                 )
-                                // KART KAPALIYKEN ÖZET BİLGİ GÖSTERİMİ
                                 if (!isClosingExpanded) {
                                     val assignedPersonnel = personnelList.find { it.id == service.assignedPersonnelId }
                                     Text(
@@ -530,66 +541,38 @@ fun ServiceDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
-                            if (personnelId == null) {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    regularNotes.forEach { note ->
-                                        val dateStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(note.createdAt))
-                                        val noteWriterName = personnelList.find { it.id == note.personnelId }?.fullName ?: "Personel ID: ${note.personnelId}"
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                regularNotes.forEach { note ->
+                                    val dateStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(note.createdAt))
+                                    val noteWriterName = personnelList.find { it.id == note.personnelId }?.fullName ?: "Personel ID: ${note.personnelId}"
 
-                                        ElevatedCard(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable { selectedNoteForDialog = note },
-                                            shape = RoundedCornerShape(8.dp),
-                                            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-                                        ) {
-                                            Column(modifier = Modifier.padding(12.dp)) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Icon(Icons.Default.PersonOutline, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                                                        Spacer(modifier = Modifier.width(4.dp))
-                                                        Text(text = noteWriterName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                                    }
-                                                    Text(text = dateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                }
-                                                Spacer(modifier = Modifier.height(8.dp))
-                                                Text(
-                                                    text = note.note,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    maxLines = 2,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    regularNotes.forEach { note ->
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.surfaceVariant,
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Column(modifier = Modifier.padding(12.dp)) {
-                                                val dateStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(note.createdAt))
-                                                val noteWriterName = personnelList.find { it.id == note.personnelId }?.fullName ?: "Personel ID: ${note.personnelId}"
-
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
+                                    ElevatedCard(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { selectedNoteForDialog = note },
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.PersonOutline, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                                    Spacer(modifier = Modifier.width(4.dp))
                                                     Text(text = noteWriterName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                                    Text(text = dateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                 }
-                                                Spacer(modifier = Modifier.height(6.dp))
-                                                Text(text = note.note, style = MaterialTheme.typography.bodyMedium)
+                                                Text(text = dateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = note.note,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
                                     }
                                 }
@@ -671,6 +654,62 @@ fun ServiceDetailScreen(
     }
 
     // --- DİYALOGLAR ---
+
+    if (showRejectDialog) {
+        AlertDialog(
+            onDismissRequest = { showRejectDialog = false },
+            title = { Text("İş Emrini Reddet", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Lütfen bu işi neden reddettiğinizi açıklayınız (Zorunludur):")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = rejectionReasonText,
+                        onValueChange = {
+                            rejectionReasonText = it
+                            if (it.isNotBlank()) rejectError = ""
+                        },
+                        label = { Text("Red Nedeni") },
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = rejectError.isNotEmpty(),
+                        minLines = 3
+                    )
+                    if (rejectError.isNotEmpty()) {
+                        Text(
+                            text = rejectError,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (rejectionReasonText.isBlank()) {
+                            rejectError = "Red nedeni boş bırakılamaz."
+                        } else {
+                            showRejectDialog = false
+                            viewModel.rejectService(
+                                recordId = service.id,
+                                rejectionReason = rejectionReasonText.trim(),
+                                personnelId = personnelId ?: 0
+                            )
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Reddet Onayla")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRejectDialog = false }) {
+                    Text("İptal")
+                }
+            }
+        )
+    }
 
     if (showCategoryDialog) {
         AlertDialog(
@@ -835,11 +874,8 @@ fun ServiceDetailScreen(
         )
     }
 
-// Personel Atama / Değiştirme Diyaloğu Güncellemesi (Başlık ve Buton Metni)
     if (showAssignDialog) {
         var selectedPersonnelId by remember { mutableStateOf(service.assignedPersonnelId) }
-
-        // Personel listesini alıyoruz (Eğer aktiflik filtresi personelleri yok ediyorsa diye direkt tüm listeyi kullanıyoruz)
         val displayList = personnelList
         val isAssigned = service.assignedPersonnelId != null
 
@@ -853,18 +889,16 @@ fun ServiceDetailScreen(
             },
             text = {
                 if (displayList.isEmpty()) {
-                    // Liste boşsa net bir hata mesajı göster
                     Text(
                         text = "Kayıtlı personel bulunamadı.",
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 } else {
-                    // LazyColumn'un AlertDialog içinde 0 piksele çökmemesi için heightIn ile sınır veriyoruz
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 300.dp), // Ekrana taşmayı önler ve kaydırılabilir liste yapar
+                            .heightIn(max = 300.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         items(displayList) { personnel ->
@@ -899,7 +933,6 @@ fun ServiceDetailScreen(
                         }
                         showAssignDialog = false
                     },
-                    // KURAL: Personel seçilmeden buton aktif olmasın
                     enabled = selectedPersonnelId != null
                 ) {
                     Text(if (isAssigned) "Değiştir" else "Ata")

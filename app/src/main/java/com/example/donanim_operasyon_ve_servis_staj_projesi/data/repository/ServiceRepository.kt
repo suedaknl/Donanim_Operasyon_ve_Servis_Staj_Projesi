@@ -281,6 +281,29 @@ class ServiceRepository(
             println("SYNC HATASI: Firebase'den veri çekilemedi. Hata: ${it.message}")
         }
     }
+    suspend fun rejectService(serviceId: Int, rejectionReason: String): Result<Unit> {
+        return try {
+            val localRecord = serviceDao.getServiceById(serviceId) ?: return Result.failure(Exception("Kayıt bulunamadı"))
+            val updatedRecord = localRecord.copy(status = ServiceStatus.IPTAL, rejectionReason = rejectionReason)
+
+            // 1. Room güncellemesi
+            serviceDao.updateService(updatedRecord)
+
+            // 2. Firestore güncellemesi (Mevcut firestoreId üzerinden)
+            if (!updatedRecord.firestoreId.isNullOrEmpty()) {
+                // Fonksiyon adını rejectService olarak güncelliyoruz
+                val firestoreResult = firestoreDataSource.rejectService(updatedRecord.firestoreId!!, rejectionReason)
+
+                if (firestoreResult.isFailure) {
+                    return Result.failure(firestoreResult.exceptionOrNull() ?: Exception("Firebase güncellemesi başarısız"))
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // --- FIRESTORE SENKRONİZASYON FONKSİYONU (PERSONEL) ---
     suspend fun syncServicesFromFirestore(
         personnelUid: String,
