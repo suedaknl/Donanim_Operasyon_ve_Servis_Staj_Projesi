@@ -16,8 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage // Coil eklendi
-// Paket isimlerini projenizdeki gerçek yollara göre kontrol edin:
+import coil.compose.AsyncImage
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.common.SignaturePad
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.common.rememberSignatureController
@@ -40,6 +39,7 @@ fun ClosingFormScreen(
     val closingNote by viewModel.closingNote.collectAsState()
     val closingState by viewModel.closingState.collectAsState()
     val closingAfterPhotoUri by viewModel.closingAfterPhotoUri.collectAsState()
+    val closingSignatureUri by viewModel.closingSignatureUri.collectAsState() // ViewModel'deki İmza URI State'i
 
     var showExitWarning by remember { mutableStateOf(false) }
 
@@ -69,7 +69,7 @@ fun ClosingFormScreen(
 
     // Veri kaybını önlemek için Geri Tuşu yakalama
     BackHandler {
-        if (closingNote.isNotBlank() || !signatureController.isEmpty || closingAfterPhotoUri != null) {
+        if (closingNote.isNotBlank() || !signatureController.isEmpty || closingAfterPhotoUri != null || closingSignatureUri != null) {
             showExitWarning = true
         } else {
             onNavigateBack()
@@ -103,7 +103,7 @@ fun ClosingFormScreen(
                 title = { Text("İş Kapanış Formu", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = {
-                        if (closingNote.isNotBlank() || !signatureController.isEmpty || closingAfterPhotoUri != null) {
+                        if (closingNote.isNotBlank() || !signatureController.isEmpty || closingAfterPhotoUri != null || closingSignatureUri != null) {
                             showExitWarning = true
                         } else {
                             onNavigateBack()
@@ -159,7 +159,10 @@ fun ClosingFormScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = { signatureController.clear() }) {
+                TextButton(onClick = {
+                    signatureController.clear()
+                    viewModel.updateClosingSignatureUri(null)
+                }) {
                     Text("İmzayı Temizle")
                 }
             }
@@ -167,7 +170,6 @@ fun ClosingFormScreen(
             // --- SONRASI FOTOĞRAFI ALANI ---
             Text("Sonrası Fotoğrafı (Zorunlu)", fontWeight = FontWeight.Bold)
             if (closingAfterPhotoUri != null) {
-                // Fotoğraf Önizlemesi
                 AsyncImage(
                     model = closingAfterPhotoUri,
                     contentDescription = "Sonrası Fotoğrafı",
@@ -197,22 +199,26 @@ fun ClosingFormScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // İŞİ KAPAT BUTONU VE DOĞRU VALIDASYON
-            val isFormValid = closingNote.isNotBlank() && !signatureController.isEmpty && closingAfterPhotoUri != null
+            // İŞİ KAPAT BUTONU VE DOĞRU VALIDASYON (İmzanın Controller VEYA ViewModel URI'sinde var olması kontrol edilir)
+            val hasSignature = !signatureController.isEmpty || closingSignatureUri != null
+            val isFormValid = closingNote.isNotBlank() && hasSignature && closingAfterPhotoUri != null
             val isLoading = closingState is ServiceViewModel.ClosingState.Loading
 
             Button(
                 onClick = {
-                    val bitmap = signatureController.getSignatureBitmap()
-                    if (bitmap != null) {
-                        val uri = saveSignatureToInternalStorage(context, bitmap)
-                        if (uri != null) {
-                            viewModel.updateClosingSignatureUri(uri)
-                            viewModel.submitClosingForm(serviceId, personnelId)
-                        } else {
-                            Toast.makeText(context, "İmza dosyası oluşturulamadı!", Toast.LENGTH_SHORT).show()
+                    // Eğer imza henüz dahili depolamaya kaydedilmediyse controller'dan alıp kaydedelim
+                    if (closingSignatureUri == null) {
+                        val bitmap = signatureController.getSignatureBitmap()
+                        if (bitmap != null) {
+                            val uri = saveSignatureToInternalStorage(context, bitmap)
+                            if (uri != null) {
+                                viewModel.updateClosingSignatureUri(uri)
+                            }
                         }
                     }
+
+                    // Formu gönder
+                    viewModel.submitClosingForm(serviceId, personnelId)
                 },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 enabled = isFormValid && !isLoading,

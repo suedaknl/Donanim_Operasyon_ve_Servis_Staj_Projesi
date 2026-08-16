@@ -27,14 +27,21 @@ fun PersonnelWelcomeScreen(
     LaunchedEffect(personnelId) {
         personnelViewModel.getPersonnelById(personnelId) { loadedPersonnel ->
             personnel = loadedPersonnel
+            // --- GİRİŞ YAPILDIĞI AN İŞLERİ BURADA DA SENKRONİZE ET ---
+            loadedPersonnel?.firebaseUid?.let { uid ->
+                serviceViewModel.syncMyServices(uid, personnelId)
+            }
         }
+        // Personelin özel servis kayıtlarını Room'dan yükle
+        serviceViewModel.loadRecordsForPersonnel(personnelId)
     }
 
-    val serviceRecords by serviceViewModel.serviceRecords.collectAsState()
+    // Admin listesi yerine personelin kendi özel servis kayıtlarını dinliyoruz
+    val personnelServices by serviceViewModel.personnelServiceRecords.collectAsState()
 
-    val activeServiceCount = remember(serviceRecords, personnelId) {
-        serviceRecords.count { record ->
-            record.assignedPersonnelId == personnelId &&
+    val activeServiceCount = remember(personnelServices, personnelId) {
+        personnelServices.count { record ->
+            (record.assignedPersonnelId == personnelId || record.assignedPersonnelUid == personnel?.firebaseUid) &&
                     record.status != ServiceStatus.TAMAMLANDI &&
                     record.status != ServiceStatus.IPTAL
         }

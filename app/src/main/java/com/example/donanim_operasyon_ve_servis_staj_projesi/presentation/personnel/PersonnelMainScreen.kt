@@ -31,6 +31,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceSt
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.StandaloneUserFormScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 import java.util.*
 
 @Composable
@@ -45,17 +46,28 @@ fun PersonnelMainScreen(
     var personnel by remember { mutableStateOf<Personnel?>(null) }
     val context = LocalContext.current
 
-    LaunchedEffect(personnelId) {
-        personnelViewModel.getPersonnelById(personnelId) { loadedPersonnel ->
-            personnel = loadedPersonnel
+    // Tek bir yerden personel listesini ve oturum bilgisini alıyoruz
+    val personnelList by personnelViewModel.personnelList.collectAsState()
+
+    // Oturum açan personelin Firebase UID'sini buluyoruz
+    val currentPersonnel = personnelList.find { it.id == personnelId }
+    val currentFirebaseUid = currentPersonnel?.firebaseUid
+
+    LaunchedEffect(currentFirebaseUid) {
+        if (!currentFirebaseUid.isNullOrEmpty()) {
+            serviceViewModel.setCurrentPersonnelUid(currentFirebaseUid)
         }
     }
 
-    val allServiceList by serviceViewModel.filteredServiceRecords.collectAsState()
-    val personnelList by personnelViewModel.personnelList.collectAsState()
+    // ViewModel üzerindeki merkezi ve optimize edilmiş FİLTRELENMİŞ akışı dinliyoruz
+    val filteredPersonnelServices by serviceViewModel.filteredPersonnelServiceRecords.collectAsState()
 
-    val myServices = remember(allServiceList, personnelId) {
-        allServiceList.filter { it.assignedPersonnelId == personnelId }
+    // Ekran açıldığında ve personelId değiştiğinde personelin işlerini Room ve Firestore'dan yükle
+    LaunchedEffect(personnelId, currentPersonnel) {
+        currentPersonnel?.firebaseUid?.let { uid ->
+            serviceViewModel.syncMyServices(uid, personnelId)
+        }
+        serviceViewModel.loadRecordsForPersonnel(personnelId)
     }
 
     Scaffold(
@@ -96,7 +108,7 @@ fun PersonnelMainScreen(
                     DropdownMenu(
                         expanded = showFabMenu,
                         onDismissRequest = { showFabMenu = false },
-                        modifier = Modifier.width(220.dp) // Hata düzeltildi
+                        modifier = Modifier.width(220.dp)
                     ) {
                         DropdownMenuItem(
                             text = { Text("İş Emirlerine Git", fontWeight = FontWeight.Medium) },
@@ -156,14 +168,14 @@ fun PersonnelMainScreen(
             when (selectedTab) {
                 0 -> PersonnelHomeContent(
                     personnel = personnel,
-                    myServices = myServices,
+                    myServices = filteredPersonnelServices,
                     onNavigateToServiceDetail = onNavigateToServiceDetail,
                     onGoToAssignments = { selectedTab = 1 }
                 )
                 1 -> {
                     Box(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
                         StandaloneUserFormScreen(
-                            serviceList = myServices,
+                            serviceList = filteredPersonnelServices, // Doğrudan filtrelenmiş liste aktarılıyor
                             personnelList = personnelList,
                             selectedTab = serviceViewModel.selectedTab,
                             onTabSelected = { serviceViewModel.updateSelectedTab(it) },
@@ -173,19 +185,20 @@ fun PersonnelMainScreen(
                             onFilterSelected = { filter -> serviceViewModel.updateSelectedFilter(filter) },
                             selectedPriority = serviceViewModel.selectedPriorityFilter,
                             onPrioritySelected = { selectedPriority ->
-                                serviceViewModel.updateSelectedPriorityFilter(selectedPriority) // Hata düzeltildi
+                                serviceViewModel.updateSelectedPriorityFilter(selectedPriority)
                             },
                             onClearFilters = {
                                 serviceViewModel.updateSearchQuery("")
                                 serviceViewModel.updateSelectedFilter("Hepsi")
                                 serviceViewModel.updateSelectedPriorityFilter("Hepsi")
+                                serviceViewModel.updateSelectedTab("Tümü")
                             },
                             onNavigateToPersonnel = { },
                             onNavigateToAddService = { },
                             onServiceClick = { service -> onNavigateToServiceDetail(service.id) },
                             onLogOut = onLogOut,
                             serviceViewModel = serviceViewModel,
-                            firebaseUid = null,
+                            firebaseUid = currentFirebaseUid,
                             localPersonnelId = personnelId
                         )
                     }
@@ -434,7 +447,7 @@ fun PersonnelProfileContent(personnel: Personnel?, onLogOut: () -> Unit) {
         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
             Column {
                 ProfileMenuItem(icon = Icons.Default.Lock, title = "Şifre Değiştir", isAction = true) {
-                    Toast.makeText(context, "Şifre değiştirme ekranı hazırlanıyor.", Toast.LENGTH_SHORT).show() // Hata düzeltildi
+                    Toast.makeText(context, "Şifre değiştirme ekranı hazırlanıyor.", Toast.LENGTH_SHORT).show()
                 }
                 HorizontalDivider()
                 ProfileMenuItem(icon = Icons.Default.HelpOutline, title = "Destek ve Yardım", isAction = true) {

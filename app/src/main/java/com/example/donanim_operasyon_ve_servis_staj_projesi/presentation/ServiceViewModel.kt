@@ -47,18 +47,22 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     private val _serviceNotes = MutableStateFlow<List<ServiceNote>>(emptyList())
     val serviceNotes: StateFlow<List<ServiceNote>> = _serviceNotes.asStateFlow()
 
-    // --- FAZ 2.5: FOTOĞRAF STATE ---
     private val _servicePhotos = MutableStateFlow<List<ServicePhoto>>(emptyList())
     val servicePhotos: StateFlow<List<ServicePhoto>> = _servicePhotos.asStateFlow()
 
     private var notesJob: Job? = null
     private var photosJob: Job? = null
 
-    // Reaktif Filtre StateFlow'ları
     private val _searchQueryFlow = MutableStateFlow("")
     private val _selectedFilterFlow = MutableStateFlow("Hepsi")
     private val _selectedPriorityFilterFlow = MutableStateFlow("Hepsi")
     private val _selectedTabFlow = MutableStateFlow("Tümü")
+
+    private val _currentPersonnelUidFlow = MutableStateFlow<String?>(null)
+
+    fun setCurrentPersonnelUid(uid: String?) {
+        _currentPersonnelUidFlow.value = uid
+    }
 
     private val _serviceClosingSignature =
         MutableStateFlow<com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceClosingSignature?>(
@@ -66,7 +70,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         )
     val serviceClosingSignature = _serviceClosingSignature.asStateFlow()
 
-    // --- HATA MESAJI STATE'İ (İŞ KURALLARI İÇİN) ---
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage = _errorMessage.asStateFlow()
 
@@ -74,7 +77,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         _errorMessage.value = null
     }
 
-    // UI State'leri
     var searchQuery by mutableStateOf("")
         private set
 
@@ -87,14 +89,12 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     var selectedTab by mutableStateOf("Tümü")
         private set
 
-    // --- KAPANIŞ FORMU STATE'LERİ ---
     private val _closingNote = MutableStateFlow("")
     val closingNote = _closingNote.asStateFlow()
 
     private val _closingSignatureUri = MutableStateFlow<String?>(null)
     val closingSignatureUri = _closingSignatureUri.asStateFlow()
 
-    // UI'ın anlayacağı işlem sonuç state'i
     sealed class ClosingState {
         object Idle : ClosingState()
         object Loading : ClosingState()
@@ -112,7 +112,49 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         _closingAfterPhotoUri.value = uri
     }
 
-    // Ortak Filtreleme Algoritması
+    // Personel iş emirleri için kesin ve hatasız filtreleme mantığı
+    private fun filterPersonnelRecords(
+        records: List<ServiceRecord>,
+        query: String,
+        priority: String,
+        tab: String,
+        currentUid: String?
+    ): List<ServiceRecord> {
+        val lowerQuery = query.trim().lowercase()
+
+        // 1. Ana Koşul: Oturum açmış personele atanmış olmalı ve IPTAL olmamalı
+        val personnelBaseRecords = records.filter { record ->
+            val matchesPersonnel = if (!currentUid.isNullOrEmpty()) {
+                record.assignedPersonnelUid == currentUid
+            } else {
+                true
+            }
+            matchesPersonnel && record.status != ServiceStatus.IPTAL
+        }
+
+        return personnelBaseRecords.filter { record ->
+            val matchesSearch = if (lowerQuery.isEmpty()) true else {
+                record.companyName.lowercase().contains(lowerQuery) ||
+                        record.deviceType.lowercase().contains(lowerQuery) ||
+                        record.serialNumber.lowercase().contains(lowerQuery) ||
+                        record.location.lowercase().contains(lowerQuery)
+            }
+            val matchesPriority = if (priority == "Hepsi") true else record.priority == priority
+
+            // 2. Sekme (Tab) / Statü Bazlı Kesin Eşleşme
+            val matchesTab = when (tab) {
+                "Tümü" -> true
+                "Atanmış", "Atanan", "Bekleyen" -> record.status == ServiceStatus.BEKLIYOR
+                "Yolda" -> record.status == ServiceStatus.YOLDA
+                "Devam Eden", "İşlemde" -> record.status == ServiceStatus.ISLEME_BASLANDI || record.status == ServiceStatus.PARCA_BEKLENIYOR
+                "Tamamlanan" -> record.status == ServiceStatus.TAMAMLANDI
+                else -> true
+            }
+
+            matchesSearch && matchesPriority && matchesTab
+        }
+    }
+
     private fun filterRecords(
         records: List<ServiceRecord>,
         query: String,
@@ -128,22 +170,25 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                         record.serialNumber.lowercase().contains(lowerQuery) ||
                         record.location.lowercase().contains(lowerQuery)
             }
-            val matchesStatus = if (status == "Hepsi") true else record.status == status
             val matchesPriority = if (priority == "Hepsi") true else record.priority == priority
-
             val matchesTab = when (tab) {
-                "Atanmamış" -> record.assignedPersonnelId == null
-                "Atanan" -> record.assignedPersonnelId != null && record.status != ServiceStatus.TAMAMLANDI && record.status != ServiceStatus.IPTAL
-                "Devam Eden" -> record.status == ServiceStatus.YOLDA || record.status == ServiceStatus.ISLEME_BASLANDI || record.status == ServiceStatus.PARCA_BEKLENIYOR
+                "Atanan", "Atanmış" -> record.status == ServiceStatus.BEKLIYOR
+                "Yolda" -> record.status == ServiceStatus.YOLDA
+                "Devam Eden", "İşlemde" -> record.status == ServiceStatus.ISLEME_BASLANDI || record.status == ServiceStatus.PARCA_BEKLENIYOR
                 "Tamamlanan" -> record.status == ServiceStatus.TAMAMLANDI
                 else -> true
             }
-
-            matchesSearch && matchesStatus && matchesPriority && matchesTab
+            val matchesStatus = if (status == "Hepsi") true else when (status) {
+                "Atanan", "Atanmış", "Bekliyor" -> record.status == ServiceStatus.BEKLIYOR
+                "Yolda" -> record.status == ServiceStatus.YOLDA
+                "Devam Eden", "İşlemde", "İşleme Başlandı" -> record.status == ServiceStatus.ISLEME_BASLANDI || record.status == ServiceStatus.PARCA_BEKLENIYOR
+                "Tamamlanan" -> record.status == ServiceStatus.TAMAMLANDI
+                else -> true
+            }
+            matchesSearch && matchesPriority && matchesTab && matchesStatus
         }
     }
 
-    // Admin Listesi
     val filteredServiceRecords = combine(
         _serviceRecords,
         _searchQueryFlow,
@@ -154,18 +199,17 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         filterRecords(records, query, status, priority, tab)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Personel Listesi
     val filteredPersonnelServiceRecords = combine(
         _personnelServiceRecords,
         _searchQueryFlow,
-        _selectedFilterFlow,
-        _selectedPriorityFilterFlow
-    ) { records, query, status, priority ->
-        filterRecords(records, query, status, priority, "Tümü")
+        _selectedPriorityFilterFlow,
+        _selectedTabFlow,
+        _currentPersonnelUidFlow
+    ) { records, query, priority, tab, currentUid ->
+        filterPersonnelRecords(records, query, priority, tab, currentUid)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        // Uygulama her açıldığında Firebase'deki iş emirlerini yerel veritabanına (Room) indir
         viewModelScope.launch {
             try {
                 repository.syncAllServices()
@@ -233,60 +277,35 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
 
     fun updateRecord(record: ServiceRecord) {
         viewModelScope.launch {
-            // İş kurallarını doğrulamak için veritabanındaki mevcut kaydı al
             val currentRecord = _serviceRecords.value.find { it.id == record.id }
 
             if (currentRecord != null) {
-                // 1. KURAL: Tamamlanmış (veya İptal) iş emri üzerinde operasyonel güncelleme yapılamaz.
-                if (currentRecord.status == ServiceStatus.TAMAMLANDI || currentRecord.status == ServiceStatus.IPTAL) {
+                if (currentRecord.status == ServiceStatus.TAMAMLANDI) {
                     return@launch
                 }
 
-                // 2. KURAL: Personel Atama / Değiştirme
                 if (currentRecord.assignedPersonnelId != record.assignedPersonnelId) {
-                    // YENİ KURAL: Yalnızca BEKLIYOR durumundaysa atamaya veya mevcut personeli değiştirmeye izin ver
-                    val canAssignOrChange = currentRecord.status == ServiceStatus.BEKLIYOR
+                    val canAssignOrChange = currentRecord.status == ServiceStatus.BEKLIYOR || currentRecord.status == ServiceStatus.IPTAL
                     if (!canAssignOrChange) {
-                        return@launch // İşleme Başlandı, Yolda vb. ise reddet
+                        return@launch
                     }
                 }
             }
 
             repository.updateService(record)
-            loadRecords() // Ekranın yenilenmesi için
+            loadRecords()
         }
     }
 
     fun updateStatus(recordId: Int, newStatus: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            // İşlemi yapmadan önce mevcut kaydı bul
             val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
 
-            // KURAL C: Tamamlanmış iş emri üzerinde durum değişikliği yapılamaz
             if (currentRecord.status == ServiceStatus.TAMAMLANDI) {
                 _errorMessage.value = "Tamamlanmış bir iş emrinin durumu değiştirilemez."
                 return@launch
             }
 
-            // KURAL A: Aynı personelin aynı anda birden fazla aktif iş almasını engelle
-            val activeStatuses = listOf(ServiceStatus.YOLDA, ServiceStatus.ISLEME_BASLANDI)
-            if (newStatus in activeStatuses && currentRecord.assignedPersonnelId != null) {
-
-                // Personelin şu anki aktif işlerini kontrol et (Kendisi hariç)
-                val activeJobs = _serviceRecords.value.filter {
-                    it.assignedPersonnelId == currentRecord.assignedPersonnelId &&
-                            it.status in activeStatuses &&
-                            it.id != recordId
-                }
-
-                if (activeJobs.isNotEmpty()) {
-                    _errorMessage.value =
-                        "Aynı anda birden fazla işleme başlanamaz veya yola çıkılamaz."
-                    return@launch
-                }
-            }
-
-            // Kurallar başarıyla geçilirse güncellemeyi yap
             repository.updateStatus(recordId, newStatus)
             loadRecords()
             _selectedRecord.value = _selectedRecord.value?.copy(status = newStatus)
@@ -327,8 +346,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    // --- FAZ 2.5: FOTOĞRAF İŞLEMLERİ ---
-
     fun loadServicePhotos(serviceRecordId: Int) {
         photosJob?.cancel()
         photosJob = viewModelScope.launch(Dispatchers.IO) {
@@ -362,8 +379,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    // --- KAPANIŞ FORMU FONKSİYONLARI ---
-
     fun updateClosingNote(note: String) {
         _closingNote.value = note
     }
@@ -392,29 +407,9 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
 
     fun syncAdminData() {
         viewModelScope.launch {
-            // 1. Arka planda Firebase'den verileri çek ve Room'u güncelle
-            repository.syncAllServices()
-
-            // 2. EKRANI YENİLE
-            val updatedList = repository.getAllRecords()
-            _serviceRecords.value = updatedList
-        }
-    }
-
-    fun forceSync() {
-        viewModelScope.launch {
             repository.syncAllServices()
             val updatedList = repository.getAllRecords()
             _serviceRecords.value = updatedList
-        }
-    }
-
-    fun syncPersonnelData(uid: String, personnelId: Int) {
-        viewModelScope.launch {
-            repository.syncServicesFromFirestore(
-                personnelUid = uid,
-                localPersonnelId = personnelId
-            )
         }
     }
 
@@ -425,31 +420,16 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                     personnelUid = firebaseUid,
                     localPersonnelId = localPersonnelId
                 )
+                val updatedRecords = repository.getRecordsByPersonnelId(localPersonnelId)
+                _personnelServiceRecords.value = updatedRecords
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
     }
 
-    // Personelin işi kabul etmesi (BEKLIYOR -> YOLDA geçişi ve aynı anda 2 aktif iş kontrolü)
     fun acceptService(recordId: Int, personnelId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
-
-            // KURAL: Aynı anda birden fazla aktif iş (YOLDA veya ISLEME_BASLANDI) alınamaz.
-            val activeStatuses = listOf(ServiceStatus.YOLDA, ServiceStatus.ISLEME_BASLANDI)
-            val activeJobs = _serviceRecords.value.filter {
-                it.assignedPersonnelId == personnelId &&
-                        it.status in activeStatuses &&
-                        it.id != recordId
-            }
-
-            if (activeJobs.isNotEmpty()) {
-                _errorMessage.value = "Devam eden bir işiniz bulunmaktadır. Yeni bir iş kabul etmek için mevcut işinizi tamamlamanız gerekmektedir."
-                return@launch
-            }
-
-            // Kurallara uygunsa durumu YOLDA (Kabul Edildi / Sahaya çıkış) yap
             repository.updateStatus(recordId, ServiceStatus.YOLDA)
             loadRecords()
             loadRecordsForPersonnel(personnelId)
@@ -457,7 +437,27 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    // Personelin işi red nedeni ile reddetmesi (Room + Firestore sync)
+    fun startServiceWork(recordId: Int, personnelId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
+            if (currentRecord.status == ServiceStatus.YOLDA) {
+                repository.updateStatus(recordId, ServiceStatus.ISLEME_BASLANDI)
+                loadRecords()
+                loadRecordsForPersonnel(personnelId)
+                _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.ISLEME_BASLANDI)
+            }
+        }
+    }
+
+    fun setParcaBekleniyor(recordId: Int, personnelId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateStatus(recordId, ServiceStatus.PARCA_BEKLENIYOR)
+            loadRecords()
+            loadRecordsForPersonnel(personnelId)
+            _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.PARCA_BEKLENIYOR)
+        }
+    }
+
     fun rejectService(recordId: Int, rejectionReason: String, personnelId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             val result = repository.rejectService(recordId, rejectionReason)
@@ -476,10 +476,8 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
 
     fun submitClosingForm(serviceId: Int, personnelId: Int) {
         viewModelScope.launch {
-            // 1. UI'a yükleniyor durumunu bildir
             _closingState.value = ClosingState.Loading
 
-            // 2. Gerekli verileri mevcut State'lerden ve listeden topla
             val currentRecord = getServiceById(serviceId)
             val note = _closingNote.value
             val signature = _closingSignatureUri.value
@@ -489,18 +487,20 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                 return@launch
             }
 
-            // 3. Repository'deki işlemi çağır
+            val completedRecord = currentRecord.copy(status = ServiceStatus.TAMAMLANDI)
+
             val result = repository.completeServiceWork(
-                serviceRecord = currentRecord,
+                serviceRecord = completedRecord,
                 personnelId = personnelId,
                 closingNoteText = note,
                 signatureUri = signature
             )
 
-            // 4. Sonucu UI State'ine aktar
             if (result.isSuccess) {
                 _closingState.value = ClosingState.Success
-                loadRecords() // İşlem bitince listeyi yenile
+                loadRecords()
+                loadRecordsForPersonnel(personnelId)
+                _selectedRecord.value = completedRecord
             } else {
                 _closingState.value = ClosingState.Error(result.exceptionOrNull()?.message ?: "İşlem sırasında bir hata oluştu.")
             }
