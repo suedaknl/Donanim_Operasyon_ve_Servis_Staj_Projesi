@@ -46,7 +46,6 @@ fun PersonnelMainScreen(
     var personnel by remember { mutableStateOf<Personnel?>(null) }
     val context = LocalContext.current
 
-    // Tek bir yerden personel listesini ve oturum bilgisini alıyoruz
     val personnelList by personnelViewModel.personnelList.collectAsState()
 
     // Oturum açan personelin Firebase UID'sini buluyoruz
@@ -167,7 +166,7 @@ fun PersonnelMainScreen(
         Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
             when (selectedTab) {
                 0 -> PersonnelHomeContent(
-                    personnel = personnel,
+                    personnel = currentPersonnel,
                     myServices = filteredPersonnelServices,
                     onNavigateToServiceDetail = onNavigateToServiceDetail,
                     onGoToAssignments = { selectedTab = 1 }
@@ -175,7 +174,7 @@ fun PersonnelMainScreen(
                 1 -> {
                     Box(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
                         StandaloneUserFormScreen(
-                            serviceList = filteredPersonnelServices, // Doğrudan filtrelenmiş liste aktarılıyor
+                            serviceList = filteredPersonnelServices,
                             personnelList = personnelList,
                             selectedTab = serviceViewModel.selectedTab,
                             onTabSelected = { serviceViewModel.updateSelectedTab(it) },
@@ -204,7 +203,7 @@ fun PersonnelMainScreen(
                     }
                 }
                 2 -> PersonnelMapPlaceholder()
-                3 -> PersonnelProfileContent(personnel = personnel, onLogOut = onLogOut)
+                3 -> PersonnelProfileContent(personnel = currentPersonnel, onLogOut = onLogOut)
             }
         }
     }
