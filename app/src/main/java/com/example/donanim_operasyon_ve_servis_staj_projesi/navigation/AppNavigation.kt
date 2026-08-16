@@ -1,9 +1,11 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.navigation
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -17,6 +19,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.AppDatabase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePhoto
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.AdminLoginScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.PersonnelLoginScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.WelcomeScreen
@@ -61,7 +64,6 @@ fun AppNavigation() {
     val sharedServiceViewModel: ServiceViewModel = viewModel(factory = serviceFactory)
     val sessionManager = remember { SessionManager(context) }
     val authRepository = remember { AuthRepository() }
-
 
     NavHost(navController = navController, startDestination = "splash") {
 
@@ -281,6 +283,34 @@ fun AppNavigation() {
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
 
+            // FAB'dan kamera açılıp fotoğraf çekildikten sonra dönen URI'yi dinliyoruz
+            val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>("photo_uri", null).collectAsState()
+            val photoServiceId = backStackEntry.savedStateHandle.get<Int>("photo_service_id")
+
+            // Fotoğraf başarıyla döndüyse kaydetme işlemini yap
+            LaunchedEffect(returnedPhotoUri) {
+                val uri = returnedPhotoUri // Smart cast hatasını çözen yerel atama
+
+                if (uri != null && photoServiceId != null) {
+                    sharedServiceViewModel.addServicePhoto(
+                        ServicePhoto(
+                            serviceRecordId = photoServiceId,
+                            personnelId = personnelId,
+                            photoUri = uri,
+                            localUri = uri,
+                            photoType = "GENEL",
+                            photoCategory = "GENEL",
+                            timestamp = System.currentTimeMillis() // Fotoğraf için timestamp, not için createdAt kullanıyorsun
+                        )
+                    )
+                    Toast.makeText(context, "Fotoğraf başarıyla eklendi.", Toast.LENGTH_SHORT).show()
+
+                    // İşlem bittikten sonra state'leri temizleyerek sonsuz döngüyü engelliyoruz
+                    backStackEntry.savedStateHandle.remove<String>("photo_uri")
+                    backStackEntry.savedStateHandle.remove<Int>("photo_service_id")
+                }
+            }
+
             PersonnelMainScreen(
                 personnelId = personnelId,
                 serviceViewModel = sharedServiceViewModel,
@@ -292,6 +322,11 @@ fun AppNavigation() {
                     authRepository.signOut()
                     sessionManager.clearSession()
                     navController.navigate("welcome") { popUpTo(0) }
+                },
+                onNavigateToCameraForService = { serviceId, _ ->
+                    // Hangi iş emri için kameranın açıldığını kaydedip doğrudan kameraya yönlendiriyoruz
+                    backStackEntry.savedStateHandle["photo_service_id"] = serviceId
+                    navController.navigate("camera")
                 }
             )
         }

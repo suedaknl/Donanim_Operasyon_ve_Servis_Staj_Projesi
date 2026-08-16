@@ -3,6 +3,7 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.person
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,19 +21,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.StandaloneUserFormScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
-import java.util.*
+import kotlin.math.roundToInt
 
 @Composable
 fun PersonnelMainScreen(
@@ -40,15 +43,21 @@ fun PersonnelMainScreen(
     serviceViewModel: ServiceViewModel,
     personnelViewModel: PersonnelViewModel,
     onNavigateToServiceDetail: (Int) -> Unit,
-    onLogOut: () -> Unit
+    onLogOut: () -> Unit,
+    onNavigateToCameraForService: (Int, String) -> Unit = { _, _ -> }
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    var personnel by remember { mutableStateOf<Personnel?>(null) }
     val context = LocalContext.current
 
-    val personnelList by personnelViewModel.personnelList.collectAsState()
+    // En temiz ve hatasız Sürüklenebilir FAB State'leri
+    var fabOffsetX by remember { mutableStateOf(0f) }
+    var fabOffsetY by remember { mutableStateOf(0f) }
 
-    // Oturum açan personelin Firebase UID'sini buluyoruz
+    // Dialog State'leri
+    var showNoteDialog by remember { mutableStateOf(false) }
+    var showPhotoDialog by remember { mutableStateOf(false) }
+
+    val personnelList by personnelViewModel.personnelList.collectAsState()
     val currentPersonnel = personnelList.find { it.id == personnelId }
     val currentFirebaseUid = currentPersonnel?.firebaseUid
 
@@ -58,10 +67,19 @@ fun PersonnelMainScreen(
         }
     }
 
-    // ViewModel üzerindeki merkezi ve optimize edilmiş FİLTRELENMİŞ akışı dinliyoruz
     val filteredPersonnelServices by serviceViewModel.filteredPersonnelServiceRecords.collectAsState()
 
-    // Ekran açıldığında ve personelId değiştiğinde personelin işlerini Room ve Firestore'dan yükle
+    val allPersonnelRawServices by serviceViewModel.personnelServiceRecords.collectAsState()
+    val activeServicesForFab = remember(allPersonnelRawServices, personnelId) {
+        allPersonnelRawServices.filter {
+            it.assignedPersonnelId == personnelId &&
+                    (it.status == ServiceStatus.BEKLIYOR ||
+                            it.status == ServiceStatus.YOLDA ||
+                            it.status == ServiceStatus.ISLEME_BASLANDI ||
+                            it.status == ServiceStatus.PARCA_BEKLENIYOR)
+        }
+    }
+
     LaunchedEffect(personnelId, currentPersonnel) {
         currentPersonnel?.firebaseUid?.let { uid ->
             serviceViewModel.syncMyServices(uid, personnelId)
@@ -71,39 +89,39 @@ fun PersonnelMainScreen(
 
     Scaffold(
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(if (selectedTab == 0) Icons.Filled.Home else Icons.Outlined.Home, contentDescription = "Ana Sayfa") },
-                    label = { Text("Ana Sayfa") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(if (selectedTab == 1) Icons.Filled.Assignment else Icons.Outlined.Assignment, contentDescription = "İş Emirleri") },
-                    label = { Text("İş Emirleri") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = { Icon(if (selectedTab == 2) Icons.Filled.Map else Icons.Outlined.Map, contentDescription = "Harita") },
-                    label = { Text("Harita") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
-                    icon = { Icon(if (selectedTab == 3) Icons.Filled.Person else Icons.Outlined.Person, contentDescription = "Profil") },
-                    label = { Text("Profil") }
-                )
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
+                NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(if (selectedTab == 0) Icons.Filled.Home else Icons.Outlined.Home, null) }, label = { Text("Ana Sayfa") })
+                NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(if (selectedTab == 1) Icons.Filled.Assignment else Icons.Outlined.Assignment, null) }, label = { Text("İş Emirleri") })
+                NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2 }, icon = { Icon(if (selectedTab == 2) Icons.Filled.Map else Icons.Outlined.Map, null) }, label = { Text("Harita") })
+                NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3 }, icon = { Icon(if (selectedTab == 3) Icons.Filled.Person else Icons.Outlined.Person, null) }, label = { Text("Profil") })
             }
         },
         floatingActionButton = {
             if (selectedTab == 0 || selectedTab == 1) {
                 var showFabMenu by remember { mutableStateOf(false) }
-                Box(contentAlignment = Alignment.BottomEnd) {
+
+                Box(
+                    contentAlignment = Alignment.BottomEnd,
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt())
+                        }
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    fabOffsetX += dragAmount.x
+                                    fabOffsetY += dragAmount.y
+                                },
+                                onDragEnd = {
+                                    // Scaffold BottomEnd slotunda olduğumuz için pozitif değerler ekranın sağına ve altına kaçmaktır.
+                                    // Ekrandan çıkmasını engellemek için basit bir yaslama yapıyoruz.
+                                    if (fabOffsetX > 0f) fabOffsetX = 0f
+                                    if (fabOffsetY > 0f) fabOffsetY = 0f
+                                }
+                            )
+                        }
+                ) {
                     DropdownMenu(
                         expanded = showFabMenu,
                         onDismissRequest = { showFabMenu = false },
@@ -111,34 +129,39 @@ fun PersonnelMainScreen(
                     ) {
                         DropdownMenuItem(
                             text = { Text("İş Emirlerine Git", fontWeight = FontWeight.Medium) },
-                            leadingIcon = { Icon(Icons.Default.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                            onClick = {
-                                showFabMenu = false
-                                selectedTab = 1
-                            }
+                            leadingIcon = { Icon(Icons.Default.Assignment, null, tint = MaterialTheme.colorScheme.primary) },
+                            onClick = { showFabMenu = false; selectedTab = 1 }
                         )
                         HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text("Hızlı Not Ekle", fontWeight = FontWeight.Medium) },
-                            leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            leadingIcon = { Icon(Icons.Default.EditNote, null, tint = MaterialTheme.colorScheme.primary) },
                             onClick = {
                                 showFabMenu = false
-                                Toast.makeText(context, "Hızlı not ekleme açılıyor...", Toast.LENGTH_SHORT).show()
+                                if (activeServicesForFab.isEmpty()) {
+                                    Toast.makeText(context, "İşlem yapabileceğiniz aktif iş emriniz bulunmuyor.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showNoteDialog = true
+                                }
                             }
                         )
                         HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text("Fotoğraf Çek", fontWeight = FontWeight.Medium) },
-                            leadingIcon = { Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            leadingIcon = { Icon(Icons.Default.PhotoCamera, null, tint = MaterialTheme.colorScheme.primary) },
                             onClick = {
                                 showFabMenu = false
-                                Toast.makeText(context, "Kamera modülü açılıyor...", Toast.LENGTH_SHORT).show()
+                                if (activeServicesForFab.isEmpty()) {
+                                    Toast.makeText(context, "İşlem yapabileceğiniz aktif iş emriniz bulunmuyor.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showPhotoDialog = true
+                                }
                             }
                         )
                         HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text("AI Asistanı (Yakında)", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.secondary) },
-                            leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) },
+                            leadingIcon = { Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.secondary) },
                             onClick = {
                                 showFabMenu = false
                                 Toast.makeText(context, "Yapay zeka asistanı yakında hizmetinizde olacak.", Toast.LENGTH_SHORT).show()
@@ -181,11 +204,9 @@ fun PersonnelMainScreen(
                             searchQuery = serviceViewModel.searchQuery,
                             onSearchQueryChange = { serviceViewModel.updateSearchQuery(it) },
                             selectedFilter = serviceViewModel.selectedFilter,
-                            onFilterSelected = { filter -> serviceViewModel.updateSelectedFilter(filter) },
+                            onFilterSelected = { serviceViewModel.updateSelectedFilter(it) },
                             selectedPriority = serviceViewModel.selectedPriorityFilter,
-                            onPrioritySelected = { selectedPriority ->
-                                serviceViewModel.updateSelectedPriorityFilter(selectedPriority)
-                            },
+                            onPrioritySelected = { serviceViewModel.updateSelectedPriorityFilter(it) },
                             onClearFilters = {
                                 serviceViewModel.updateSearchQuery("")
                                 serviceViewModel.updateSelectedFilter("Hepsi")
@@ -207,6 +228,115 @@ fun PersonnelMainScreen(
             }
         }
     }
+
+    // Hızlı Not Ekleme Dialogu
+    if (showNoteDialog) {
+        var selectedServiceForNote by remember { mutableStateOf<ServiceRecord?>(null) }
+        var noteText by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showNoteDialog = false },
+            title = { Text("Hızlı Not Ekle", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (selectedServiceForNote == null) {
+                        Text("Lütfen not eklenecek iş emrini seçin:", style = MaterialTheme.typography.bodyMedium)
+                        LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
+                            items(activeServicesForFab) { s ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clickable { selectedServiceForNote = s },
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text("#${s.id} - ${s.companyName}", fontWeight = FontWeight.Bold)
+                                        Text("${s.deviceType} (${s.status})", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Text("Seçilen İş: #${selectedServiceForNote!!.id} - ${selectedServiceForNote!!.companyName}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        OutlinedTextField(
+                            value = noteText,
+                            onValueChange = { noteText = it },
+                            label = { Text("Notunuzu girin") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (selectedServiceForNote != null) {
+                    Button(
+                        onClick = {
+                            if (noteText.isNotBlank()) {
+                                serviceViewModel.addServiceNote(
+                                    ServiceNote(
+                                        serviceRecordId = selectedServiceForNote!!.id,
+                                        personnelId = personnelId,
+                                        note = noteText.trim(),
+                                        createdAt = System.currentTimeMillis()
+                                    )
+                                )
+                                Toast.makeText(context, "Not başarıyla eklendi.", Toast.LENGTH_SHORT).show()
+                                showNoteDialog = false
+                            }
+                        },
+                        enabled = noteText.isNotBlank()
+                    ) { Text("Kaydet") }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    if (selectedServiceForNote != null) {
+                        selectedServiceForNote = null
+                    } else {
+                        showNoteDialog = false
+                    }
+                }) { Text(if (selectedServiceForNote != null) "Geri" else "İptal") }
+            }
+        )
+    }
+
+    // Fotoğraf Çekme Dialogu
+    if (showPhotoDialog) {
+        AlertDialog(
+            onDismissRequest = { showPhotoDialog = false },
+            title = { Text("Fotoğraf Ekle", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Lütfen fotoğraf eklenecek iş emrini seçin:", style = MaterialTheme.typography.bodyMedium)
+                    LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
+                        items(activeServicesForFab) { s ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clickable {
+                                        showPhotoDialog = false
+                                        onNavigateToCameraForService(s.id, "GENEL")
+                                    },
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("#${s.id} - ${s.companyName}", fontWeight = FontWeight.Bold)
+                                    Text("${s.deviceType} (${s.status})", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showPhotoDialog = false }) { Text("İptal") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -225,39 +355,17 @@ fun PersonnelHomeContent(
         it.status != ServiceStatus.TAMAMLANDI && it.status != ServiceStatus.IPTAL
     }.sortedByDescending { it.id }
 
-    Column(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-    ) {
-        Surface(
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(20.dp).fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.padding(20.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Person, contentDescription = "Profil", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(32.dp))
+                    Box(modifier = Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(32.dp))
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
-                        Text(
-                            text = personnel?.fullName ?: "Personel",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            text = personnel?.role ?: "Saha Personeli",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                        )
+                        Text(personnel?.fullName ?: "Personel", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(personnel?.role ?: "Saha Personeli", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color.Green))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -265,27 +373,15 @@ fun PersonnelHomeContent(
                         }
                     }
                 }
-                IconButton(onClick = { /* Bildirimler */ }) {
-                    Icon(Icons.Default.Notifications, contentDescription = "Bildirimler", tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                }
+                IconButton(onClick = { /* Bildirimler */ }) { Icon(Icons.Default.Notifications, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
             }
         }
 
-        LazyColumn(
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
+        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize()) {
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Görev Özeti", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = onGoToAssignments) {
-                        Text("Tümünü Gör")
-                    }
+                    TextButton(onClick = onGoToAssignments) { Text("Tümünü Gör") }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -312,47 +408,23 @@ fun PersonnelHomeContent(
                 }
             } else {
                 items(activeServices) { service ->
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxWidth().clickable { onNavigateToServiceDetail(service.id) },
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
+                    ElevatedCard(modifier = Modifier.fillMaxWidth().clickable { onNavigateToServiceDetail(service.id) }, shape = RoundedCornerShape(12.dp)) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(
-                                    text = service.companyName,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = service.priority,
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Text(service.companyName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                Text(service.priority, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = "${service.deviceType} - ${service.deviceModel}", style = MaterialTheme.typography.bodyMedium)
+                            Text("${service.deviceType} - ${service.deviceModel}", style = MaterialTheme.typography.bodyMedium)
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Default.AccessTime, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = service.date.take(10), style = MaterialTheme.typography.labelSmall)
+                                    Text(service.date.take(10), style = MaterialTheme.typography.labelSmall)
                                 }
-                                Surface(
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = service.status,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
+                                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(8.dp)) {
+                                    Text(service.status, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                 }
                             }
                         }
@@ -366,18 +438,10 @@ fun PersonnelHomeContent(
 
 @Composable
 fun SummaryCard(modifier: Modifier = Modifier, title: String, count: Int, color: Color) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = count.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = color)
-            Text(text = title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), shape = RoundedCornerShape(12.dp)) {
+        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(count.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = color)
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -386,19 +450,11 @@ fun SummaryCard(modifier: Modifier = Modifier, title: String, count: Int, color:
 fun PersonnelMapPlaceholder() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Outlined.Map, contentDescription = "Harita", modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+            Icon(Icons.Outlined.Map, null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Harita Modülü",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
+            Text("Harita Modülü", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "İş konumları ve rota bilgileri yakında\nbu ekranda görüntülenecektir.",
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("İş konumları ve rota bilgileri yakında\nbu ekranda görüntülenecektir.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -406,68 +462,37 @@ fun PersonnelMapPlaceholder() {
 @Composable
 fun PersonnelProfileContent(personnel: Personnel?, onLogOut: () -> Unit) {
     val context = LocalContext.current
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(modifier = Modifier.height(16.dp))
-        Box(
-            modifier = Modifier.size(90.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.Person, contentDescription = "Profil", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(50.dp))
+        Box(modifier = Modifier.size(90.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(50.dp))
         }
         Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = personnel?.fullName ?: "Personel Adı",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = personnel?.role ?: "Saha Personeli",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-
+        Text(personnel?.fullName ?: "Personel Adı", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(personnel?.role ?: "Saha Personeli", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(20.dp))
-
         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
             Column {
-                ProfileMenuItem(icon = Icons.Default.Email, title = personnel?.email ?: "E-posta belirtilmedi")
+                ProfileMenuItem(Icons.Default.Email, personnel?.email ?: "E-posta belirtilmedi")
                 HorizontalDivider()
-                ProfileMenuItem(icon = Icons.Default.Phone, title = personnel?.phoneNumber ?: "Telefon belirtilmedi")
+                ProfileMenuItem(Icons.Default.Phone, personnel?.phoneNumber ?: "Telefon belirtilmedi")
                 HorizontalDivider()
-                ProfileMenuItem(icon = Icons.Default.Wc, title = "Cinsiyet: ${personnel?.gender ?: "Belirtilmedi"}")
+                ProfileMenuItem(Icons.Default.Wc, "Cinsiyet: ${personnel?.gender ?: "Belirtilmedi"}")
             }
         }
-
         Spacer(modifier = Modifier.height(16.dp))
-
         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
             Column {
-                ProfileMenuItem(icon = Icons.Default.Lock, title = "Şifre Değiştir", isAction = true) {
-                    Toast.makeText(context, "Şifre değiştirme ekranı hazırlanıyor.", Toast.LENGTH_SHORT).show()
-                }
+                ProfileMenuItem(Icons.Default.Lock, "Şifre Değiştir", true) { Toast.makeText(context, "Şifre değiştirme ekranı hazırlanıyor.", Toast.LENGTH_SHORT).show() }
                 HorizontalDivider()
-                ProfileMenuItem(icon = Icons.Default.HelpOutline, title = "Destek ve Yardım", isAction = true) {
-                    Toast.makeText(context, "Destek talebi özelliği yakında eklenecektir.", Toast.LENGTH_SHORT).show()
-                }
+                ProfileMenuItem(Icons.Default.HelpOutline, "Destek ve Yardım", true) { Toast.makeText(context, "Destek talebi özelliği yakında eklenecektir.", Toast.LENGTH_SHORT).show() }
                 HorizontalDivider()
-                ProfileMenuItem(icon = Icons.Default.Edit, title = "Profil Bilgilerini Güncelle", isAction = true) {
-                    Toast.makeText(context, "Bilgi güncelleme talebiniz yöneticiye iletildi.", Toast.LENGTH_SHORT).show()
-                }
+                ProfileMenuItem(Icons.Default.Edit, "Profil Bilgilerini Güncelle", true) { Toast.makeText(context, "Bilgi güncelleme talebiniz yöneticiye iletildi.", Toast.LENGTH_SHORT).show() }
             }
         }
-
         Spacer(modifier = Modifier.weight(1f))
-
-        Button(
-            onClick = onLogOut,
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(Icons.Default.Logout, contentDescription = null)
+        Button(onClick = onLogOut, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), shape = RoundedCornerShape(12.dp)) {
+            Icon(Icons.Default.Logout, null)
             Spacer(modifier = Modifier.width(8.dp))
             Text("Çıkış Yap", style = MaterialTheme.typography.titleMedium)
         }
@@ -477,15 +502,10 @@ fun PersonnelProfileContent(personnel: Personnel?, onLogOut: () -> Unit) {
 
 @Composable
 fun ProfileMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, isAction: Boolean = false, onClick: () -> Unit = {}) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(enabled = isAction, onClick = onClick).padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+    Row(modifier = Modifier.fillMaxWidth().clickable(enabled = isAction, onClick = onClick).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.width(16.dp))
-        Text(text = title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        if (isAction) {
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        if (isAction) Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
