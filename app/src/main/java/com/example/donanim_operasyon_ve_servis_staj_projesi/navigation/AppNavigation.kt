@@ -41,6 +41,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.camera.
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.ClosingFormScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.AdminMainScreen
 
 @Composable
 fun AppNavigation() {
@@ -154,43 +155,22 @@ fun AppNavigation() {
         }
 
         composable("home") {
-            val serviceList by sharedServiceViewModel.filteredServiceRecords.collectAsState()
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
-            val personnelList by personnelViewModel.personnelList.collectAsState()
 
-            HomeScreen(
-                serviceList = serviceList,
-                personnelList = personnelList,
-                selectedTab = sharedServiceViewModel.selectedTab,
-                onTabSelected = { sharedServiceViewModel.updateSelectedTab(it) },
-                searchQuery = sharedServiceViewModel.searchQuery,
-                onSearchQueryChange = { sharedServiceViewModel.updateSearchQuery(it) },
-                selectedFilter = sharedServiceViewModel.selectedFilter,
-                onFilterSelected = { filter ->
-                    sharedServiceViewModel.updateSelectedFilter(filter)
-                },
-                selectedPriority = sharedServiceViewModel.selectedPriorityFilter,
-                onPrioritySelected = { priority ->
-                    sharedServiceViewModel.updateSelectedPriorityFilter(priority)
-                },
-                onClearFilters = {
-                    sharedServiceViewModel.updateSearchQuery("")
-                    sharedServiceViewModel.updateSelectedFilter("Hepsi")
-                    sharedServiceViewModel.updateSelectedPriorityFilter("Hepsi")
-                },
-                onNavigateToPersonnel = { navController.navigate("personnel_list") },
+            AdminMainScreen(
+                serviceViewModel = sharedServiceViewModel,
+                personnelViewModel = personnelViewModel,
                 onNavigateToAddService = { navController.navigate("add_service") },
                 onServiceClick = { clickedService ->
                     navController.navigate("service_detail/${clickedService.id}")
                 },
+                onNavigateToAddPersonnel = { navController.navigate("add_personnel") },
+                onNavigateToEditPersonnel = { id -> navController.navigate("add_personnel?personnelId=$id") },
                 onLogOut = {
                     authRepository.signOut()
                     sessionManager.clearSession()
                     navController.navigate("welcome") { popUpTo(0) }
-                },
-                serviceViewModel = sharedServiceViewModel,
-                firebaseUid = null,
-                localPersonnelId = null
+                }
             )
         }
 

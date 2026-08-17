@@ -10,12 +10,9 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceSt
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,52 +36,31 @@ fun HomeScreen(
     selectedPriority: String,
     onPrioritySelected: (String) -> Unit,
     onClearFilters: () -> Unit,
-    onNavigateToPersonnel: () -> Unit,
+    onNavigateToPersonnel: () -> Unit = {},
     onNavigateToAddService: () -> Unit,
     onServiceClick: (ServiceRecord) -> Unit,
-    onLogOut: () -> Unit,
-
-    // YENİ EKLENEN PARAMETRELER: Senkronizasyon için gerekli veriler
+    onLogOut: () -> Unit = {},
     serviceViewModel: ServiceViewModel,
     firebaseUid: String? = null,
     localPersonnelId: Int? = null
 ) {
-    val statusOptions = listOf("Hepsi") + ServiceStatus.all
-    val priorityOptions = listOf("Hepsi", "Düşük", "Normal", "Yüksek", "Acil")
-    val tabs = listOf("Tümü", "Atanmamış", "Atanan", "Devam Eden", "Tamamlanan")
+    // İstenen yeni 6 durum sekmesi
+    val tabs = listOf("Tümü", "Bekleyen", "Yolda", "İşlemde", "Tamamlanan", "Reddedilen")
 
     var showFilterSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // --- FAZ 3: SENKRONİZASYON TETİKLEYİCİSİ EKLENDİ ---
-    // Ekran açıldığında Firestore'daki gerçek verileri Room'a indirir
     LaunchedEffect(Unit) {
         serviceViewModel.syncAdminData()
     }
-    // ---------------------------------------------------
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("İş Emirleri Yönetimi", fontWeight = FontWeight.Bold) },
-                actions = {
-                    IconButton(onClick = onNavigateToPersonnel) {
-                        Icon(Icons.Default.People, contentDescription = "Personel Yönetimi")
-                    }
-                    IconButton(onClick = onLogOut) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Çıkış Yap")
-                    }
-                },
+                // Sağ üstteki personel ve çıkış ikonları Bottom Navigation'a taşındığı için kaldırıldı
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToAddService,
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Yeni İş Emri Ekle")
-            }
         }
     ) { paddingValues ->
         Column(
@@ -93,7 +69,7 @@ fun HomeScreen(
                 .padding(paddingValues)
         ) {
             ScrollableTabRow(
-                selectedTabIndex = tabs.indexOf(selectedTab),
+                selectedTabIndex = tabs.indexOf(selectedTab).coerceAtLeast(0),
                 edgePadding = 8.dp,
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surface
@@ -118,7 +94,7 @@ fun HomeScreen(
                     value = searchQuery,
                     onValueChange = onSearchQueryChange,
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Firma, cihaz, seri no...") },
+                    placeholder = { Text("Firma, cihaz, seri no, lokasyon...") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Ara") },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -154,11 +130,7 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (searchQuery.isNotEmpty() || selectedFilter != "Hepsi" || selectedPriority != "Hepsi") {
-                            "Arama veya filtreleme kriterlerine uygun iş emri bulunamadı."
-                        } else {
-                            "Bu kategoride iş emri bulunmuyor."
-                        },
+                        text = "Arama veya filtreleme kriterlerine uygun iş emri bulunamadı.",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center

@@ -89,6 +89,46 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     var selectedTab by mutableStateOf("Tümü")
         private set
 
+    // 1. Gelişmiş Filtre State'leri
+    var adminSelectedStatusTab by mutableStateOf("Tümü") // "Tümü", "Bekleyen", "Yolda", "İşlemde", "Tamamlanan", "Reddedilen"
+        private set
+
+    var adminSearchQuery by mutableStateOf("")
+        private set
+
+    var selectedDateFilter by mutableStateOf("Tümü") // "Tümü", "Bugün", "Son 7 gün", "Son 30 gün", "Bu ay", "Özel Aralık"
+        private set
+
+    var customStartDate by mutableStateOf<Long?>(null)
+        private set
+
+    var customEndDate by mutableStateOf<Long?>(null)
+        private set
+
+    var selectedStatusesFilter by mutableStateOf(setOf<String>()) // Çoklu durum seçimi
+        private set
+
+    var selectedPrioritiesFilter by mutableStateOf(setOf<String>()) // Öncelik seçimi
+        private set
+
+    var selectedDeviceTypesFilter by mutableStateOf(setOf<String>()) // Cihaz türü seçimi
+        private set
+
+    var selectedPersonnelFilter by mutableStateOf<String?>("Tümü") // Personel UID/İsim
+        private set
+
+    var selectedCompanyFilter by mutableStateOf<String?>("Tümü") // Firma seçimi
+        private set
+
+    var selectedLocationFilter by mutableStateOf<String?>("Tümü") // Lokasyon seçimi
+        private set
+
+    var selectedAssignmentStatusFilter by mutableStateOf("Tümü") // "Tümü", "Atanmış", "Atanmamış"
+        private set
+
+    var selectedSortOption by mutableStateOf("En yeni") // "En yeni", "En eski", "Önceliği yüksek olan"
+        private set
+
     private val _closingNote = MutableStateFlow("")
     val closingNote = _closingNote.asStateFlow()
 
@@ -154,6 +194,71 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             matchesSearch && matchesPriority && matchesTab
         }
     }
+    fun updateAdminSelectedStatusTab(status: String) {
+        adminSelectedStatusTab = status
+    }
+
+    fun updateAdminSearchQuery(query: String) {
+        adminSearchQuery = query
+    }
+
+    fun updateAdvancedFilters(
+        dateFilter: String,
+        start: Long?,
+        end: Long?,
+        statuses: Set<String>,
+        priorities: Set<String>,
+        deviceTypes: Set<String>,
+        personnel: String?,
+        company: String?,
+        location: String?,
+        assignment: String,
+        sort: String
+    ) {
+        selectedDateFilter = dateFilter
+        customStartDate = start
+        customEndDate = end
+        selectedStatusesFilter = statuses
+        selectedPrioritiesFilter = priorities
+        selectedDeviceTypesFilter = deviceTypes
+        selectedPersonnelFilter = personnel
+        selectedCompanyFilter = company
+        selectedLocationFilter = location
+        selectedAssignmentStatusFilter = assignment
+        selectedSortOption = sort
+    }
+
+    fun clearAllAdvancedFilters() {
+        selectedDateFilter = "Tümü"
+        customStartDate = null
+        customEndDate = null
+        selectedStatusesFilter = emptySet()
+        selectedPrioritiesFilter = emptySet()
+        selectedDeviceTypesFilter = emptySet()
+        selectedPersonnelFilter = "Tümü"
+        selectedCompanyFilter = "Tümü"
+        selectedLocationFilter = "Tümü"
+        selectedAssignmentStatusFilter = "Tümü"
+        selectedSortOption = "En yeni"
+        adminSearchQuery = ""
+        adminSelectedStatusTab = "Tümü"
+    }
+
+    // Aktif filtre sayısını hesaplayan yardımcı fonksiyon
+    val activeFilterCount: Int
+        get() {
+            var count = 0
+            if (selectedDateFilter != "Tümü") count++
+            if (selectedStatusesFilter.isNotEmpty()) count++
+            if (selectedPrioritiesFilter.isNotEmpty()) count++
+            if (selectedDeviceTypesFilter.isNotEmpty()) count++
+            if (selectedPersonnelFilter != null && selectedPersonnelFilter != "Tümü") count++
+            if (selectedCompanyFilter != null && selectedCompanyFilter != "Tümü") count++
+            if (selectedLocationFilter != null && selectedLocationFilter != "Tümü") count++
+            if (selectedAssignmentStatusFilter != "Tümü") count++
+            if (selectedSortOption != "En yeni") count++
+            return count
+        }
 
     private fun filterRecords(
         records: List<ServiceRecord>,
