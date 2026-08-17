@@ -3,7 +3,6 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -18,11 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
@@ -31,7 +28,6 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home.Ho
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.google.firebase.auth.FirebaseAuth
-import kotlin.math.roundToInt
 
 @Composable
 fun AdminMainScreen(
@@ -45,10 +41,6 @@ fun AdminMainScreen(
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val context = LocalContext.current
-
-    // Draggable FAB State'leri
-    var fabOffsetX by remember { mutableStateOf(0f) }
-    var fabOffsetY by remember { mutableStateOf(0f) }
     var showFabMenu by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -59,31 +51,31 @@ fun AdminMainScreen(
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    icon = { Icon(if (selectedTab == 0) Icons.Filled.Dashboard else Icons.Outlined.Dashboard, null) },
+                    icon = { Icon(if (selectedTab == 0) Icons.Filled.Dashboard else Icons.Outlined.Dashboard, contentDescription = "Ana Sayfa") },
                     label = { Text("Ana Sayfa") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    icon = { Icon(if (selectedTab == 1) Icons.Filled.ListAlt else Icons.Outlined.ListAlt, null) },
+                    icon = { Icon(if (selectedTab == 1) Icons.Filled.ListAlt else Icons.Outlined.ListAlt, contentDescription = "İş Emirleri") },
                     label = { Text("İş Emirleri") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    icon = { Icon(if (selectedTab == 2) Icons.Filled.People else Icons.Outlined.PeopleOutline, null) },
+                    icon = { Icon(if (selectedTab == 2) Icons.Filled.People else Icons.Outlined.PeopleOutline, contentDescription = "Personeller") },
                     label = { Text("Personeller") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
-                    icon = { Icon(if (selectedTab == 3) Icons.Filled.LocationOn else Icons.Outlined.LocationOn, null) },
+                    icon = { Icon(if (selectedTab == 3) Icons.Filled.LocationOn else Icons.Outlined.LocationOn, contentDescription = "Konum") },
                     label = { Text("Konum") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 4,
                     onClick = { selectedTab = 4 },
-                    icon = { Icon(if (selectedTab == 4) Icons.Filled.AdminPanelSettings else Icons.Outlined.AdminPanelSettings, null) },
+                    icon = { Icon(if (selectedTab == 4) Icons.Filled.AdminPanelSettings else Icons.Outlined.AdminPanelSettings, contentDescription = "Profil") },
                     label = { Text("Profil") }
                 )
             }
@@ -149,6 +141,9 @@ fun AdminMainScreen(
                     onCardClick = { statusTab ->
                         serviceViewModel.updateAdminSelectedStatusTab(statusTab)
                         selectedTab = 1 // İş Emirleri sekmesine yönlendir
+                    },
+                    onPersonnelCardClick = {
+                        selectedTab = 2 // Personeller sekmesine yönlendir
                     }
                 )
 
@@ -191,6 +186,7 @@ fun AdminMainScreen(
                         onNavigateBack = { selectedTab = 0 }
                     )
                 }
+
                 3 -> AdminLocationPlaceholder()
                 4 -> AdminProfileContent(onLogOut = onLogOut)
             }
@@ -202,7 +198,8 @@ fun AdminMainScreen(
 fun AdminDashboardContent(
     serviceViewModel: ServiceViewModel,
     personnelViewModel: PersonnelViewModel,
-    onCardClick: (String) -> Unit
+    onCardClick: (String) -> Unit,
+    onPersonnelCardClick: () -> Unit
 ) {
     val allServices by serviceViewModel.serviceRecords.collectAsState(initial = emptyList())
     val allPersonnel by personnelViewModel.personnelList.collectAsState(initial = emptyList())
@@ -233,7 +230,10 @@ fun AdminDashboardContent(
         }
 
         item {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 AdminSummaryCard(
                     modifier = Modifier.weight(1f),
                     title = "Toplam İş Emri",
@@ -248,13 +248,16 @@ fun AdminDashboardContent(
                     count = totalPersonnel.toString(),
                     icon = Icons.Default.People,
                     color = MaterialTheme.colorScheme.secondary,
-                    onClick = null
+                    onClick = { onPersonnelCardClick() }
                 )
             }
         }
 
         item {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 AdminSummaryCard(
                     modifier = Modifier.weight(1f),
                     title = "Bekleyen",

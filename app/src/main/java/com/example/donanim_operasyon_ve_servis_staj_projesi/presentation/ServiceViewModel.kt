@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class ServiceViewModelFactory(private val repository: ServiceRepository) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
@@ -89,14 +90,17 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     var selectedTab by mutableStateOf("Tümü")
         private set
 
-    // 1. Gelişmiş Filtre State'leri
-    var adminSelectedStatusTab by mutableStateOf("Tümü") // "Tümü", "Bekleyen", "Yolda", "İşlemde", "Tamamlanan", "Reddedilen"
+    // --- ADMIN GELİŞMİŞ FİLTRE STATE'LERİ (MutableStateFlow olarak ViewModel uyumlu hale getirildi) ---
+    private val _adminSelectedStatusTab = MutableStateFlow("Tümü")
+    val adminSelectedStatusTabState: StateFlow<String> = _adminSelectedStatusTab.asStateFlow()
+    var adminSelectedStatusTab by mutableStateOf("Tümü")
         private set
 
+    private val _adminSearchQuery = MutableStateFlow("")
     var adminSearchQuery by mutableStateOf("")
         private set
 
-    var selectedDateFilter by mutableStateOf("Tümü") // "Tümü", "Bugün", "Son 7 gün", "Son 30 gün", "Bu ay", "Özel Aralık"
+    var selectedDateFilter by mutableStateOf("Tümü")
         private set
 
     var customStartDate by mutableStateOf<Long?>(null)
@@ -105,28 +109,36 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     var customEndDate by mutableStateOf<Long?>(null)
         private set
 
-    var selectedStatusesFilter by mutableStateOf(setOf<String>()) // Çoklu durum seçimi
+    private val _selectedStatusesFilter = MutableStateFlow(setOf<String>())
+    var selectedStatusesFilter = mutableStateOf(setOf<String>())
         private set
 
-    var selectedPrioritiesFilter by mutableStateOf(setOf<String>()) // Öncelik seçimi
+    private val _selectedPrioritiesFilter = MutableStateFlow(setOf<String>())
+    var selectedPrioritiesFilter = mutableStateOf(setOf<String>())
         private set
 
-    var selectedDeviceTypesFilter by mutableStateOf(setOf<String>()) // Cihaz türü seçimi
+    private val _selectedDeviceTypesFilter = MutableStateFlow(setOf<String>())
+    var selectedDeviceTypesFilter = mutableStateOf(setOf<String>())
         private set
 
-    var selectedPersonnelFilter by mutableStateOf<String?>("Tümü") // Personel UID/İsim
+    private val _selectedPersonnelFilter = MutableStateFlow<String?>("Tümü")
+    var selectedPersonnelFilter by mutableStateOf<String?>("Tümü")
         private set
 
-    var selectedCompanyFilter by mutableStateOf<String?>("Tümü") // Firma seçimi
+    private val _selectedCompanyFilter = MutableStateFlow<String?>("Tümü")
+    var selectedCompanyFilter by mutableStateOf<String?>("Tümü")
         private set
 
-    var selectedLocationFilter by mutableStateOf<String?>("Tümü") // Lokasyon seçimi
+    private val _selectedLocationFilter = MutableStateFlow<String?>("Tümü")
+    var selectedLocationFilter by mutableStateOf<String?>("Tümü")
         private set
 
-    var selectedAssignmentStatusFilter by mutableStateOf("Tümü") // "Tümü", "Atanmış", "Atanmamış"
+    private val _selectedAssignmentStatusFilter = MutableStateFlow("Tümü")
+    var selectedAssignmentStatusFilter by mutableStateOf("Tümü")
         private set
 
-    var selectedSortOption by mutableStateOf("En yeni") // "En yeni", "En eski", "Önceliği yüksek olan"
+    private val _selectedSortOption = MutableStateFlow("En yeni")
+    var selectedSortOption by mutableStateOf("En yeni")
         private set
 
     private val _closingNote = MutableStateFlow("")
@@ -152,7 +164,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         _closingAfterPhotoUri.value = uri
     }
 
-    // Personel iş emirleri için kesin ve hatasız filtreleme mantığı
     private fun filterPersonnelRecords(
         records: List<ServiceRecord>,
         query: String,
@@ -162,7 +173,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     ): List<ServiceRecord> {
         val lowerQuery = query.trim().lowercase()
 
-        // 1. Ana Koşul: Oturum açmış personele atanmış olmalı ve IPTAL olmamalı
         val personnelBaseRecords = records.filter { record ->
             val matchesPersonnel = if (!currentUid.isNullOrEmpty()) {
                 record.assignedPersonnelUid == currentUid
@@ -181,7 +191,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             }
             val matchesPriority = if (priority == "Hepsi") true else record.priority == priority
 
-            // 2. Sekme (Tab) / Statü Bazlı Kesin Eşleşme
             val matchesTab = when (tab) {
                 "Tümü" -> true
                 "Atanmış", "Atanan", "Bekleyen" -> record.status == ServiceStatus.BEKLIYOR
@@ -194,12 +203,15 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             matchesSearch && matchesPriority && matchesTab
         }
     }
+
     fun updateAdminSelectedStatusTab(status: String) {
         adminSelectedStatusTab = status
+        _adminSelectedStatusTab.value = status
     }
 
     fun updateAdminSearchQuery(query: String) {
         adminSearchQuery = query
+        _adminSearchQuery.value = query
     }
 
     fun updateAdvancedFilters(
@@ -218,23 +230,32 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         selectedDateFilter = dateFilter
         customStartDate = start
         customEndDate = end
-        selectedStatusesFilter = statuses
-        selectedPrioritiesFilter = priorities
-        selectedDeviceTypesFilter = deviceTypes
+        selectedStatusesFilter.value = statuses
+        selectedPrioritiesFilter.value = priorities
+        selectedDeviceTypesFilter.value = deviceTypes
         selectedPersonnelFilter = personnel
         selectedCompanyFilter = company
         selectedLocationFilter = location
         selectedAssignmentStatusFilter = assignment
         selectedSortOption = sort
+
+        _selectedStatusesFilter.value = statuses
+        _selectedPrioritiesFilter.value = priorities
+        _selectedDeviceTypesFilter.value = deviceTypes
+        _selectedPersonnelFilter.value = personnel
+        _selectedCompanyFilter.value = company
+        _selectedLocationFilter.value = location
+        _selectedAssignmentStatusFilter.value = assignment
+        _selectedSortOption.value = sort
     }
 
     fun clearAllAdvancedFilters() {
         selectedDateFilter = "Tümü"
         customStartDate = null
         customEndDate = null
-        selectedStatusesFilter = emptySet()
-        selectedPrioritiesFilter = emptySet()
-        selectedDeviceTypesFilter = emptySet()
+        selectedStatusesFilter.value = emptySet()
+        selectedPrioritiesFilter.value = emptySet()
+        selectedDeviceTypesFilter.value = emptySet()
         selectedPersonnelFilter = "Tümü"
         selectedCompanyFilter = "Tümü"
         selectedLocationFilter = "Tümü"
@@ -242,23 +263,126 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         selectedSortOption = "En yeni"
         adminSearchQuery = ""
         adminSelectedStatusTab = "Tümü"
+
+        _selectedStatusesFilter.value = emptySet()
+        _selectedPrioritiesFilter.value = emptySet()
+        _selectedDeviceTypesFilter.value = emptySet()
+        _selectedPersonnelFilter.value = "Tümü"
+        _selectedCompanyFilter.value = "Tümü"
+        _selectedLocationFilter.value = "Tümü"
+        _selectedAssignmentStatusFilter.value = "Tümü"
+        _selectedSortOption.value = "En yeni"
+        _adminSearchQuery.value = ""
+        _adminSelectedStatusTab.value = "Tümü"
     }
 
-    // Aktif filtre sayısını hesaplayan yardımcı fonksiyon
     val activeFilterCount: Int
         get() {
             var count = 0
             if (selectedDateFilter != "Tümü") count++
-            if (selectedStatusesFilter.isNotEmpty()) count++
-            if (selectedPrioritiesFilter.isNotEmpty()) count++
-            if (selectedDeviceTypesFilter.isNotEmpty()) count++
-            if (selectedPersonnelFilter != null && selectedPersonnelFilter != "Tümü") count++
-            if (selectedCompanyFilter != null && selectedCompanyFilter != "Tümü") count++
-            if (selectedLocationFilter != null && selectedLocationFilter != "Tümü") count++
+            if (selectedStatusesFilter.value.isNotEmpty()) count++
+            if (selectedPrioritiesFilter.value.isNotEmpty()) count++
+            if (selectedDeviceTypesFilter.value.isNotEmpty()) count++
+            if (!selectedPersonnelFilter.isNullOrBlank() && selectedPersonnelFilter != "Tümü") count++
+            if (!selectedCompanyFilter.isNullOrBlank() && selectedCompanyFilter != "Tümü") count++
+            if (!selectedLocationFilter.isNullOrBlank() && selectedLocationFilter != "Tümü") count++
             if (selectedAssignmentStatusFilter != "Tümü") count++
             if (selectedSortOption != "En yeni") count++
             return count
         }
+
+    private fun filterAdminRecords(
+        records: List<ServiceRecord>,
+        tab: String,
+        query: String,
+        statuses: Set<String>,
+        priorities: Set<String>,
+        deviceTypes: Set<String>,
+        personnel: String?,
+        company: String?,
+        location: String?,
+        assignment: String,
+        dateFilter: String,
+        start: Long?,
+        end: Long?,
+        sort: String
+    ): List<ServiceRecord> {
+        val lowerQuery = query.trim().lowercase(Locale.ROOT)
+
+        val filtered = records.filter { record ->
+            // 1. Üst Durum Sekmesi Filtresi (Yolda ve İşlemde durumlarını netleştirme)
+            val tabMatch = when (tab) {
+                "Tümü" -> true
+                "Bekleyen" -> record.status == ServiceStatus.BEKLIYOR
+                "Yolda" -> record.status == ServiceStatus.YOLDA
+                "İşlemde" -> record.status == ServiceStatus.ISLEME_BASLANDI || record.status == ServiceStatus.PARCA_BEKLENIYOR || record.status == ServiceStatus.YOLDA
+                "Tamamlanan" -> record.status == ServiceStatus.TAMAMLANDI
+                "Reddedilen" -> record.status == ServiceStatus.IPTAL
+                else -> true
+            }
+            val queryMatch = if (lowerQuery.isBlank()) {
+                true
+            } else {
+                record.companyName.lowercase(Locale.ROOT).contains(lowerQuery) ||
+                        record.deviceType.lowercase(Locale.ROOT).contains(lowerQuery) ||
+                        record.deviceModel.lowercase(Locale.ROOT).contains(lowerQuery) ||
+                        record.location.lowercase(Locale.ROOT).contains(lowerQuery) ||
+                        (!record.serialNumber.isNullOrBlank() && record.serialNumber.lowercase(Locale.ROOT).contains(lowerQuery))
+            }
+
+            val statusMatch = if (statuses.isEmpty()) true else statuses.contains(record.status)
+            val priorityMatch = if (priorities.isEmpty()) true else priorities.contains(record.priority)
+            val deviceMatch = if (deviceTypes.isEmpty()) true else deviceTypes.contains(record.deviceType)
+
+            // 6. Personel Filtresi (ID veya UID eşleşmesi)
+            val personnelMatch = if (personnel.isNullOrBlank() || personnel == "Tümü") {
+                true
+            } else {
+                record.assignedPersonnelId?.toString() == personnel ||
+                        personnel.equals(record.assignedPersonnelUid, ignoreCase = true)
+            }
+
+            val companyMatch = if (company.isNullOrBlank() || company == "Tümü") {
+                true
+            } else {
+                record.companyName.equals(company, ignoreCase = true)
+            }
+
+            val locationMatch = if (location.isNullOrBlank() || location == "Tümü") {
+                true
+            } else {
+                record.location.equals(location, ignoreCase = true)
+            }
+
+            val assignmentMatch = when (assignment) {
+                "Atanmış" -> record.assignedPersonnelId != null || !record.assignedPersonnelUid.isNullOrBlank()
+                "Atanmamış" -> record.assignedPersonnelId == null && record.assignedPersonnelUid.isNullOrBlank()
+                else -> true
+            }
+
+            val dateMatch = when (dateFilter) {
+                "Tümü" -> true
+                else -> true
+            }
+
+            tabMatch && queryMatch && statusMatch && priorityMatch && deviceMatch && personnelMatch && companyMatch && locationMatch && assignmentMatch && dateMatch
+        }
+
+        return filtered.sortedWith(
+            when (sort) {
+                "En eski" -> compareBy { it.id }
+                "Önceliği yüksek olan" -> compareByDescending {
+                    when (it.priority) {
+                        "Acil", "Çok Yüksek" -> 3
+                        "Yüksek" -> 2
+                        "Normal", "Orta" -> 1
+                        else -> 0
+                    }
+                }
+                else -> compareByDescending { it.id }
+            }
+        )
+    }
 
     private fun filterRecords(
         records: List<ServiceRecord>,
@@ -296,12 +420,51 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
 
     val filteredServiceRecords = combine(
         _serviceRecords,
-        _searchQueryFlow,
-        _selectedFilterFlow,
-        _selectedPriorityFilterFlow,
-        _selectedTabFlow
-    ) { records, query, status, priority, tab ->
-        filterRecords(records, query, status, priority, tab)
+        _adminSelectedStatusTab,
+        _adminSearchQuery,
+        _selectedStatusesFilter,
+        _selectedPrioritiesFilter,
+        _selectedDeviceTypesFilter,
+        _selectedPersonnelFilter,
+        _selectedCompanyFilter,
+        _selectedLocationFilter,
+        _selectedAssignmentStatusFilter,
+        MutableStateFlow("Tümü"),
+        MutableStateFlow<Long?>(null),
+        MutableStateFlow<Long?>(null),
+        _selectedSortOption
+    ) { args ->
+        val records = args[0] as List<ServiceRecord>
+        val tab = args[1] as String
+        val query = args[2] as String
+        val statuses = args[3] as Set<String>
+        val priorities = args[4] as Set<String>
+        val deviceTypes = args[5] as Set<String>
+        val personnel = args[6] as String?
+        val company = args[7] as String?
+        val location = args[8] as String?
+        val assignment = args[9] as String
+        val dateFilter = args[10] as String
+        val start = args[11] as Long?
+        val end = args[12] as Long?
+        val sort = args[13] as String
+
+        filterAdminRecords(
+            records = records,
+            tab = tab,
+            query = query,
+            statuses = statuses,
+            priorities = priorities,
+            deviceTypes = deviceTypes,
+            personnel = personnel,
+            company = company,
+            location = location,
+            assignment = assignment,
+            dateFilter = dateFilter,
+            start = start,
+            end = end,
+            sort = sort
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val filteredPersonnelServiceRecords = combine(
