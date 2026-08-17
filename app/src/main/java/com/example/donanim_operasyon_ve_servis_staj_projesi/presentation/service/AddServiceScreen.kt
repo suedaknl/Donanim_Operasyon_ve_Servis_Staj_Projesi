@@ -36,26 +36,30 @@ fun AddServiceScreen(
     var issueDescription by remember { mutableStateOf("") }
     var selectedPriority by remember { mutableStateOf("Orta") }
 
-    // --- YENİ EKLENEN FORM STATE'LERİ ---
+    // İletişim ve Adres State'leri
     var contactPerson by remember { mutableStateOf("") }
     var contactPhone by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var plannedDate by remember { mutableStateOf("") }
-    // ------------------------------------
 
     var showError by remember { mutableStateOf(false) }
 
-    // Düzenleme modunda orijinal kaydı tutmak için
+    // Düzenleme modunda orijinal kaydı tutmak için (Çoğaltma işleminde null kalır)
     var existingRecord by remember { mutableStateOf<ServiceRecord?>(null) }
 
     val priorities = listOf("Düşük", "Orta", "Yüksek")
 
-    // serviceId varsa mevcut verileri çek ve formu doldur (Pre-fill)
-    LaunchedEffect(serviceId) {
-        if (serviceId != null) {
-            val record = viewModel.getServiceById(serviceId)
+    // Çoğaltma (Duplicate) kontrolü: serviceId negatif gönderildiyse bu bir çoğaltma işlemidir
+    val isDuplicating = serviceId != null && serviceId < 0
+    val actualServiceId = if (isDuplicating && serviceId != null) -serviceId else serviceId
+
+    // serviceId varsa mevcut verileri çek ve formu doldur (Düzenleme veya Çoğaltma)
+    LaunchedEffect(actualServiceId) {
+        if (actualServiceId != null && actualServiceId != 0) {
+            val record = viewModel.getServiceById(actualServiceId)
             if (record != null) {
-                existingRecord = record
+                // Eğer çoğaltma yapıyorsak existingRecord = null kalır ki yeni kayıt (insert) yapılsın!
+                existingRecord = if (isDuplicating) null else record
 
                 companyName = record.companyName
                 deviceType = record.deviceType
@@ -65,8 +69,6 @@ fun AddServiceScreen(
                 selectedPriority = record.priority
                 issueDescription = record.issueDescription
 
-                // --- YENİ ALANLARIN DOLDURULMASI ---
-                // Eğer veritabanında null ise forma boş metin ("") olarak yansıtıyoruz
                 contactPerson = record.contactPerson ?: ""
                 contactPhone = record.contactPhone ?: ""
                 address = record.address ?: ""
@@ -75,7 +77,11 @@ fun AddServiceScreen(
         }
     }
 
-    val screenTitle = if (serviceId == null) "Yeni İş Emri Oluştur" else "İş Emri Düzenle"
+    val screenTitle = when {
+        isDuplicating -> "İş Emrini Çoğalt"
+        serviceId == null || serviceId == 0 -> "Yeni İş Emri Oluştur"
+        else -> "İş Emri Düzenle"
+    }
 
     Scaffold(
         topBar = {
@@ -109,7 +115,7 @@ fun AddServiceScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            // --- YENİ EKLENEN UI: YETKİLİ KİŞİ VE TELEFON ---
+            // Yetkili Kişi ve Telefon
             OutlinedTextField(
                 value = contactPerson,
                 onValueChange = { contactPerson = it },
@@ -129,7 +135,6 @@ fun AddServiceScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
-            // -----------------------------------------------
 
             // Cihaz Tipi ve Modeli
             Row(
@@ -178,7 +183,7 @@ fun AddServiceScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            // --- YENİ EKLENEN UI: ADRES VE TARİH ---
+            // Adres ve Tarih
             OutlinedTextField(
                 value = address,
                 onValueChange = { address = it },
@@ -198,7 +203,6 @@ fun AddServiceScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
-            // ---------------------------------------
 
             // Öncelik Seçimi
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -247,7 +251,7 @@ fun AddServiceScreen(
 
             if (showError) {
                 Text(
-                    text = "Lütfen tüm zorunlu alanları eksiksiz doldurun.", // Metin opsiyonel alanları kapsamayacak şekilde ufak netleştirildi
+                    text = "Lütfen tüm zorunlu alanları eksiksiz doldurun.",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -255,16 +259,15 @@ fun AddServiceScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Kaydet Butonu
+            // Kaydet / Yeni İş Emri Oluştur Butonu
             Button(
                 onClick = {
-                    // YENİ ALANLAR İÇİN VALIDATION EKLENMEDİ (Kasten Opsiyonel Bırakıldı)
                     if (companyName.isBlank() || deviceType.isBlank() || deviceModel.isBlank() ||
                         serialNumber.isBlank() || location.isBlank() || issueDescription.isBlank()) {
                         showError = true
                     } else {
                         if (existingRecord != null) {
-                            // DÜZENLEME MODU: ID, tarih, atanan personel ve durum bilgileri otomatik korunur
+                            // DÜZENLEME MODU: Mevcut kayıt güncellenir
                             val updatedRecord = existingRecord!!.copy(
                                 companyName = companyName.trim(),
                                 deviceType = deviceType.trim(),
@@ -273,7 +276,6 @@ fun AddServiceScreen(
                                 location = location.trim(),
                                 priority = selectedPriority,
                                 issueDescription = issueDescription.trim(),
-                                // YENİ ALANLAR (Boş bırakıldıysa veritabanına NULL olarak kaydedilir)
                                 contactPerson = contactPerson.trim().takeIf { it.isNotBlank() },
                                 contactPhone = contactPhone.trim().takeIf { it.isNotBlank() },
                                 address = address.trim().takeIf { it.isNotBlank() },
@@ -281,7 +283,7 @@ fun AddServiceScreen(
                             )
                             viewModel.updateRecord(updatedRecord)
                         } else {
-                            // YENİ EKLEME MODU
+                            // YENİ EKLEME VEYA ÇOĞALTMA MODU: Sıfırdan BEKLIYOR statüsünde yeni kayıt açılır
                             val currentDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())
 
                             val newRecord = ServiceRecord(
@@ -294,7 +296,6 @@ fun AddServiceScreen(
                                 issueDescription = issueDescription.trim(),
                                 status = ServiceStatus.BEKLIYOR,
                                 date = currentDate,
-                                // YENİ ALANLAR
                                 contactPerson = contactPerson.trim().takeIf { it.isNotBlank() },
                                 contactPhone = contactPhone.trim().takeIf { it.isNotBlank() },
                                 address = address.trim().takeIf { it.isNotBlank() },
@@ -313,7 +314,7 @@ fun AddServiceScreen(
             ) {
                 Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Kaydet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(if (isDuplicating) "Yeni İş Emri Oluştur" else "Kaydet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         }
     }

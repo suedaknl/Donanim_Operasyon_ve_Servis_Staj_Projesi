@@ -158,28 +158,25 @@ fun ServiceDetailScreen(
             !isLocked &&
             service.status != ServiceStatus.BEKLIYOR
 
-    // --- FOTOĞRAF VE NOT AYRIŞTIRMASI ---
-    // Kapanış Formunda çekilen Sonrası Fotoğrafı:
-    val closingAfterPhotos = servicePhotos.filter { photo ->
-        val type = (photo.photoType ?: photo.photoCategory ?: "").trim().uppercase(Locale.ROOT)
-        type == "SONRASI" || type == "SONRASİ" || type == "CLOSING" || type == "KAPANIS" || type == "KAPANIŞ"
-    }
+    val closingKeywords = listOf("closing", "kapanis", "kapanış", "sonuc", "sonuç", "sonrasi", "sonrası")
 
-    // 3. Aşamada (İşlem) kalacak ara fotoğraflar (Öncesi, Değiştirilen Parça vb.):
-    val operationalPhotos = servicePhotos.filter { photo ->
-        val type = (photo.photoType ?: photo.photoCategory ?: "").trim().uppercase(Locale.ROOT)
-        type != "SONRASI" && type != "SONRASİ" && type != "CLOSING" && type != "KAPANIS" && type != "KAPANIŞ"
-    }
-
-    // Kapanış Notu:
-    val closingNoteItem = serviceNotes.firstOrNull { note ->
-        val type = (note.noteType ?: "").trim().uppercase(Locale.ROOT)
-        type == "CLOSING" || type == "KAPANIS" || type == "KAPANIŞ"
-    } ?: serviceNotes.lastOrNull() // Eğer özel type verilmediyse kapanışta girilen son not
-
-    // 3. Aşamada kalacak normal notlar:
     val operationalNotes = serviceNotes.filter { note ->
-        note != closingNoteItem
+        val t = (note.noteType ?: "").trim().lowercase(Locale.ROOT)
+        !closingKeywords.any { t.contains(it) }
+    }
+    val operationalPhotos = servicePhotos.filter { photo ->
+        val t = (photo.photoType ?: photo.photoCategory ?: "").trim().lowercase(Locale.ROOT)
+        !closingKeywords.any { t.contains(it) }
+    }
+
+    val closingNoteItem = serviceNotes.firstOrNull { note ->
+        val t = (note.noteType ?: "").trim().lowercase(Locale.ROOT)
+        closingKeywords.any { t.contains(it) }
+    } ?: serviceNotes.lastOrNull()
+
+    val closingAfterPhotos = servicePhotos.filter { photo ->
+        val t = (photo.photoType ?: photo.photoCategory ?: "").trim().lowercase(Locale.ROOT)
+        closingKeywords.any { t.contains(it) }
     }
 
     Scaffold(
@@ -262,6 +259,11 @@ fun ServiceDetailScreen(
                                         InfoRow(icon = Icons.Default.ConfirmationNumber, label = "Seri No", value = service.serialNumber)
                                         InfoRow(icon = Icons.Default.LocationOn, label = "Lokasyon", value = service.location)
                                         InfoRow(icon = Icons.Default.Home, label = "Adres", value = service.address ?: "Belirtilmedi")
+                                        InfoRow(icon = Icons.Default.DateRange, label = "Kayıt Tarihi", value = service.date)
+                                        if (!service.plannedDate.isNullOrBlank()) {
+                                            InfoRow(icon = Icons.Default.Schedule, label = "Planlanan Tarih", value = service.plannedDate)
+                                        }
+                                        InfoRow(icon = Icons.Default.ReportProblem, label = "Arıza Nedeni", value = service.issueDescription)
                                         InfoRow(icon = Icons.Default.Badge, label = "Atanan Personel", value = assignedPersonnelName)
                                         InfoRow(icon = Icons.Default.Info, label = "Mevcut Durum", value = service.status)
                                     }
@@ -315,13 +317,12 @@ fun ServiceDetailScreen(
                                         }
                                     }
 
-                                    // Saha İşlem Notları (Kapanış Notu Hariç)
                                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                         Column(modifier = Modifier.padding(16.dp)) {
                                             Text("Saha İşlem Notları", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                             Spacer(modifier = Modifier.height(4.dp))
                                             if (operationalNotes.isEmpty()) {
-                                                Text("Eklenmiş ara işlem notu bulunmuyor.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text("Eklenmiş işlem notu bulunmuyor.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             } else {
                                                 operationalNotes.forEach { note ->
                                                     Text("• ${note.note}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 2.dp))
@@ -330,13 +331,12 @@ fun ServiceDetailScreen(
                                         }
                                     }
 
-                                    // Saha İşlem Fotoğrafları (Sonrası Hariç)
                                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                         Column(modifier = Modifier.padding(16.dp)) {
                                             Text("İşlem Fotoğrafları", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                             Spacer(modifier = Modifier.height(4.dp))
                                             if (operationalPhotos.isEmpty()) {
-                                                Text("Eklenmiş işlem fotoğrafı bulunmuyor.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text("Eklenmiş fotoğraf bulunmuyor.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             } else {
                                                 val groupedPhotos = operationalPhotos.groupBy { it.photoType ?: it.photoCategory ?: "DİĞER" }
                                                 groupedPhotos.forEach { (category, photos) ->
@@ -372,7 +372,6 @@ fun ServiceDetailScreen(
                                         }
                                     }
 
-                                    // SADECE KAPANIŞ AÇIKLAMASI
                                     if (closingNoteItem != null) {
                                         ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -382,7 +381,6 @@ fun ServiceDetailScreen(
                                         }
                                     }
 
-                                    // SADECE SONRASI FOTOĞRAFI
                                     if (closingAfterPhotos.isNotEmpty()) {
                                         ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -401,7 +399,6 @@ fun ServiceDetailScreen(
                                         }
                                     }
 
-                                    // MÜŞTERİ DİJİTAL İMZASI
                                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text("Müşteri Dijital İmzası", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
@@ -424,8 +421,24 @@ fun ServiceDetailScreen(
                     }
                 }
 
-                if (!isCompleted) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // --- ALT KISIM OPERASYONEL BUTONLAR ---
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // İŞ EMRİNİ ÇOĞALT BUTONU (Negatif ID göndererek çoğaltma sinyali verir)
+                    Button(
+                        onClick = {
+                            val targetId = if (service.id > 0) -service.id else service.id
+                            onNavigateToEdit(targetId)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("İş Emrini Çoğalt")
+                    }
+
+                    if (!isCompleted) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = { showAssignDialog = true },
@@ -448,27 +461,27 @@ fun ServiceDetailScreen(
                                 Text("Durum Güncelle")
                             }
                         }
+                    }
 
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { onNavigateToEdit(service.id) },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Düzenle")
-                            }
-                            Button(
-                                onClick = { showDeleteDialog = true },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Sil")
-                            }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { onNavigateToEdit(service.id) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Düzenle")
+                        }
+                        Button(
+                            onClick = { showDeleteDialog = true },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Sil")
                         }
                     }
                 }
@@ -535,8 +548,12 @@ fun ServiceDetailScreen(
                                         InfoRow(icon = Icons.Default.ConfirmationNumber, label = "Seri No", value = service.serialNumber)
                                         InfoRow(icon = Icons.Default.LocationOn, label = "Lokasyon", value = service.location)
                                         InfoRow(icon = Icons.Default.Home, label = "Adres", value = service.address ?: "Belirtilmedi")
+                                        InfoRow(icon = Icons.Default.DateRange, label = "Kayıt Tarihi", value = service.date)
+                                        if (!service.plannedDate.isNullOrBlank()) {
+                                            InfoRow(icon = Icons.Default.Schedule, label = "Planlanan Tarih", value = service.plannedDate)
+                                        }
+                                        InfoRow(icon = Icons.Default.ReportProblem, label = "Arıza Nedeni", value = service.issueDescription)
                                         InfoRow(icon = Icons.Default.PriorityHigh, label = "Öncelik", value = service.priority)
-                                        InfoRow(icon = Icons.Default.DateRange, label = "Tarih", value = service.date)
                                     }
                                 }
                             }
