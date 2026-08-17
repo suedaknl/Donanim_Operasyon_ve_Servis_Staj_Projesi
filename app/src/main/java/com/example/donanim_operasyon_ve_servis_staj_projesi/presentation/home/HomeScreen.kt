@@ -10,7 +10,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceSt
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
@@ -32,31 +32,21 @@ fun HomeScreen(
     onTabSelected: (String) -> Unit,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    selectedFilter: String,
-    onFilterSelected: (String) -> Unit,
-    selectedPriority: String,
-    onPrioritySelected: (String) -> Unit,
-    onClearFilters: () -> Unit,
-    onNavigateToPersonnel: () -> Unit = {},
+    serviceViewModel: ServiceViewModel,
     onNavigateToAddService: () -> Unit,
     onServiceClick: (ServiceRecord) -> Unit,
-    onLogOut: () -> Unit = {},
-    serviceViewModel: ServiceViewModel,
-    firebaseUid: String? = null,
-    localPersonnelId: Int? = null
+    onLogOut: () -> Unit = {}
 ) {
     val tabs = listOf("Tümü", "Bekleyen", "Yolda", "İşlemde", "Tamamlanan", "Reddedilen")
 
     var showFilterSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Dinamik filtre seçenekleri
     val allRecords = serviceViewModel.serviceRecords.collectAsState(initial = emptyList()).value
     val dynamicDeviceTypes = remember(allRecords) { allRecords.map { it.deviceType }.filter { !it.isBlank() }.distinct() }
     val dynamicCompanies = remember(allRecords) { allRecords.map { it.companyName }.filter { !it.isBlank() }.distinct() }
     val dynamicLocations = remember(allRecords) { allRecords.map { it.location }.filter { !it.isBlank() }.distinct() }
 
-    // ModalBottomSheet içindeki geçici filtre state'leri
     var tempSelectedStatuses by remember { mutableStateOf(serviceViewModel.selectedStatusesFilter.value) }
     var tempSelectedPriorities by remember { mutableStateOf(serviceViewModel.selectedPrioritiesFilter.value) }
     var tempSelectedDeviceType by remember { mutableStateOf(serviceViewModel.selectedDeviceTypesFilter.value.firstOrNull()) }
@@ -66,8 +56,7 @@ fun HomeScreen(
     var tempAssignmentStatus by remember { mutableStateOf(serviceViewModel.selectedAssignmentStatusFilter) }
     var tempSortOption by remember { mutableStateOf(serviceViewModel.selectedSortOption) }
 
-    // Arama pencereleri (Dialog) durumları
-    var activeDialog by remember { mutableStateOf<String?>(null) } // "personnel", "device", "company", "location"
+    var activeDialog by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         serviceViewModel.syncAdminData()
@@ -101,7 +90,6 @@ fun HomeScreen(
                 }
             }
 
-            // Arama Kutusu ve Filtre Butonu
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -197,7 +185,7 @@ fun HomeScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(text = record.companyName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 }
@@ -207,6 +195,15 @@ fun HomeScreen(
                                 Text("Cihaz: ${record.deviceType} - ${record.deviceModel}", style = MaterialTheme.typography.bodyMedium)
                                 Text("Lokasyon: ${record.location}", style = MaterialTheme.typography.bodyMedium)
                                 Text("Öncelik: ${record.priority}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+
+                                if (record.status == ServiceStatus.IPTAL && !record.rejectionReason.isNullOrBlank()) {
+                                    Text(
+                                        "Red Nedeni: ${record.rejectionReason}",
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
 
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(8.dp), modifier = Modifier.weight(1f)) {
@@ -230,7 +227,6 @@ fun HomeScreen(
         }
     }
 
-    // ModalBottomSheet Gelişmiş Filtre Paneli
     if (showFilterSheet) {
         ModalBottomSheet(
             onDismissRequest = { showFilterSheet = false },
@@ -258,7 +254,6 @@ fun HomeScreen(
                     }
                 }
 
-                // 1. Sıralama
                 item {
                     Text("Sıralama", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -273,7 +268,6 @@ fun HomeScreen(
                     }
                 }
 
-                // 2. Çoklu Durum Seçimi
                 item {
                     Text("Durumlar", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -295,7 +289,6 @@ fun HomeScreen(
                     }
                 }
 
-                // 3. Öncelik Filtresi
                 item {
                     Text("Öncelik", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -312,7 +305,6 @@ fun HomeScreen(
                     }
                 }
 
-                // 4. Atama Durumu
                 item {
                     Text("Atama Durumu", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -327,7 +319,6 @@ fun HomeScreen(
                     }
                 }
 
-                // 5. Atanan Personel (Dropdown / Arama Butonu)
                 item {
                     Text("Atanan Personel", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -348,7 +339,6 @@ fun HomeScreen(
                     }
                 }
 
-                // 6. Cihaz Türü (Dropdown / Arama Butonu)
                 item {
                     Text("Cihaz Türü", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -365,7 +355,6 @@ fun HomeScreen(
                     }
                 }
 
-                // 7. Firma (Dropdown / Arama Butonu)
                 item {
                     Text("Firma", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -382,7 +371,6 @@ fun HomeScreen(
                     }
                 }
 
-                // 8. Lokasyon (Dropdown / Arama Butonu)
                 item {
                     Text("Lokasyon", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -399,7 +387,6 @@ fun HomeScreen(
                     }
                 }
 
-                // Uygula Butonu
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
@@ -429,7 +416,6 @@ fun HomeScreen(
         }
     }
 
-    // --- ARANABİLİR SEÇİM DİALOGLARI ---
     when (activeDialog) {
         "personnel" -> {
             SearchableSelectorDialog(
@@ -470,7 +456,6 @@ fun HomeScreen(
     }
 }
 
-// Yardımcı Arama ve Seçim Dialog Bileşeni
 @Composable
 fun SearchableSelectorDialog(
     title: String,

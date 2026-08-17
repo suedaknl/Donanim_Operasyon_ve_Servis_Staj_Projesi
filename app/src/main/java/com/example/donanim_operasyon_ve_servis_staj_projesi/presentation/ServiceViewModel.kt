@@ -90,9 +90,8 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     var selectedTab by mutableStateOf("Tümü")
         private set
 
-    // --- ADMIN GELİŞMİŞ FİLTRE STATE'LERİ (MutableStateFlow olarak ViewModel uyumlu hale getirildi) ---
+    // --- AKIŞ VE STATE TANIMLARI ---
     private val _adminSelectedStatusTab = MutableStateFlow("Tümü")
-    val adminSelectedStatusTabState: StateFlow<String> = _adminSelectedStatusTab.asStateFlow()
     var adminSelectedStatusTab by mutableStateOf("Tümü")
         private set
 
@@ -212,6 +211,7 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     fun updateAdminSearchQuery(query: String) {
         adminSearchQuery = query
         _adminSearchQuery.value = query
+        updateSearchQuery(query)
     }
 
     fun updateAdvancedFilters(
@@ -263,7 +263,8 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         selectedSortOption = "En yeni"
         adminSearchQuery = ""
         adminSelectedStatusTab = "Tümü"
-
+        _adminSearchQuery.value = ""
+        _adminSelectedStatusTab.value = "Tümü"
         _selectedStatusesFilter.value = emptySet()
         _selectedPrioritiesFilter.value = emptySet()
         _selectedDeviceTypesFilter.value = emptySet()
@@ -272,8 +273,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         _selectedLocationFilter.value = "Tümü"
         _selectedAssignmentStatusFilter.value = "Tümü"
         _selectedSortOption.value = "En yeni"
-        _adminSearchQuery.value = ""
-        _adminSelectedStatusTab.value = "Tümü"
     }
 
     val activeFilterCount: Int
@@ -303,14 +302,11 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         location: String?,
         assignment: String,
         dateFilter: String,
-        start: Long?,
-        end: Long?,
         sort: String
     ): List<ServiceRecord> {
         val lowerQuery = query.trim().lowercase(Locale.ROOT)
 
         val filtered = records.filter { record ->
-            // 1. Üst Durum Sekmesi Filtresi (Yolda ve İşlemde durumlarını netleştirme)
             val tabMatch = when (tab) {
                 "Tümü" -> true
                 "Bekleyen" -> record.status == ServiceStatus.BEKLIYOR
@@ -320,6 +316,7 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                 "Reddedilen" -> record.status == ServiceStatus.IPTAL
                 else -> true
             }
+
             val queryMatch = if (lowerQuery.isBlank()) {
                 true
             } else {
@@ -334,7 +331,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             val priorityMatch = if (priorities.isEmpty()) true else priorities.contains(record.priority)
             val deviceMatch = if (deviceTypes.isEmpty()) true else deviceTypes.contains(record.deviceType)
 
-            // 6. Personel Filtresi (ID veya UID eşleşmesi)
             val personnelMatch = if (personnel.isNullOrBlank() || personnel == "Tümü") {
                 true
             } else {
@@ -430,8 +426,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         _selectedLocationFilter,
         _selectedAssignmentStatusFilter,
         MutableStateFlow("Tümü"),
-        MutableStateFlow<Long?>(null),
-        MutableStateFlow<Long?>(null),
         _selectedSortOption
     ) { args ->
         val records = args[0] as List<ServiceRecord>
@@ -445,9 +439,7 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         val location = args[8] as String?
         val assignment = args[9] as String
         val dateFilter = args[10] as String
-        val start = args[11] as Long?
-        val end = args[12] as Long?
-        val sort = args[13] as String
+        val sort = args[11] as String
 
         filterAdminRecords(
             records = records,
@@ -461,8 +453,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             location = location,
             assignment = assignment,
             dateFilter = dateFilter,
-            start = start,
-            end = end,
             sort = sort
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -543,23 +533,34 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
+    fun reassignService(recordId: Int, newPersonnelId: Int?, newPersonnelUid: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
+
+            if (currentRecord.status == ServiceStatus.TAMAMLANDI) {
+                _errorMessage.value = "Tamamlanmış bir iş emri yeniden atanamaz."
+                return@launch
+            }
+
+            val updatedRecord = currentRecord.copy(
+                assignedPersonnelId = newPersonnelId,
+                assignedPersonnelUid = newPersonnelUid,
+                status = if (currentRecord.status == ServiceStatus.IPTAL) ServiceStatus.BEKLIYOR else currentRecord.status,
+                rejectionReason = null
+            )
+            repository.updateService(updatedRecord)
+            loadRecords()
+            _selectedRecord.value = updatedRecord
+        }
+    }
+
     fun updateRecord(record: ServiceRecord) {
         viewModelScope.launch {
             val currentRecord = _serviceRecords.value.find { it.id == record.id }
-
-            if (currentRecord != null) {
-                if (currentRecord.status == ServiceStatus.TAMAMLANDI) {
-                    return@launch
-                }
-
-                if (currentRecord.assignedPersonnelId != record.assignedPersonnelId) {
-                    val canAssignOrChange = currentRecord.status == ServiceStatus.BEKLIYOR || currentRecord.status == ServiceStatus.IPTAL
-                    if (!canAssignOrChange) {
-                        return@launch
-                    }
-                }
+            if (currentRecord != null && currentRecord.status == ServiceStatus.TAMAMLANDI) {
+                _errorMessage.value = "Tamamlanmış bir iş emrinin detayları değiştirilemez."
+                return@launch
             }
-
             repository.updateService(record)
             loadRecords()
         }
@@ -568,17 +569,110 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     fun updateStatus(recordId: Int, newStatus: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
-
             if (currentRecord.status == ServiceStatus.TAMAMLANDI) {
                 _errorMessage.value = "Tamamlanmış bir iş emrinin durumu değiştirilemez."
                 return@launch
             }
-
             repository.updateStatus(recordId, newStatus)
             loadRecords()
             _selectedRecord.value = _selectedRecord.value?.copy(status = newStatus)
         }
     }
+
+    // --- PERSONEL AKIŞ METOTLARI (Eksiksiz Eklendi) ---
+    fun acceptService(recordId: Int, personnelId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateStatus(recordId, ServiceStatus.YOLDA)
+            loadRecords()
+            loadRecordsForPersonnel(personnelId)
+            _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.YOLDA)
+        }
+    }
+
+    fun startServiceWork(recordId: Int, personnelId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
+            if (currentRecord.status == ServiceStatus.YOLDA || currentRecord.status == ServiceStatus.BEKLIYOR) {
+                repository.updateStatus(recordId, ServiceStatus.ISLEME_BASLANDI)
+                loadRecords()
+                loadRecordsForPersonnel(personnelId)
+                _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.ISLEME_BASLANDI)
+            }
+        }
+    }
+
+    fun setParcaBekleniyor(recordId: Int, personnelId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateStatus(recordId, ServiceStatus.PARCA_BEKLENIYOR)
+            loadRecords()
+            loadRecordsForPersonnel(personnelId)
+            _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.PARCA_BEKLENIYOR)
+        }
+    }
+
+    fun rejectService(recordId: Int, rejectionReason: String, personnelId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = repository.rejectService(recordId, rejectionReason)
+            if (result.isSuccess) {
+                loadRecords()
+                loadRecordsForPersonnel(personnelId)
+                _selectedRecord.value = _selectedRecord.value?.copy(
+                    status = ServiceStatus.IPTAL,
+                    rejectionReason = rejectionReason
+                )
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "İş reddedilirken bir hata oluştu."
+            }
+        }
+    }
+
+    fun submitClosingForm(serviceId: Int, personnelId: Int) {
+        viewModelScope.launch {
+            _closingState.value = ClosingState.Loading
+
+            val currentRecord = getServiceById(serviceId)
+            val note = _closingNote.value
+            val signature = _closingSignatureUri.value
+            val afterPhoto = _closingAfterPhotoUri.value
+
+            if (currentRecord == null || signature == null || note.isBlank() || afterPhoto == null) {
+                _closingState.value = ClosingState.Error("Eksik veri: Lütfen kapanış notu, imza ve sonrası fotoğrafını eksiksiz doldurun.")
+                return@launch
+            }
+
+            // 1. Sonrası fotoğrafını doğrudan ServicePhoto olarak veritabanına ekle
+            val photoEntity = ServicePhoto(
+                serviceRecordId = serviceId,
+                personnelId = personnelId,
+                photoType = "SONRASI",
+                localUri = afterPhoto,
+                timestamp = System.currentTimeMillis(),
+                photoUri = afterPhoto,
+                photoCategory = "SONRASI"
+            )
+            addServicePhoto(photoEntity)
+
+            // 2. İşi tamamlandı olarak kapat
+            val completedRecord = currentRecord.copy(status = ServiceStatus.TAMAMLANDI)
+
+            val result = repository.completeServiceWork(
+                serviceRecord = completedRecord,
+                personnelId = personnelId,
+                closingNoteText = note,
+                signatureUri = signature
+            )
+
+            if (result.isSuccess) {
+                _closingState.value = ClosingState.Success
+                loadRecords()
+                loadRecordsForPersonnel(personnelId)
+                _selectedRecord.value = completedRecord
+            } else {
+                _closingState.value = ClosingState.Error(result.exceptionOrNull()?.message ?: "İşlem sırasında bir hata oluştu.")
+            }
+        }
+    }
+    // ------------------------------------------------
 
     fun getServiceById(id: Int): ServiceRecord? {
         return serviceRecords.value.find { it.id == id }
@@ -692,85 +786,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                 _personnelServiceRecords.value = updatedRecords
             } catch (e: Exception) {
                 e.printStackTrace()
-            }
-        }
-    }
-
-    fun acceptService(recordId: Int, personnelId: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.updateStatus(recordId, ServiceStatus.YOLDA)
-            loadRecords()
-            loadRecordsForPersonnel(personnelId)
-            _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.YOLDA)
-        }
-    }
-
-    fun startServiceWork(recordId: Int, personnelId: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
-            if (currentRecord.status == ServiceStatus.YOLDA) {
-                repository.updateStatus(recordId, ServiceStatus.ISLEME_BASLANDI)
-                loadRecords()
-                loadRecordsForPersonnel(personnelId)
-                _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.ISLEME_BASLANDI)
-            }
-        }
-    }
-
-    fun setParcaBekleniyor(recordId: Int, personnelId: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.updateStatus(recordId, ServiceStatus.PARCA_BEKLENIYOR)
-            loadRecords()
-            loadRecordsForPersonnel(personnelId)
-            _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.PARCA_BEKLENIYOR)
-        }
-    }
-
-    fun rejectService(recordId: Int, rejectionReason: String, personnelId: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val result = repository.rejectService(recordId, rejectionReason)
-            if (result.isSuccess) {
-                loadRecords()
-                loadRecordsForPersonnel(personnelId)
-                _selectedRecord.value = _selectedRecord.value?.copy(
-                    status = ServiceStatus.IPTAL,
-                    rejectionReason = rejectionReason
-                )
-            } else {
-                _errorMessage.value = result.exceptionOrNull()?.message ?: "İş reddedilirken bir hata oluştu."
-            }
-        }
-    }
-
-    fun submitClosingForm(serviceId: Int, personnelId: Int) {
-        viewModelScope.launch {
-            _closingState.value = ClosingState.Loading
-
-            val currentRecord = getServiceById(serviceId)
-            val note = _closingNote.value
-            val signature = _closingSignatureUri.value
-
-            if (currentRecord == null || signature == null || note.isBlank()) {
-                _closingState.value = ClosingState.Error("Eksik veri: Lütfen formu kontrol edin.")
-                return@launch
-            }
-
-            val completedRecord = currentRecord.copy(status = ServiceStatus.TAMAMLANDI)
-
-            val result = repository.completeServiceWork(
-                serviceRecord = completedRecord,
-                personnelId = personnelId,
-                closingNoteText = note,
-                signatureUri = signature
-            )
-
-            if (result.isSuccess) {
-                _closingState.value = ClosingState.Success
-                loadRecords()
-                loadRecordsForPersonnel(personnelId)
-                _selectedRecord.value = completedRecord
-            } else {
-                _closingState.value = ClosingState.Error(result.exceptionOrNull()?.message ?: "İşlem sırasında bir hata oluştu.")
             }
         }
     }

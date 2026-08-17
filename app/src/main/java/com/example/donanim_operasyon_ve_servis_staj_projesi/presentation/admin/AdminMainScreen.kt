@@ -3,6 +3,7 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -17,9 +18,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
@@ -28,6 +33,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home.Ho
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.google.firebase.auth.FirebaseAuth
+import kotlin.math.roundToInt
 
 @Composable
 fun AdminMainScreen(
@@ -41,7 +47,21 @@ fun AdminMainScreen(
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val context = LocalContext.current
+
+    // Sürüklenebilir FAB State'leri
+    var fabOffsetX by remember { mutableStateOf(0f) }
+    var fabOffsetY by remember { mutableStateOf(0f) }
     var showFabMenu by remember { mutableStateOf(false) }
+
+    // Ekran sınırlarını hesaplamak için (FAB'ın üst ve alt barlara taşmasını engeller)
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+
+    // FAB'ın hareket edebileceği maksimum limitler (Scaffold slot'una göre relatif)
+    val minX = with(density) { -(configuration.screenWidthDp.dp - 80.dp).toPx() } // Sola maksimum
+    val maxX = 0f // Sağa maksimum (Zaten en sağda başlıyor)
+    val minY = with(density) { -(configuration.screenHeightDp.dp - 180.dp).toPx() } // Yukarı maksimum (Üst barı korur)
+    val maxY = 0f // Aşağı maksimum (Alt navigasyonun altına girmesini engeller)
 
     Scaffold(
         bottomBar = {
@@ -82,7 +102,19 @@ fun AdminMainScreen(
         },
         floatingActionButton = {
             if (selectedTab == 0 || selectedTab == 1) {
-                Box(contentAlignment = Alignment.BottomEnd) {
+                Box(
+                    contentAlignment = Alignment.BottomEnd,
+                    modifier = Modifier
+                        .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                // FAB sınırlandırmaları uygulanıyor (CoerceIn)
+                                fabOffsetX = (fabOffsetX + dragAmount.x).coerceIn(minX, maxX)
+                                fabOffsetY = (fabOffsetY + dragAmount.y).coerceIn(minY, maxY)
+                            }
+                        }
+                ) {
                     DropdownMenu(
                         expanded = showFabMenu,
                         onDismissRequest = { showFabMenu = false },
@@ -158,22 +190,10 @@ fun AdminMainScreen(
                         onTabSelected = { serviceViewModel.updateAdminSelectedStatusTab(it) },
                         searchQuery = serviceViewModel.adminSearchQuery,
                         onSearchQueryChange = { serviceViewModel.updateAdminSearchQuery(it) },
-                        selectedFilter = serviceViewModel.selectedFilter,
-                        onFilterSelected = { serviceViewModel.updateSelectedFilter(it) },
-                        selectedPriority = serviceViewModel.selectedPriorityFilter,
-                        onPrioritySelected = { serviceViewModel.updateSelectedPriorityFilter(it) },
-                        onClearFilters = {
-                            serviceViewModel.updateSearchQuery("")
-                            serviceViewModel.updateSelectedFilter("Hepsi")
-                            serviceViewModel.updateSelectedPriorityFilter("Hepsi")
-                        },
-                        onNavigateToPersonnel = { selectedTab = 2 },
+                        serviceViewModel = serviceViewModel,
                         onNavigateToAddService = onNavigateToAddService,
                         onServiceClick = onServiceClick,
-                        onLogOut = onLogOut,
-                        serviceViewModel = serviceViewModel,
-                        firebaseUid = null,
-                        localPersonnelId = null
+                        onLogOut = onLogOut
                     )
                 }
 
