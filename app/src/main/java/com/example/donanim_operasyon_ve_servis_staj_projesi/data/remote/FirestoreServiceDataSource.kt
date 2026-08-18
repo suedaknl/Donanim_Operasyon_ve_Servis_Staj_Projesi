@@ -1,13 +1,131 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.data.remote
 
+import android.net.Uri
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
 
 class FirestoreServiceDataSource(
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val storage: FirebaseStorage = FirebaseStorage.getInstance()
 ) {
     private val collection = firestore.collection("services")
+
+    // --- STORAGE VE SUBCOLLECTION FONKSİYONLARI ---
+
+    suspend fun uploadPhotoToFirebase(localUriString: String, firestoreId: String, photoType: String): Result<String> {
+        return try {
+            if (firestoreId.isBlank()) return Result.failure(IllegalArgumentException("Firestore ID boş."))
+
+            // DÜZELTME: Dosya yolundaki bozuk "file:/" tekrarları temizlendi, güvenli URI oluşturuldu
+            val cleanPath = localUriString.replace("file://", "").replace("file:", "")
+            val uri = if (localUriString.startsWith("content://")) {
+                android.net.Uri.parse(localUriString)
+            } else {
+                android.net.Uri.fromFile(java.io.File(cleanPath))
+            }
+
+            val timestamp = System.currentTimeMillis()
+            val fileName = "${photoType}_$timestamp.jpg"
+
+            val storageRef = storage.reference.child("services/$firestoreId/photos/$fileName")
+            storageRef.putFile(uri).await()
+            val downloadUrl = storageRef.downloadUrl.await().toString()
+
+            val photoData = hashMapOf(
+                "photoType" to photoType,
+                "downloadUrl" to downloadUrl,
+                "timestamp" to timestamp
+            )
+            collection.document(firestoreId).collection("photos").add(photoData).await()
+
+            Result.success(downloadUrl)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun uploadSignatureToFirebase(localUriString: String, firestoreId: String): Result<String> {
+        return try {
+            if (firestoreId.isBlank()) return Result.failure(IllegalArgumentException("Firestore ID boş."))
+
+            // DÜZELTME: İmza dosya yolu temizlenip güvenli URI'ye çevrildi
+            val cleanPath = localUriString.replace("file://", "").replace("file:", "")
+            val uri = if (localUriString.startsWith("content://")) {
+                android.net.Uri.parse(localUriString)
+            } else {
+                android.net.Uri.fromFile(java.io.File(cleanPath))
+            }
+
+            val timestamp = System.currentTimeMillis()
+            val fileName = "signature_$timestamp.png"
+
+            val storageRef = storage.reference.child("services/$firestoreId/signatures/$fileName")
+            storageRef.putFile(uri).await()
+            val downloadUrl = storageRef.downloadUrl.await().toString()
+
+            val signatureData = hashMapOf(
+                "downloadUrl" to downloadUrl,
+                "timestamp" to timestamp
+            )
+            collection.document(firestoreId).collection("signatures").add(signatureData).await()
+
+            Result.success(downloadUrl)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getServicePhotos(firestoreId: String): Result<List<Map<String, Any>>> {
+        return try {
+            val snapshot = collection.document(firestoreId).collection("photos").get().await()
+            val photos = snapshot.documents.mapNotNull { it.data }
+            Result.success(photos)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getServiceSignatures(firestoreId: String): Result<List<Map<String, Any>>> {
+        return try {
+            val snapshot = collection.document(firestoreId).collection("signatures").get().await()
+            val signatures = snapshot.documents.mapNotNull { it.data }
+            Result.success(signatures)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun uploadNoteToFirebase(note: com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote, firestoreId: String): Result<Unit> {
+        return try {
+            if (firestoreId.isBlank()) return Result.failure(IllegalArgumentException("Firestore ID boş."))
+
+            val noteData = hashMapOf(
+                "note" to note.note,
+                "noteType" to (note.noteType ?: "GENERAL"),
+                "personnelId" to note.personnelId,
+                "createdAt" to note.createdAt
+            )
+
+            collection.document(firestoreId).collection("notes").add(noteData).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getServiceNotes(firestoreId: String): Result<List<Map<String, Any>>> {
+        return try {
+            val snapshot = collection.document(firestoreId).collection("notes").get().await()
+            val notes = snapshot.documents.mapNotNull { it.data }
+            Result.success(notes)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // --- MEVCUT FONKSİYONLAR ---
 
     suspend fun saveServiceRecord(record: ServiceRecord): Result<String> {
         return try {
@@ -122,9 +240,7 @@ class FirestoreServiceDataSource(
 
     suspend fun completeServiceInFirestore(
         firestoreId: String,
-        status: String,
-        signatureUrl: String?,
-        photoUrls: Map<String, String>
+        status: String
     ): Result<Unit> {
         return try {
             if (firestoreId.isBlank()) return Result.failure(IllegalArgumentException("Firestore ID boş"))
@@ -132,12 +248,6 @@ class FirestoreServiceDataSource(
             val updates = mutableMapOf<String, Any>(
                 "status" to status
             )
-            if (!signatureUrl.isNullOrEmpty()) {
-                updates["closingSignatureUrl"] = signatureUrl
-            }
-            if (photoUrls.isNotEmpty()) {
-                updates["photoUrls"] = photoUrls
-            }
 
             collection.document(firestoreId)
                 .update(updates)

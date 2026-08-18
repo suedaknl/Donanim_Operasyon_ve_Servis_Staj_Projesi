@@ -87,4 +87,6 @@ dependencies {
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
+    // Firebase Storage dependency'sini ekle
+    implementation("com.google.firebase:firebase-storage-ktx")
 }

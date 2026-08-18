@@ -58,10 +58,21 @@ fun ServiceDetailScreen(
     val serviceRecords by viewModel.serviceRecords.collectAsState()
     val service = serviceRecords.find { it.id == serviceId }
 
+    LaunchedEffect(service?.firestoreId) {
+        service?.firestoreId?.let { firestoreId ->
+            viewModel.loadRemoteMediaAndNotes(firestoreId)
+        }
+    }
+
     val personnelList by personnelViewModel.personnelList.collectAsState()
     val serviceNotes by viewModel.serviceNotes.collectAsState()
     val servicePhotos by viewModel.servicePhotos.collectAsState()
     val closingSignature = viewModel.serviceClosingSignature.collectAsState().value
+
+    // Firebase Remote State'ler
+    val remotePhotos by viewModel.remotePhotos.collectAsState()
+    val remoteSignatures by viewModel.remoteSignatures.collectAsState()
+    val remoteNotes by viewModel.remoteNotes.collectAsState()
 
     val context = LocalContext.current
 
@@ -158,26 +169,63 @@ fun ServiceDetailScreen(
             !isLocked &&
             service.status != ServiceStatus.BEKLIYOR
 
+    // --- OFFLINE CACHE (ROOM) VE FIREBASE (REMOTE) VERİLERİNİ BİRLEŞTİRME ---
+    val combinedNotes = remember(serviceNotes, remoteNotes) {
+        val remoteAsObjects = remoteNotes.map { map ->
+            ServiceNote(
+                serviceRecordId = serviceId,
+                personnelId = (map["personnelId"] as? Long)?.toInt() ?: 0,
+                note = map["note"] as? String ?: "",
+                noteType = map["noteType"] as? String ?: "NORMAL",
+                createdAt = (map["createdAt"] as? Long) ?: 0L
+            )
+        }
+        (remoteAsObjects + serviceNotes).distinctBy { it.note to it.createdAt }
+    }
+
+    val combinedPhotos = remember(servicePhotos, remotePhotos) {
+        val remoteAsObjects = remotePhotos.map { map ->
+            val url = map["downloadUrl"] as? String ?: ""
+            val type = map["photoType"] as? String ?: "DİĞER"
+            ServicePhoto(
+                serviceRecordId = serviceId,
+                personnelId = 0,
+                photoType = type,
+                localUri = url,
+                timestamp = (map["timestamp"] as? Long) ?: 0L,
+                photoUri = url,
+                photoCategory = type // Firestore'dan gelen photoType'ı kategoriye de atıyoruz
+            )
+        }
+        (remoteAsObjects + servicePhotos).distinctBy { it.photoUri.ifBlank { it.localUri } }
+    }
+
     val closingKeywords = listOf("closing", "kapanis", "kapanış", "sonuc", "sonuç", "sonrasi", "sonrası")
 
-    val operationalNotes = serviceNotes.filter { note ->
+    val operationalNotes = combinedNotes.filter { note ->
         val t = (note.noteType ?: "").trim().lowercase(Locale.ROOT)
         !closingKeywords.any { t.contains(it) }
     }
-    val operationalPhotos = servicePhotos.filter { photo ->
+
+    val operationalPhotos = combinedPhotos.filter { photo ->
         val t = (photo.photoType ?: photo.photoCategory ?: "").trim().lowercase(Locale.ROOT)
         !closingKeywords.any { t.contains(it) }
     }
 
-    val closingNoteItem = serviceNotes.firstOrNull { note ->
+    val closingNoteItem = combinedNotes.firstOrNull { note ->
         val t = (note.noteType ?: "").trim().lowercase(Locale.ROOT)
         closingKeywords.any { t.contains(it) }
-    } ?: serviceNotes.lastOrNull()
+    } ?: combinedNotes.lastOrNull()
 
-    val closingAfterPhotos = servicePhotos.filter { photo ->
+    val closingAfterPhotos = combinedPhotos.filter { photo ->
         val t = (photo.photoType ?: photo.photoCategory ?: "").trim().lowercase(Locale.ROOT)
         closingKeywords.any { t.contains(it) }
     }
+
+    // İmza için Remote ve Local Birleşimi
+    val remoteSignatureUrl = remoteSignatures.firstOrNull()?.get("downloadUrl") as? String
+    val effectiveSignaturePath = closingSignature?.signatureLocalUri ?: remoteSignatureUrl
+    // ------------------------------------------------------------------------
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -402,10 +450,9 @@ fun ServiceDetailScreen(
                                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text("Müşteri Dijital İmzası", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                            val signaturePath = closingSignature?.signatureLocalUri
-                                            if (!signaturePath.isNullOrBlank()) {
+                                            if (!effectiveSignaturePath.isNullOrBlank()) {
                                                 AsyncImage(
-                                                    model = signaturePath,
+                                                    model = effectiveSignaturePath,
                                                     contentDescription = "Dijital İmza",
                                                     modifier = Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
                                                     contentScale = ContentScale.Fit
@@ -423,7 +470,6 @@ fun ServiceDetailScreen(
 
                 // --- ALT KISIM OPERASYONEL BUTONLAR ---
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // İŞ EMRİNİ ÇOĞALT BUTONU (Negatif ID göndererek çoğaltma sinyali verir)
                     Button(
                         onClick = {
                             val targetId = if (service.id > 0) -service.id else service.id
@@ -726,10 +772,9 @@ fun ServiceDetailScreen(
                                 ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text("Müşteri Dijital İmzası", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                        val signaturePath = closingSignature?.signatureLocalUri
-                                        if (!signaturePath.isNullOrBlank()) {
+                                        if (!effectiveSignaturePath.isNullOrBlank()) {
                                             AsyncImage(
-                                                model = signaturePath,
+                                                model = effectiveSignaturePath,
                                                 contentDescription = "Dijital İmza",
                                                 modifier = Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
                                                 contentScale = ContentScale.Fit

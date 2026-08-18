@@ -146,6 +146,16 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     private val _closingSignatureUri = MutableStateFlow<String?>(null)
     val closingSignatureUri = _closingSignatureUri.asStateFlow()
 
+    // --- FIREBASE REMOTE STATE'LERİ ---
+    private val _remotePhotos = MutableStateFlow<List<Map<String, Any>>>(emptyList())
+    val remotePhotos: StateFlow<List<Map<String, Any>>> = _remotePhotos.asStateFlow()
+
+    private val _remoteSignatures = MutableStateFlow<List<Map<String, Any>>>(emptyList())
+    val remoteSignatures: StateFlow<List<Map<String, Any>>> = _remoteSignatures.asStateFlow()
+
+    private val _remoteNotes = MutableStateFlow<List<Map<String, Any>>>(emptyList())
+    val remoteNotes: StateFlow<List<Map<String, Any>>> = _remoteNotes.asStateFlow()
+
     sealed class ClosingState {
         object Idle : ClosingState()
         object Loading : ClosingState()
@@ -380,40 +390,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         )
     }
 
-    private fun filterRecords(
-        records: List<ServiceRecord>,
-        query: String,
-        status: String,
-        priority: String,
-        tab: String
-    ): List<ServiceRecord> {
-        val lowerQuery = query.trim().lowercase()
-        return records.filter { record ->
-            val matchesSearch = if (lowerQuery.isEmpty()) true else {
-                record.companyName.lowercase().contains(lowerQuery) ||
-                        record.deviceType.lowercase().contains(lowerQuery) ||
-                        record.serialNumber.lowercase().contains(lowerQuery) ||
-                        record.location.lowercase().contains(lowerQuery)
-            }
-            val matchesPriority = if (priority == "Hepsi") true else record.priority == priority
-            val matchesTab = when (tab) {
-                "Atanan", "Atanmış" -> record.status == ServiceStatus.BEKLIYOR
-                "Yolda" -> record.status == ServiceStatus.YOLDA
-                "Devam Eden", "İşlemde" -> record.status == ServiceStatus.ISLEME_BASLANDI || record.status == ServiceStatus.PARCA_BEKLENIYOR
-                "Tamamlanan" -> record.status == ServiceStatus.TAMAMLANDI
-                else -> true
-            }
-            val matchesStatus = if (status == "Hepsi") true else when (status) {
-                "Atanan", "Atanmış", "Bekliyor" -> record.status == ServiceStatus.BEKLIYOR
-                "Yolda" -> record.status == ServiceStatus.YOLDA
-                "Devam Eden", "İşlemde", "İşleme Başlandı" -> record.status == ServiceStatus.ISLEME_BASLANDI || record.status == ServiceStatus.PARCA_BEKLENIYOR
-                "Tamamlanan" -> record.status == ServiceStatus.TAMAMLANDI
-                else -> true
-            }
-            matchesSearch && matchesPriority && matchesTab && matchesStatus
-        }
-    }
-
     val filteredServiceRecords = combine(
         _serviceRecords,
         _adminSelectedStatusTab,
@@ -553,7 +529,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             _selectedRecord.value = updatedRecord
         }
     }
-
     fun updateRecord(record: ServiceRecord) {
         viewModelScope.launch {
             val currentRecord = _serviceRecords.value.find { it.id == record.id }
@@ -579,7 +554,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    // --- PERSONEL AKIŞ METOTLARI (Eksiksiz Eklendi) ---
     fun acceptService(recordId: Int, personnelId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateStatus(recordId, ServiceStatus.YOLDA)
@@ -640,7 +614,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                 return@launch
             }
 
-            // 1. Sonrası fotoğrafını doğrudan ServicePhoto olarak veritabanına ekle
             val photoEntity = ServicePhoto(
                 serviceRecordId = serviceId,
                 personnelId = personnelId,
@@ -652,7 +625,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             )
             addServicePhoto(photoEntity)
 
-            // 2. İşi tamamlandı olarak kapat
             val completedRecord = currentRecord.copy(status = ServiceStatus.TAMAMLANDI)
 
             val result = repository.completeServiceWork(
@@ -672,7 +644,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             }
         }
     }
-    // ------------------------------------------------
 
     fun getServiceById(id: Int): ServiceRecord? {
         return serviceRecords.value.find { it.id == id }
@@ -772,6 +743,32 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             repository.syncAllServices()
             val updatedList = repository.getAllRecords()
             _serviceRecords.value = updatedList
+        }
+    }
+
+    // --- FIREBASE REMOTE VERİLERİNİ OKUMA ---
+    fun loadRemoteMediaAndNotes(firestoreId: String) {
+        if (firestoreId.isBlank()) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 1. Notları Çek
+                repository.getRemoteNotesForService(firestoreId).onSuccess { notesList ->
+                    _remoteNotes.value = notesList
+                }
+
+                // 2. Fotoğrafları Çek
+                repository.getRemotePhotosForService(firestoreId).onSuccess { photosList ->
+                    _remotePhotos.value = photosList
+                }
+
+                // 3. İmzaları Çek
+                repository.getRemoteSignaturesForService(firestoreId).onSuccess { sigList ->
+                    _remoteSignatures.value = sigList
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
