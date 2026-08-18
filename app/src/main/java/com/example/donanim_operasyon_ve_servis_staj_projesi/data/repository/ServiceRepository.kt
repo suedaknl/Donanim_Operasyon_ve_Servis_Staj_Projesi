@@ -45,6 +45,16 @@ class ServiceRepository(
                 result.onSuccess { firestoreId ->
                     val updatedRecord = savedRecord.copy(firestoreId = firestoreId)
                     serviceDao.updateService(updatedRecord)
+
+                    // --- İŞLEM GEÇMİŞİ: OLUŞTURULDU ---
+                    recordHistory(
+                        firestoreId = firestoreId,
+                        eventType = "SERVICE_CREATED",
+                        title = "İş Emri Oluşturuldu",
+                        description = "Firma: ${savedRecord.companyName} (${savedRecord.deviceType})",
+                        status = savedRecord.status,
+                        performedByRole = "Admin"
+                    )
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -77,6 +87,21 @@ class ServiceRepository(
 
                 if (!firestoreId.isNullOrEmpty()) {
                     firestoreDataSource.updateServiceStatus(firestoreId, newStatus)
+
+                    // --- İŞLEM GEÇMİŞİ: DURUM DEĞİŞİKLİĞİ ---
+                    val (eventType, title) = when (newStatus) {
+                        ServiceStatus.YOLDA -> "SERVICE_ACCEPTED" to "İş Emri Kabul Edildi (Yolda)"
+                        ServiceStatus.ISLEME_BASLANDI -> "SERVICE_STARTED" to "İşleme Başlandı"
+                        ServiceStatus.PARCA_BEKLENIYOR -> "PART_WAITING" to "Parça Bekleniyor"
+                        else -> "STATUS_CHANGED" to "Durum Güncellendi: $newStatus"
+                    }
+                    recordHistory(
+                        firestoreId = firestoreId,
+                        eventType = eventType,
+                        title = title,
+                        status = newStatus,
+                        performedByRole = "Personel"
+                    )
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -135,10 +160,8 @@ class ServiceRepository(
     }
 
     suspend fun insertServiceNote(note: ServiceNote) {
-        // 1. Önce her zaman yerel Room kaydını yap
         serviceDao.insertServiceNote(note)
 
-        // 2. Ardından internet varsayımıyla Firestore'a (notes subcollection) gönder
         withContext(Dispatchers.IO) {
             try {
                 val serviceRecord = serviceDao.getServiceById(note.serviceRecordId)
@@ -146,16 +169,24 @@ class ServiceRepository(
 
                 if (!firestoreId.isNullOrBlank()) {
                     firestoreDataSource.uploadNoteToFirebase(note, firestoreId)
-                } else {
-                    println("Firebase Not Upload Atlandı: İş emrine ait firestoreId bulunamadı.")
+
+                    // --- İŞLEM GEÇMİŞİ: NOT EKLENDİ ---
+                    if (note.noteType != "CLOSING") {
+                        recordHistory(
+                            firestoreId = firestoreId,
+                            eventType = "NOTE_ADDED",
+                            title = "Servis Notu Eklendi",
+                            description = note.note,
+                            status = serviceRecord.status,
+                            performedByRole = "Personel"
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                println("Firebase Not Upload Hatası: Not yüklenemedi. Detay: ${e.message}")
             }
         }
     }
-// --- FIREBASE'DEN VERİ OKUMA METOTLARI ---
 
     suspend fun getRemoteNotesForService(firestoreId: String): Result<List<Map<String, Any>>> {
         return try {
@@ -189,34 +220,33 @@ class ServiceRepository(
         return serviceDao.getNotesForService(serviceRecordId)
     }
 
-    // --- FOTOĞRAF YÜKLEME GÜNCELLEMESİ ---
     suspend fun insertServicePhoto(photo: ServicePhoto) {
-        // 1. Önce her zaman yerel (Room) kaydını yap
         serviceDao.insertServicePhoto(photo)
 
-        // 2. Ardından internet varsayımıyla Firebase Storage & Firestore yüklemesini dene
         withContext(Dispatchers.IO) {
             try {
                 val serviceRecord = serviceDao.getServiceById(photo.serviceRecordId)
                 val firestoreId = serviceRecord?.firestoreId
 
-                // Sadece firestoreId mevcutsa yükleme yap, yoksa (henüz Firebase'e atılmamışsa) atla
                 if (!firestoreId.isNullOrBlank()) {
                     val photoType = photo.photoType ?: photo.photoCategory ?: "Diger"
-
-                    // Upload işlemi başarısız olursa exception fırlatır, catch bloğuna düşer
                     firestoreDataSource.uploadPhotoToFirebase(
                         localUriString = photo.localUri,
                         firestoreId = firestoreId,
                         photoType = photoType
                     )
-                } else {
-                    println("Firebase Upload Atlandı: İş emrine ait firestoreId bulunamadı.")
+
+                    // --- İŞLEM GEÇMİŞİ: FOTOĞRAF EKLENDİ ---
+                    recordHistory(
+                        firestoreId = firestoreId,
+                        eventType = "PHOTO_ADDED",
+                        title = "Fotoğraf Eklendi ($photoType)",
+                        status = serviceRecord.status,
+                        performedByRole = "Personel"
+                    )
                 }
             } catch (e: Exception) {
-                // Upload hatası alındığında yerel kayıt ASLA silinmez, akış bozulmaz
                 e.printStackTrace()
-                println("Firebase Upload Hatası: Fotoğraf yüklenemedi. Detay: ${e.message}")
             }
         }
     }
@@ -229,7 +259,42 @@ class ServiceRepository(
         serviceDao.deleteServicePhoto(photo)
     }
 
-    // --- İMZA YÜKLEME VE KAPANIŞ GÜNCELLEMESİ ---
+    suspend fun getRemoteHistoryForService(firestoreId: String): Result<List<Map<String, Any>>> {
+        return try {
+            firestoreDataSource.getServiceHistory(firestoreId)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun recordHistory(
+        firestoreId: String?,
+        eventType: String,
+        title: String,
+        description: String? = null,
+        status: String,
+        performedByUid: String? = null,
+        performedByName: String? = null,
+        performedByRole: String? = null
+    ) {
+        if (!firestoreId.isNullOrBlank()) {
+            try {
+                firestoreDataSource.addServiceHistory(
+                    firestoreId = firestoreId,
+                    eventType = eventType,
+                    title = title,
+                    description = description,
+                    status = status,
+                    performedByUid = performedByUid,
+                    performedByName = performedByName,
+                    performedByRole = performedByRole
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     suspend fun completeServiceWork(
         serviceRecord: ServiceRecord,
         personnelId: Int,
@@ -273,63 +338,47 @@ class ServiceRepository(
 
             val updatedRecord = freshRecord.copy(status = ServiceStatus.TAMAMLANDI)
 
-            // 1. Yerel Room Transaction Kaydı (İş akışı bozulmuyor)
             serviceDao.completeServiceTransaction(updatedRecord, closingNote, signature)
-            // 2. Firestore Senkronizasyonu (Status güncellemesi), İmza ve Kapanış Notu Yüklemesi
+
             withContext(Dispatchers.IO) {
                 try {
                     val firestoreId = updatedRecord.firestoreId
                     if (!firestoreId.isNullOrEmpty()) {
-                        // Statüyü TAMAMLANDI olarak güncelle
                         firestoreDataSource.completeServiceInFirestore(
                             firestoreId = firestoreId,
                             status = ServiceStatus.TAMAMLANDI
                         )
 
-                        // 1. İmza dosyasını Firebase Storage ve Subcollection'a yükle
                         firestoreDataSource.uploadSignatureToFirebase(
                             localUriString = signatureUri,
                             firestoreId = firestoreId
                         )
 
-                        // 2. Kapanış notunu Firestore'daki "notes" subcollection'ına yükle
                         firestoreDataSource.uploadNoteToFirebase(
                             note = closingNote,
                             firestoreId = firestoreId
                         )
-                    } else {
-                        println("Firebase Senkronizasyonu Atlandı: firestoreId bulunamadı.")
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    println("Firebase Kapanış Hatası: ${e.message}")
-                }
-            }
 
-            // 2. Firestore Senkronizasyonu (Status güncellemesi) ve İmza Yüklemesi
-            withContext(Dispatchers.IO) {
-                try {
-                    val firestoreId = updatedRecord.firestoreId
-                    if (!firestoreId.isNullOrEmpty()) {
-                        // Statüyü TAMAMLANDI olarak güncelle (eski URL parametreleri kaldırıldı)
-                        firestoreDataSource.completeServiceInFirestore(
+                        // --- İŞLEM GEÇMİŞİ: İMZA VE TAMAMLANMA ---
+                        recordHistory(
                             firestoreId = firestoreId,
-                            status = ServiceStatus.TAMAMLANDI
+                            eventType = "SIGNATURE_ADDED",
+                            title = "Dijital İmza Alındı",
+                            status = ServiceStatus.TAMAMLANDI,
+                            performedByRole = "Personel"
                         )
 
-                        // İmza dosyasını Firebase Storage ve Subcollection'a yükle
-                        firestoreDataSource.uploadSignatureToFirebase(
-                            localUriString = signatureUri,
-                            firestoreId = firestoreId
+                        recordHistory(
+                            firestoreId = firestoreId,
+                            eventType = "SERVICE_COMPLETED",
+                            title = "İş Tamamlandı",
+                            description = closingNoteText,
+                            status = ServiceStatus.TAMAMLANDI,
+                            performedByRole = "Personel"
                         )
-                    } else {
-                        println("Firebase Senkronizasyonu Atlandı: firestoreId bulunamadı.")
                     }
                 } catch (e: Exception) {
-                    // Firebase işlemleri (status update veya imza upload) hata alsa bile
-                    // yerel kapanış (completeServiceTransaction) tamamlandığı için akış bozulmaz
                     e.printStackTrace()
-                    println("Firebase Kapanış Hatası: İşlem yerel olarak kapatıldı ancak Firebase senkronizasyonu veya imza yüklemesi tamamlanamadı.")
                 }
             }
 
@@ -408,6 +457,16 @@ class ServiceRepository(
                 if (firestoreResult.isFailure) {
                     return Result.failure(firestoreResult.exceptionOrNull() ?: Exception("Firebase güncellemesi başarısız"))
                 }
+
+                // --- İŞLEM GEÇMİŞİ: REDDEDİLDİ ---
+                recordHistory(
+                    firestoreId = updatedRecord.firestoreId,
+                    eventType = "SERVICE_REJECTED",
+                    title = "İş Emri Reddedildi / İptal Edildi",
+                    description = rejectionReason,
+                    status = ServiceStatus.IPTAL,
+                    performedByRole = "Personel"
+                )
             }
             Result.success(Unit)
         } catch (e: Exception) {

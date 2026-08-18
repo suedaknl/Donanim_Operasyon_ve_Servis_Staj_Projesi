@@ -289,6 +289,53 @@ class FirestoreServiceDataSource(
         }
     }
 
+    // --- İŞLEM GEÇMİŞİ (SERVICE HISTORY) FONKSİYONLARI ---
+
+    suspend fun addServiceHistory(
+        firestoreId: String,
+        eventType: String,
+        title: String,
+        description: String?,
+        status: String,
+        performedByUid: String?,
+        performedByName: String?,
+        performedByRole: String?
+    ): Result<Unit> {
+        return try {
+            if (firestoreId.isBlank()) return Result.failure(IllegalArgumentException("Firestore ID boş."))
+
+            val historyData = hashMapOf(
+                "eventType" to eventType,
+                "title" to title,
+                "description" to (description ?: ""),
+                "status" to status,
+                "performedByUid" to (performedByUid ?: ""),
+                "performedByName" to (performedByName ?: "Bilinmeyen"),
+                "performedByRole" to (performedByRole ?: "Sistem"),
+                "timestamp" to System.currentTimeMillis()
+            )
+
+            collection.document(firestoreId).collection("history").add(historyData).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getServiceHistory(firestoreId: String): Result<List<Map<String, Any>>> {
+        return try {
+            val snapshot = collection.document(firestoreId)
+                .collection("history")
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.ASCENDING)
+                .get()
+                .await()
+            val historyList = snapshot.documents.mapNotNull { it.data }
+            Result.success(historyList)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getServicesForPersonnel(uid: String): Result<List<ServiceRecord>> {
         return try {
             val snapshot = collection.whereEqualTo("assignedPersonnelUid", uid).get().await()

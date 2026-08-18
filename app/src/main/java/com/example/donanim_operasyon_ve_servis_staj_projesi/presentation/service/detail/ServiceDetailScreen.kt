@@ -44,6 +44,7 @@ fun ServiceDetailScreen(
     personnelId: Int? = null,
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit,
+    onNavigateToHistory: (String, Int, String) -> Unit, // FirestoreId, ServiceId, CompanyName
     returnedPhotoUri: String? = null,
     onPhotoSaved: () -> Unit = {},
     onNavigateToCamera: () -> Unit = {},
@@ -61,6 +62,7 @@ fun ServiceDetailScreen(
     LaunchedEffect(service?.firestoreId) {
         service?.firestoreId?.let { firestoreId ->
             viewModel.loadRemoteMediaAndNotes(firestoreId)
+            viewModel.loadServiceHistory(firestoreId)
         }
     }
 
@@ -73,6 +75,7 @@ fun ServiceDetailScreen(
     val remotePhotos by viewModel.remotePhotos.collectAsState()
     val remoteSignatures by viewModel.remoteSignatures.collectAsState()
     val remoteNotes by viewModel.remoteNotes.collectAsState()
+    val serviceHistory by viewModel.serviceHistory.collectAsState()
 
     val context = LocalContext.current
 
@@ -194,7 +197,7 @@ fun ServiceDetailScreen(
                 localUri = url,
                 timestamp = (map["timestamp"] as? Long) ?: 0L,
                 photoUri = url,
-                photoCategory = type // Firestore'dan gelen photoType'ı kategoriye de atıyoruz
+                photoCategory = type
             )
         }
         (remoteAsObjects + servicePhotos).distinctBy { it.photoUri.ifBlank { it.localUri } }
@@ -222,7 +225,7 @@ fun ServiceDetailScreen(
         closingKeywords.any { t.contains(it) }
     }
 
-    // İmza için Remote ve Local Birleşimi
+    // İmza için Remote and Local Birleşimi
     val remoteSignatureUrl = remoteSignatures.firstOrNull()?.get("downloadUrl") as? String
     val effectiveSignaturePath = closingSignature?.signatureLocalUri ?: remoteSignatureUrl
     // ------------------------------------------------------------------------
@@ -235,6 +238,21 @@ fun ServiceDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri Dön")
+                    }
+                },
+                actions = {
+                    // SAĞ ÜST GEÇMİŞ (X) BUTONU
+                    TextButton(
+                        onClick = {
+                            val fId = service.firestoreId.orEmpty()
+                            onNavigateToHistory(fId, service.id, service.companyName)
+                        }
+                    ) {
+                        Text(
+                            text = "Geçmiş (${serviceHistory.size})",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
@@ -833,6 +851,7 @@ fun ServiceDetailScreen(
         }
     }
 
+    // Dialoglar (Assign, Status, Reject, Category, Note, Delete) aynı kalıyor...
     if (showAssignDialog) {
         var selectedPersonnelId by remember { mutableStateOf<Int?>(null) }
         AlertDialog(
@@ -995,6 +1014,65 @@ fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String
         Spacer(modifier = Modifier.width(8.dp))
         Text(text = "$label: ", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(text = value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+fun ServiceHistoryTimelineSection(historyList: List<Map<String, Any>>) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("İşlem Geçmişi", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            HorizontalDivider()
+
+            if (historyList.isEmpty()) {
+                Text("Henüz işlem geçmişi bulunmuyor.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                val sortedHistory = historyList.sortedBy { (it["timestamp"] as? Long) ?: 0L }
+                sortedHistory.forEach { history ->
+                    val title = history["title"] as? String ?: "İşlem"
+                    val description = history["description"] as? String ?: ""
+                    val performedByName = history["performedByName"] as? String ?: "Sistem"
+                    val performedByRole = history["performedByRole"] as? String ?: ""
+                    val timestamp = history["timestamp"] as? Long ?: 0L
+
+                    val formattedDate = if (timestamp > 0) {
+                        android.text.format.DateFormat.format("dd.MM.yyyy HH:mm", java.util.Date(timestamp)).toString()
+                    } else ""
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(20.dp)) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(10.dp)
+                            ) {}
+                            Box(modifier = Modifier.width(2.dp).height(35.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            if (description.isNotBlank()) {
+                                Text(text = description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(text = "$performedByName ($performedByRole)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                                if (formattedDate.isNotBlank()) {
+                                    Text(text = "• $formattedDate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

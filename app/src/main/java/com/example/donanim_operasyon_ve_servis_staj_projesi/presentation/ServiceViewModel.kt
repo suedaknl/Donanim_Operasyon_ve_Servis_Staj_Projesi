@@ -169,6 +169,22 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     private val _closingAfterPhotoUri = MutableStateFlow<String?>(null)
     val closingAfterPhotoUri = _closingAfterPhotoUri.asStateFlow()
 
+    private val _serviceHistory = MutableStateFlow<List<Map<String, Any>>>(emptyList())
+    val serviceHistory: StateFlow<List<Map<String, Any>>> = _serviceHistory.asStateFlow()
+
+    fun loadServiceHistory(firestoreId: String) {
+        if (firestoreId.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.getRemoteHistoryForService(firestoreId).onSuccess { historyList ->
+                    _serviceHistory.value = historyList
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     fun updateClosingAfterPhotoUri(uri: String?) {
         _closingAfterPhotoUri.value = uri
     }

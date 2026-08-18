@@ -26,6 +26,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.We
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home.HomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.AddServiceScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceDetailScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceHistoryScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.AddPersonnelScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelWelcomeScreen
@@ -107,6 +108,8 @@ fun AppNavigation() {
                 onNavigateBack = { navController.popBackStack() }
             )
         }
+
+
 
         composable(
             route = "personnel_welcome/{personnelId}",
@@ -190,6 +193,10 @@ fun AppNavigation() {
                 personnelId = pId,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToEdit = { id -> navController.navigate("add_service?serviceId=$id") },
+                onNavigateToHistory = { firestoreId, sId, companyName ->
+                    val encodedCompany = android.net.Uri.encode(companyName)
+                    navController.navigate("service_history/$firestoreId/$sId/$encodedCompany")
+                },
                 returnedPhotoUri = returnedPhotoUri,
                 onPhotoSaved = {
                     backStackEntry.savedStateHandle.remove<String>("photo_uri")
@@ -263,13 +270,11 @@ fun AppNavigation() {
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
 
-            // FAB'dan kamera açılıp fotoğraf çekildikten sonra dönen URI'yi dinliyoruz
             val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>("photo_uri", null).collectAsState()
             val photoServiceId = backStackEntry.savedStateHandle.get<Int>("photo_service_id")
 
-            // Fotoğraf başarıyla döndüyse kaydetme işlemini yap
             LaunchedEffect(returnedPhotoUri) {
-                val uri = returnedPhotoUri // Smart cast hatasını çözen yerel atama
+                val uri = returnedPhotoUri
 
                 if (uri != null && photoServiceId != null) {
                     sharedServiceViewModel.addServicePhoto(
@@ -280,12 +285,11 @@ fun AppNavigation() {
                             localUri = uri,
                             photoType = "GENEL",
                             photoCategory = "GENEL",
-                            timestamp = System.currentTimeMillis() // Fotoğraf için timestamp, not için createdAt kullanıyorsun
+                            timestamp = System.currentTimeMillis()
                         )
                     )
                     Toast.makeText(context, "Fotoğraf başarıyla eklendi.", Toast.LENGTH_SHORT).show()
 
-                    // İşlem bittikten sonra state'leri temizleyerek sonsuz döngüyü engelliyoruz
                     backStackEntry.savedStateHandle.remove<String>("photo_uri")
                     backStackEntry.savedStateHandle.remove<Int>("photo_service_id")
                 }
@@ -304,7 +308,6 @@ fun AppNavigation() {
                     navController.navigate("welcome") { popUpTo(0) }
                 },
                 onNavigateToCameraForService = { serviceId, _ ->
-                    // Hangi iş emri için kameranın açıldığını kaydedip doğrudan kameraya yönlendiriyoruz
                     backStackEntry.savedStateHandle["photo_service_id"] = serviceId
                     navController.navigate("camera")
                 }
@@ -338,6 +341,10 @@ fun AppNavigation() {
                 personnelId = null,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToEdit = { id -> navController.navigate("add_service?serviceId=$id") },
+                onNavigateToHistory = { firestoreId, sId, companyName ->
+                    val encodedCompany = android.net.Uri.encode(companyName)
+                    navController.navigate("service_history/$firestoreId/$sId/$encodedCompany")
+                },
                 returnedPhotoUri = returnedPhotoUri,
                 onPhotoSaved = {
                     backStackEntry.savedStateHandle.remove<String>("photo_uri")
@@ -347,6 +354,21 @@ fun AppNavigation() {
                 },
                 onNavigateToClosingForm = { _, _ ->
                 }
+            )
+        }
+
+        // --- YENİ EKLENEN İŞLEM GEÇMİŞİ ROUTE'U ---
+        composable("service_history/{firestoreId}/{serviceId}/{companyName}") { backStackEntry ->
+            val firestoreId = backStackEntry.arguments?.getString("firestoreId") ?: ""
+            val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
+            val companyName = backStackEntry.arguments?.getString("companyName") ?: ""
+
+            ServiceHistoryScreen(
+                viewModel = sharedServiceViewModel,
+                firestoreId = firestoreId,
+                serviceId = serviceId,
+                companyName = companyName,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }
