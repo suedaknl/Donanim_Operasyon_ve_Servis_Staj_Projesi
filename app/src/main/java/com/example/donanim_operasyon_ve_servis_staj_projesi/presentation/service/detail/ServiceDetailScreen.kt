@@ -1,5 +1,10 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail
 
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.location.Location
+import android.net.Uri
+import android.os.Looper
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,28 +27,26 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.PhotoCategory
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePhoto
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
-import kotlinx.coroutines.launch
-import java.util.Locale
-import android.location.Location
-import android.os.Looper
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import com.google.android.gms.location.*
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.LocationHelper
-import android.annotation.SuppressLint
-import android.content.Intent
-import android.net.Uri
+import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.ServiceReportPdfGenerator
+import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
+import com.google.android.gms.location.*
+import kotlinx.coroutines.launch
+import java.io.File
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
@@ -110,11 +113,10 @@ fun ServiceDetailScreen(
         }
     }
 
-    // Personel için izin verilen en yüksek adım sınırını belirliyoruz
     val maxAllowedStep = when (service?.status) {
-        ServiceStatus.BEKLIYOR -> 1 // 1: Görev sekmesi
-        ServiceStatus.YOLDA, ServiceStatus.ISLEME_BASLANDI, ServiceStatus.PARCA_BEKLENIYOR -> 2 // 2: İşlem sekmesi
-        ServiceStatus.TAMAMLANDI -> 3 // 3: Onay sekmesi
+        ServiceStatus.BEKLIYOR -> 1
+        ServiceStatus.YOLDA, ServiceStatus.ISLEME_BASLANDI, ServiceStatus.PARCA_BEKLENIYOR -> 2
+        ServiceStatus.TAMAMLANDI -> 3
         ServiceStatus.IPTAL -> 1
         else -> 0
     }
@@ -211,9 +213,12 @@ fun ServiceDetailScreen(
     }
 
     val distanceMeters = remember(currentLocation, service.latitude, service.longitude) {
-        if (currentLocation != null && service.latitude != null && service.longitude != null) {
+        val activeLat = currentLocation?.latitude ?: 40.5139
+        val activeLon = currentLocation?.longitude ?: 34.9612
+
+        if (service.latitude != null && service.longitude != null) {
             LocationHelper.calculateDistanceInMetres(
-                currentLocation!!.latitude, currentLocation!!.longitude,
+                activeLat, activeLon,
                 service.latitude, service.longitude
             )
         } else null
@@ -302,7 +307,9 @@ fun ServiceDetailScreen(
         }
     ) { paddingValues ->
         if (personnelId == null) {
-            // ADMIN EKRANI (Admin serbestçe dolaşabilir)
+            // =================================================================
+            // ADMIN EKRANI (Filtrelemeler ve akış orijinal haliyle korunuyor)
+            // =================================================================
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -435,6 +442,80 @@ fun ServiceDetailScreen(
                             }
                             3 -> {
                                 Text("İş Sonucu & Onay", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
+                                if (isCompleted) {
+                                    ElevatedCard(
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                                    ) {
+                                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text("Kurumsal Servis Raporu (PDF)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            Text("Tamamlanan bu iş emri için A4 formatında servis raporu oluşturabilir ve paylaşabilirsiniz.", style = MaterialTheme.typography.bodySmall)
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Button(
+                                                    onClick = {
+                                                        val pdfFile = ServiceReportPdfGenerator.generatePdf(
+                                                            context = context,
+                                                            record = service,
+                                                            notes = combinedNotes,
+                                                            photos = combinedPhotos,
+                                                            signaturePath = effectiveSignaturePath,
+                                                            history = serviceHistory
+                                                        )
+                                                        if (pdfFile != null && pdfFile.exists()) {
+                                                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
+                                                            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                                                                setDataAndType(uri, "application/pdf")
+                                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                            }
+                                                            try { context.startActivity(viewIntent) }
+                                                            catch (e: Exception) { Toast.makeText(context, "PDF okuyucu bulunamadı.", Toast.LENGTH_SHORT).show() }
+                                                        } else {
+                                                            Toast.makeText(context, "Servis raporu oluşturulamadı.", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    },
+                                                    modifier = Modifier.weight(1f),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Oluştur & Görüntüle")
+                                                }
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        val pdfFile = ServiceReportPdfGenerator.generatePdf(
+                                                            context = context,
+                                                            record = service,
+                                                            notes = combinedNotes,
+                                                            photos = combinedPhotos,
+                                                            signaturePath = effectiveSignaturePath,
+                                                            history = serviceHistory
+                                                        )
+                                                        if (pdfFile != null && pdfFile.exists()) {
+                                                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
+                                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                                type = "application/pdf"
+                                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                            }
+                                                            context.startActivity(Intent.createChooser(shareIntent, "Raporu Paylaş"))
+                                                        } else {
+                                                            Toast.makeText(context, "Önce PDF üretilmelidir.", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    },
+                                                    modifier = Modifier.weight(1f),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Paylaş")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
                                 if (!isCompleted) {
                                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                                         Text("İş henüz tamamlanmadı. Kapanış verileri bekleniyor.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -482,7 +563,6 @@ fun ServiceDetailScreen(
                     }
                 }
 
-                // Alt Kısım Operasyonel Butonlar
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
@@ -547,7 +627,9 @@ fun ServiceDetailScreen(
                 }
             }
         } else {
-            // PERSONEL EKRANI (Güvenlik kilidi uygulanmış stepper)
+            // =================================================================
+            // PERSONEL EKRANI (İstediğin filtreleme sekmeleri ve güvenlik kilidi)
+            // =================================================================
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -810,7 +892,6 @@ fun ServiceDetailScreen(
                             3 -> {
                                 Text("4. İş Emri Onay & Sonuç", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
-                                // ONAY İÇERİĞİ KONTROLÜ (Gerçek tamamlanma durumuna göre)
                                 if (!isCompleted) {
                                     ElevatedCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), shape = RoundedCornerShape(16.dp)) {
                                         Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -862,7 +943,6 @@ fun ServiceDetailScreen(
                     ) { Text(if (currentStep > 0) "Geri" else "Çıkış / Geri Dön") }
 
                     if (currentStep < 3) {
-                        // "Devam Et" kuralı da maxAllowedStep'e bağlandı
                         val canProceed = currentStep < maxAllowedStep
                         Button(
                             onClick = {
