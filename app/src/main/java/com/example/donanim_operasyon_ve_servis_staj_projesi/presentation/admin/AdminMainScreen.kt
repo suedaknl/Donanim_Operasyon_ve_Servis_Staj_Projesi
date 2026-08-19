@@ -32,6 +32,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.Service
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home.HomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.AdminMapScreen // YENİ EKLENDİ: Gerçek harita ekranı import edildi
 import com.google.firebase.auth.FirebaseAuth
 import kotlin.math.roundToInt
 
@@ -207,7 +208,19 @@ fun AdminMainScreen(
                     )
                 }
 
-                3 -> AdminLocationPlaceholder()
+                // 3 NUMARALI SEKME ARTIK GERÇEK HARİTA EKRANI OLDU:
+                3 -> AdminMapScreen(
+                    serviceViewModel = serviceViewModel,
+                    personnelViewModel = personnelViewModel,
+                    onNavigateToServiceDetail = { serviceId ->
+                        // Haritadan gelen ID ile mevcut ServiceRecord'u bulup detay ekranına yönlendiriyoruz
+                        val targetService = serviceViewModel.serviceRecords.value.find { it.id == serviceId }
+                        if (targetService != null) {
+                            onServiceClick(targetService)
+                        }
+                    }
+                )
+
                 4 -> AdminProfileContent(onLogOut = onLogOut)
             }
         }
@@ -337,19 +350,6 @@ fun AdminSummaryCard(
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = count, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = color)
             Text(text = title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-fun AdminLocationPlaceholder() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Outlined.LocationOn, contentDescription = "Konum", modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Konum & Harita Takibi", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Saha personellerinin anlık konum takibi ve rota\nbilgileri bu sekmede yer alacaktır.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

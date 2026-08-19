@@ -172,6 +172,20 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     private val _serviceHistory = MutableStateFlow<List<Map<String, Any>>>(emptyList())
     val serviceHistory: StateFlow<List<Map<String, Any>>> = _serviceHistory.asStateFlow()
 
+    companion object {
+        const val SERVICE_START_RADIUS_METERS = 250f
+    }
+
+    // YENİ EKLENDİ: Konum doğrulamalı başlama fonksiyonu
+    fun verifyAndStartServiceWork(recordId: Int, personnelId: Int, distance: Float) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.verifyAndStartServiceWork(recordId, personnelId, distance)
+            loadRecords()
+            loadRecordsForPersonnel(personnelId)
+            _selectedRecord.value = _selectedRecord.value?.copy(status = com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus.ISLEME_BASLANDI)
+        }
+    }
+
     fun loadServiceHistory(firestoreId: String) {
         if (firestoreId.isBlank()) return
         viewModelScope.launch(Dispatchers.IO) {

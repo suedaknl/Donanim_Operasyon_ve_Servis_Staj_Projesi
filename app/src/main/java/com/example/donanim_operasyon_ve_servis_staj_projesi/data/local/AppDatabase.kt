@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ServicePhoto::class,
         ServiceClosingSignature::class
     ],
-    version = 13, // Versiyon 12'den 13'e çıkarıldı
+    version = 14, // Versiyon 13'ten 14'e çıkarıldı (latitude ve longitude eklendi)
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -53,10 +53,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        // YENİ EKLENEN GÜVENLİ MİGRATİON (12 -> 13): personnel_table tablosuna gender sütunu ekleniyor
         val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE personnel_table ADD COLUMN gender TEXT NOT NULL DEFAULT 'ERKEK'")
+            }
+        }
+
+        // YENİ EKLENEN GÜVENLİ MİGRATİON (13 -> 14): service_records tablosuna latitude ve longitude ekleniyor
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE service_records ADD COLUMN latitude REAL DEFAULT NULL")
+                db.execSQL("ALTER TABLE service_records ADD COLUMN longitude REAL DEFAULT NULL")
             }
         }
 
@@ -67,7 +74,14 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "service_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_9_10,
+                        MIGRATION_10_11,
+                        MIGRATION_11_12,
+                        MIGRATION_12_13,
+                        MIGRATION_13_14 // YENİ MİGRATİON BURAYA EKLENDİ
+                    )
                     .build()
                 INSTANCE = instance
                 instance

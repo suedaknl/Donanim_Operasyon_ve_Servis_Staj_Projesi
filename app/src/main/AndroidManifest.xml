@@ -5,6 +5,8 @@
     <!-- Kamera İzni -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <application
         android:allowBackup="true"
@@ -16,6 +18,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Donanim_Operasyon_ve_Servis_Staj_Projesi">
 
+        <!-- Google Maps API Key DOĞRU YERDE (<application> İÇİNDE) -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="***REMOVED***" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -23,7 +30,6 @@
             android:theme="@style/Theme.Donanim_Operasyon_ve_Servis_Staj_Projesi">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>

@@ -43,6 +43,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.AdminMainScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.LocationPickerScreen
 
 @Composable
 fun AppNavigation() {
@@ -108,8 +109,6 @@ fun AppNavigation() {
                 onNavigateBack = { navController.popBackStack() }
             )
         }
-
-
 
         composable(
             route = "personnel_welcome/{personnelId}",
@@ -235,9 +234,47 @@ fun AppNavigation() {
             val serviceIdStr = backStackEntry.arguments?.getString("serviceId")
             val actualServiceId = serviceIdStr?.toIntOrNull()
 
+            val selectedLat = backStackEntry.savedStateHandle.get<Double>("selected_lat")
+            val selectedLon = backStackEntry.savedStateHandle.get<Double>("selected_lon")
+
             AddServiceScreen(
                 viewModel = sharedServiceViewModel,
                 serviceId = actualServiceId,
+                returnedLatitude = selectedLat,
+                returnedLongitude = selectedLon,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToLocationPicker = { currentLat, currentLon ->
+                    val latArg = currentLat ?: 0.0
+                    val lonArg = currentLon ?: 0.0
+                    val hasArg = if (currentLat != null && currentLon != null) "true" else "false"
+                    navController.navigate("location_picker?lat=$latArg&lon=$lonArg&hasLoc=$hasArg")
+                },
+                onLocationConsumed = {
+                    backStackEntry.savedStateHandle.remove<Double>("selected_lat")
+                    backStackEntry.savedStateHandle.remove<Double>("selected_lon")
+                }
+            )
+        }
+
+        composable(
+            route = "location_picker?lat={lat}&lon={lon}&hasLoc={hasLoc}",
+            arguments = listOf(
+                navArgument("lat") { type = NavType.FloatType; defaultValue = 0f },
+                navArgument("lon") { type = NavType.FloatType; defaultValue = 0f },
+                navArgument("hasLoc") { type = NavType.StringType; defaultValue = "false" }
+            )
+        ) { backStackEntry ->
+            val hasLoc = backStackEntry.arguments?.getString("hasLoc") == "true"
+            val lat = if (hasLoc) backStackEntry.arguments?.getFloat("lat")?.toDouble() else null
+            val lon = if (hasLoc) backStackEntry.arguments?.getFloat("lon")?.toDouble() else null
+
+            LocationPickerScreen(
+                initialLat = lat,
+                initialLon = lon,
+                onLocationSelected = { latitude, longitude ->
+                    navController.previousBackStackEntry?.savedStateHandle?.set("selected_lat", latitude)
+                    navController.previousBackStackEntry?.savedStateHandle?.set("selected_lon", longitude)
+                },
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -357,7 +394,6 @@ fun AppNavigation() {
             )
         }
 
-        // --- YENİ EKLENEN İŞLEM GEÇMİŞİ ROUTE'U ---
         composable("service_history/{firestoreId}/{serviceId}/{companyName}") { backStackEntry ->
             val firestoreId = backStackEntry.arguments?.getString("firestoreId") ?: ""
             val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0

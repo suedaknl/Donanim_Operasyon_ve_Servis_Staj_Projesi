@@ -25,7 +25,9 @@ data class ServiceRecord(
 
     // YENİ EKLENEN SENKRONİZASYON ALANLARI BURADA OLMALI
     val firestoreId: String? = null,
-    val assignedPersonnelUid: String? = null
+    val assignedPersonnelUid: String? = null,
+    val latitude: Double? = null,   // YENİ EKLENDİ
+    val longitude: Double? = null   // YENİ EKLENDİ
 )
 
 object ServiceStatus {

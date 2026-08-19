@@ -1,6 +1,10 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel
 
+import android.Manifest
+import android.os.Looper
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -23,20 +27,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.*
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.PersonnelMapScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.StandaloneUserFormScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.LocationHelper
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
+import com.google.android.gms.location.*
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PersonnelMainScreen(
     personnelId: Int,
@@ -59,24 +67,87 @@ fun PersonnelMainScreen(
 
     val personnelList by personnelViewModel.personnelList.collectAsState()
     val currentPersonnel = personnelList.find { it.id == personnelId }
-    val currentFirebaseUid = currentPersonnel?.firebaseUid
+    val currentPersonnelUid = currentPersonnel?.firebaseUid
 
-    LaunchedEffect(currentFirebaseUid) {
-        if (!currentFirebaseUid.isNullOrEmpty()) {
-            serviceViewModel.setCurrentPersonnelUid(currentFirebaseUid)
+    LaunchedEffect(currentPersonnelUid) {
+        if (!currentPersonnelUid.isNullOrEmpty()) {
+            serviceViewModel.setCurrentPersonnelUid(currentPersonnelUid)
+            // Emülatör konumunu simüle etmek için test koordinatını doğrudan gönderiyoruz
+            personnelViewModel.updateCurrentLocation(currentPersonnelUid, 40.5139, 34.9612)
+            personnelViewModel.updateLocationStatus("Konum: Aktif")
         }
     }
 
     val filteredPersonnelServices by serviceViewModel.filteredPersonnelServiceRecords.collectAsState()
 
     val allPersonnelRawServices by serviceViewModel.personnelServiceRecords.collectAsState()
+
+    // GÜVENLİK GÜNCELLEMESİ: FAB üzerinden eklenecek not ve fotoğraflar sadece İŞLEME BAŞLANDI ve PARÇA BEKLENİYOR statüsündeki işler için geçerli olabilir.
     val activeServicesForFab = remember(allPersonnelRawServices, personnelId) {
         allPersonnelRawServices.filter {
             it.assignedPersonnelId == personnelId &&
-                    (it.status == ServiceStatus.BEKLIYOR ||
-                            it.status == ServiceStatus.YOLDA ||
-                            it.status == ServiceStatus.ISLEME_BASLANDI ||
+                    (it.status == ServiceStatus.ISLEME_BASLANDI ||
                             it.status == ServiceStatus.PARCA_BEKLENIYOR)
+        }
+    }
+
+    val locationStatus by personnelViewModel.locationStatus.collectAsState()
+
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    val locationCallback = remember {
+        object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                for (location in locationResult.locations) {
+                    if (currentPersonnelUid != null) {
+                        personnelViewModel.updateCurrentLocation(
+                            uid = currentPersonnelUid,
+                            lat = location.latitude,
+                            lon = location.longitude
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var permissionGranted by remember { mutableStateOf(LocationHelper.hasLocationPermission(context)) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        permissionGranted = LocationHelper.hasLocationPermission(context)
+        if (!permissionGranted) {
+            personnelViewModel.updateLocationStatus("Konum izni gerekli")
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!permissionGranted) {
+            permissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, permissionGranted) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START && permissionGranted) {
+                val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30000L).build()
+                try {
+                    fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+                } catch (e: SecurityException) {
+                    personnelViewModel.updateLocationStatus("Konum izni reddedildi")
+                }
+            } else if (event == Lifecycle.Event.ON_STOP) {
+                fusedLocationClient.removeLocationUpdates(locationCallback)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            fusedLocationClient.removeLocationUpdates(locationCallback)
         }
     }
 
@@ -88,6 +159,27 @@ fun PersonnelMainScreen(
     }
 
     Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Saha Operasyon",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = locationStatus,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (locationStatus.contains("Aktif")) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            )
+        },
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
                 NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(if (selectedTab == 0) Icons.Filled.Home else Icons.Outlined.Home, null) }, label = { Text("Ana Sayfa") })
@@ -114,8 +206,6 @@ fun PersonnelMainScreen(
                                     fabOffsetY += dragAmount.y
                                 },
                                 onDragEnd = {
-                                    // Scaffold BottomEnd slotunda olduğumuz için pozitif değerler ekranın sağına ve altına kaçmaktır.
-                                    // Ekrandan çıkmasını engellemek için basit bir yaslama yapıyoruz.
                                     if (fabOffsetX > 0f) fabOffsetX = 0f
                                     if (fabOffsetY > 0f) fabOffsetY = 0f
                                 }
@@ -125,7 +215,7 @@ fun PersonnelMainScreen(
                     DropdownMenu(
                         expanded = showFabMenu,
                         onDismissRequest = { showFabMenu = false },
-                        modifier = Modifier.width(220.dp)
+                        modifier = Modifier.width(260.dp)
                     ) {
                         DropdownMenuItem(
                             text = { Text("İş Emirlerine Git", fontWeight = FontWeight.Medium) },
@@ -134,12 +224,19 @@ fun PersonnelMainScreen(
                         )
                         HorizontalDivider()
                         DropdownMenuItem(
-                            text = { Text("Hızlı Not Ekle", fontWeight = FontWeight.Medium) },
-                            leadingIcon = { Icon(Icons.Default.EditNote, null, tint = MaterialTheme.colorScheme.primary) },
+                            text = {
+                                Column {
+                                    Text("Hızlı Not Ekle", fontWeight = FontWeight.Medium, color = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified)
+                                    if (activeServicesForFab.isEmpty()) {
+                                        Text("İşleme başladıktan sonra kullanılabilir", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            },
+                            leadingIcon = { Icon(Icons.Default.EditNote, null, tint = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary) },
                             onClick = {
                                 showFabMenu = false
                                 if (activeServicesForFab.isEmpty()) {
-                                    Toast.makeText(context, "İşlem yapabileceğiniz aktif iş emriniz bulunmuyor.", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Not eklemek için önce bir iş emrinde işleme başlamalısınız.", Toast.LENGTH_LONG).show()
                                 } else {
                                     showNoteDialog = true
                                 }
@@ -147,12 +244,19 @@ fun PersonnelMainScreen(
                         )
                         HorizontalDivider()
                         DropdownMenuItem(
-                            text = { Text("Fotoğraf Çek", fontWeight = FontWeight.Medium) },
-                            leadingIcon = { Icon(Icons.Default.PhotoCamera, null, tint = MaterialTheme.colorScheme.primary) },
+                            text = {
+                                Column {
+                                    Text("Fotoğraf Çek", fontWeight = FontWeight.Medium, color = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified)
+                                    if (activeServicesForFab.isEmpty()) {
+                                        Text("İşleme başladıktan sonra kullanılabilir", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            },
+                            leadingIcon = { Icon(Icons.Default.PhotoCamera, null, tint = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary) },
                             onClick = {
                                 showFabMenu = false
                                 if (activeServicesForFab.isEmpty()) {
-                                    Toast.makeText(context, "İşlem yapabileceğiniz aktif iş emriniz bulunmuyor.", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Fotoğraf eklemek için önce bir iş emrinde işleme başlamalısınız.", Toast.LENGTH_LONG).show()
                                 } else {
                                     showPhotoDialog = true
                                 }
@@ -192,7 +296,21 @@ fun PersonnelMainScreen(
                     personnel = currentPersonnel,
                     myServices = filteredPersonnelServices,
                     onNavigateToServiceDetail = onNavigateToServiceDetail,
-                    onGoToAssignments = { selectedTab = 1 }
+                    onGoToAssignments = { filter ->
+                        serviceViewModel.updateSearchQuery("")
+                        serviceViewModel.updateSelectedFilter("Hepsi")
+                        serviceViewModel.updateSelectedPriorityFilter("Hepsi")
+
+                        // İsimler StandaloneUserFormScreen'deki listeyle birebir aynı olmalı
+                        when (filter) {
+                            "Atanan" -> serviceViewModel.updateSelectedTab("Atanan")
+                            "Yolda" -> serviceViewModel.updateSelectedTab("Yolda")
+                            "İşlemde" -> serviceViewModel.updateSelectedTab("İşlemde")
+                            "Tamamlanan" -> serviceViewModel.updateSelectedTab("Tamamlanan")
+                            else -> serviceViewModel.updateSelectedTab("Tümü")
+                        }
+                        selectedTab = 1
+                    }
                 )
                 1 -> {
                     Box(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
@@ -218,18 +336,17 @@ fun PersonnelMainScreen(
                             onServiceClick = { service -> onNavigateToServiceDetail(service.id) },
                             onLogOut = onLogOut,
                             serviceViewModel = serviceViewModel,
-                            firebaseUid = currentFirebaseUid,
+                            firebaseUid = currentPersonnelUid,
                             localPersonnelId = personnelId
                         )
                     }
                 }
-                2 -> PersonnelMapPlaceholder()
+                2 -> PersonnelMapScreen(viewModel = serviceViewModel)
                 3 -> PersonnelProfileContent(personnel = currentPersonnel, onLogOut = onLogOut)
             }
         }
     }
 
-    // Hızlı Not Ekleme Dialogu
     if (showNoteDialog) {
         var selectedServiceForNote by remember { mutableStateOf<ServiceRecord?>(null) }
         var noteText by remember { mutableStateOf("") }
@@ -240,7 +357,7 @@ fun PersonnelMainScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (selectedServiceForNote == null) {
-                        Text("Lütfen not eklenecek iş emrini seçin:", style = MaterialTheme.typography.bodyMedium)
+                        Text("Lütfen not eklenecek aktif işlemi seçin:", style = MaterialTheme.typography.bodyMedium)
                         LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
                             items(activeServicesForFab) { s ->
                                 Card(
@@ -252,7 +369,7 @@ fun PersonnelMainScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
                                         Text("#${s.id} - ${s.companyName}", fontWeight = FontWeight.Bold)
-                                        Text("${s.deviceType} (${s.status})", style = MaterialTheme.typography.bodySmall)
+                                        Text("${s.deviceType} (${s.status})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                     }
                                 }
                             }
@@ -302,14 +419,13 @@ fun PersonnelMainScreen(
         )
     }
 
-    // Fotoğraf Çekme Dialogu
     if (showPhotoDialog) {
         AlertDialog(
             onDismissRequest = { showPhotoDialog = false },
             title = { Text("Fotoğraf Ekle", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Lütfen fotoğraf eklenecek iş emrini seçin:", style = MaterialTheme.typography.bodyMedium)
+                    Text("Lütfen fotoğraf eklenecek aktif işlemi seçin:", style = MaterialTheme.typography.bodyMedium)
                     LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
                         items(activeServicesForFab) { s ->
                             Card(
@@ -324,7 +440,7 @@ fun PersonnelMainScreen(
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Text("#${s.id} - ${s.companyName}", fontWeight = FontWeight.Bold)
-                                    Text("${s.deviceType} (${s.status})", style = MaterialTheme.typography.bodySmall)
+                                    Text("${s.deviceType} (${s.status})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -344,7 +460,7 @@ fun PersonnelHomeContent(
     personnel: Personnel?,
     myServices: List<ServiceRecord>,
     onNavigateToServiceDetail: (Int) -> Unit,
-    onGoToAssignments: () -> Unit
+    onGoToAssignments: (String) -> Unit
 ) {
     val assignedCount = myServices.count { it.status == ServiceStatus.BEKLIYOR }
     val acceptedCount = myServices.count { it.status == ServiceStatus.YOLDA }
@@ -373,25 +489,44 @@ fun PersonnelHomeContent(
                         }
                     }
                 }
-                IconButton(onClick = { /* Bildirimler */ }) { Icon(Icons.Default.Notifications, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
+                IconButton(onClick = { }) { Icon(Icons.Default.Notifications, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
             }
         }
-
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize()) {
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Görev Özeti", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = onGoToAssignments) { Text("Tümünü Gör") }
+                    TextButton(onClick = { onGoToAssignments("Tümü") }) { Text("Tümünü Gör") }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryCard(modifier = Modifier.weight(1f), title = "Atanan", count = assignedCount, color = MaterialTheme.colorScheme.error)
-                    SummaryCard(modifier = Modifier.weight(1f), title = "Yolda", count = acceptedCount, color = MaterialTheme.colorScheme.primary)
+                    SummaryCard(
+                        modifier = Modifier.weight(1f).clickable { onGoToAssignments("Atanan") },
+                        title = "Atanan",
+                        count = assignedCount,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    SummaryCard(
+                        modifier = Modifier.weight(1f).clickable { onGoToAssignments("Yolda") },
+                        title = "Yolda",
+                        count = acceptedCount,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryCard(modifier = Modifier.weight(1f), title = "İşlemde", count = inProgressCount, color = MaterialTheme.colorScheme.tertiary)
-                    SummaryCard(modifier = Modifier.weight(1f), title = "Tamamlanan", count = completedCount, color = Color(0xFF4CAF50))
+                    SummaryCard(
+                        modifier = Modifier.weight(1f).clickable { onGoToAssignments("İşlemde") },
+                        title = "İşlemde",
+                        count = inProgressCount,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    SummaryCard(
+                        modifier = Modifier.weight(1f).clickable { onGoToAssignments("Tamamlandı") },
+                        title = "Tamamlanan",
+                        count = completedCount,
+                        color = Color(0xFF4CAF50)
+                    )
                 }
             }
 
@@ -442,19 +577,6 @@ fun SummaryCard(modifier: Modifier = Modifier, title: String, count: Int, color:
         Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(count.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = color)
             Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-fun PersonnelMapPlaceholder() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Outlined.Map, null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Harita Modülü", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("İş konumları ve rota bilgileri yakında\nbu ekranda görüntülenecektir.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

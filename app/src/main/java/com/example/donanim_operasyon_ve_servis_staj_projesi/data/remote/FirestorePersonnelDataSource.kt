@@ -49,12 +49,57 @@ class FirestorePersonnelDataSource(
                     isActive = document.getBoolean("isActive") ?: false,
                     email = document.getString("email") ?: "",
                     firebaseUid = document.getString("firebaseUid") ?: document.id,
-                    gender = document.getString("gender") ?: "ERKEK" // Okunurken ekendi (Eski kayıtlarda yoksa güvenli varsayılan)
+                    gender = document.getString("gender") ?: "ERKEK" // Okunurken eklendi (Eski kayıtlarda yoksa güvenli varsayılan)
                 )
                 Result.success(personnel)
             } else {
                 Result.success(null)
             }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updatePersonnelLocation(uid: String, lat: Double, lon: Double): Result<Unit> {
+        return try {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val collection = db.collection("personnel")
+
+            // Personel dokümanını UID ile bul
+            val snapshot = collection.whereEqualTo("firebaseUid", uid).get().await()
+
+            if (!snapshot.isEmpty) {
+                val docId = snapshot.documents.first().id
+                val updates = mapOf(
+                    "currentLatitude" to lat,
+                    "currentLongitude" to lon,
+                    "lastLocationUpdate" to System.currentTimeMillis() // Mevcut timestamp standardımız
+                )
+                collection.document(docId).update(updates).await()
+            } else {
+                println("Location Update Hatası: Bu UID ile personel dokümanı bulunamadı.")
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // --- YENİ EKLENEN FONKSİYON: Admin Haritası İçin Canlı Personel Konumlarını Okuma ---
+    suspend fun getPersonnelLocations(): Result<List<Map<String, Any>>> {
+        return try {
+            val snapshot = collection.get().await()
+            val list = snapshot.documents.map { doc ->
+                mapOf(
+                    "id" to (doc.getLong("id")?.toInt() ?: 0),
+                    "firebaseUid" to (doc.getString("firebaseUid") ?: ""),
+                    "fullName" to (doc.getString("fullName") ?: ""),
+                    "currentLatitude" to (doc.getDouble("currentLatitude") ?: 0.0),
+                    "currentLongitude" to (doc.getDouble("currentLongitude") ?: 0.0),
+                    "lastLocationUpdate" to (doc.getLong("lastLocationUpdate") ?: 0L)
+                )
+            }
+            Result.success(list)
         } catch (e: Exception) {
             Result.failure(e)
         }

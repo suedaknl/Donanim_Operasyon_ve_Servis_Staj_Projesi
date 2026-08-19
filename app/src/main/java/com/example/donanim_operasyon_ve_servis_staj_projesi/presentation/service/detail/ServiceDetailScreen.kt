@@ -34,8 +34,21 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.Service
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import kotlinx.coroutines.launch
 import java.util.Locale
+import android.location.Location
+import android.os.Looper
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import com.google.android.gms.location.*
+import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.LocationHelper
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
+import java.util.concurrent.TimeUnit
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
+@SuppressLint("MissingPermission")
 @Composable
 fun ServiceDetailScreen(
     viewModel: ServiceViewModel,
@@ -44,7 +57,7 @@ fun ServiceDetailScreen(
     personnelId: Int? = null,
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit,
-    onNavigateToHistory: (String, Int, String) -> Unit, // FirestoreId, ServiceId, CompanyName
+    onNavigateToHistory: (String, Int, String) -> Unit,
     returnedPhotoUri: String? = null,
     onPhotoSaved: () -> Unit = {},
     onNavigateToCamera: () -> Unit = {},
@@ -57,7 +70,8 @@ fun ServiceDetailScreen(
     }
 
     val serviceRecords by viewModel.serviceRecords.collectAsState()
-    val service = serviceRecords.find { it.id == serviceId }
+    val personnelRecords by viewModel.personnelServiceRecords.collectAsState()
+    val service = serviceRecords.find { it.id == serviceId } ?: personnelRecords.find { it.id == serviceId }
 
     LaunchedEffect(service?.firestoreId) {
         service?.firestoreId?.let { firestoreId ->
@@ -71,7 +85,6 @@ fun ServiceDetailScreen(
     val servicePhotos by viewModel.servicePhotos.collectAsState()
     val closingSignature = viewModel.serviceClosingSignature.collectAsState().value
 
-    // Firebase Remote State'ler
     val remotePhotos by viewModel.remotePhotos.collectAsState()
     val remoteSignatures by viewModel.remoteSignatures.collectAsState()
     val remoteNotes by viewModel.remoteNotes.collectAsState()
@@ -97,6 +110,15 @@ fun ServiceDetailScreen(
         }
     }
 
+    // Personel için izin verilen en yüksek adım sınırını belirliyoruz
+    val maxAllowedStep = when (service?.status) {
+        ServiceStatus.BEKLIYOR -> 1 // 1: Görev sekmesi
+        ServiceStatus.YOLDA, ServiceStatus.ISLEME_BASLANDI, ServiceStatus.PARCA_BEKLENIYOR -> 2 // 2: İşlem sekmesi
+        ServiceStatus.TAMAMLANDI -> 3 // 3: Onay sekmesi
+        ServiceStatus.IPTAL -> 1
+        else -> 0
+    }
+
     val adminActualStep = when (service?.status) {
         ServiceStatus.BEKLIYOR -> 0
         ServiceStatus.YOLDA -> 1
@@ -115,12 +137,9 @@ fun ServiceDetailScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showAddNoteDialog by remember { mutableStateOf(false) }
     var newNoteText by remember { mutableStateOf("") }
-
     var showCategoryDialog by remember { mutableStateOf(false) }
     var pendingCategory by rememberSaveable { mutableStateOf("") }
-
     var selectedImageUri by remember { mutableStateOf<String?>(null) }
-
     var showRejectDialog by remember { mutableStateOf(false) }
     var rejectionReasonText by remember { mutableStateOf("") }
     var rejectError by remember { mutableStateOf("") }
@@ -155,24 +174,58 @@ fun ServiceDetailScreen(
 
     if (service == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("İş emri bulunamadı veya silindi.")
+            CircularProgressIndicator()
         }
         return
     }
 
-    val assignedPersonnelName = if (service.assignedPersonnelId != null) {
-        personnelList.find { it.id == service.assignedPersonnelId }?.fullName ?: "Personel Bulunamadı"
-    } else {
-        "Atanmadı"
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var currentLocation by remember { mutableStateOf<Location?>(null) }
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    val locationCallback = remember {
+        object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                currentLocation = locationResult.lastLocation
+            }
+        }
     }
 
-    val isLocked = isCompleted || isCancelled
-    val canAddContent = personnelId != null &&
-            service.assignedPersonnelId == personnelId &&
-            !isLocked &&
-            service.status != ServiceStatus.BEKLIYOR
+    if (personnelId != null && !isCompleted && !isCancelled) {
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_START && LocationHelper.hasLocationPermission(context)) {
+                    val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L).build()
+                    try { fusedLocationClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper()) }
+                    catch (e: SecurityException) { e.printStackTrace() }
+                } else if (event == Lifecycle.Event.ON_STOP) {
+                    fusedLocationClient.removeLocationUpdates(locationCallback)
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+                fusedLocationClient.removeLocationUpdates(locationCallback)
+            }
+        }
+    }
 
-    // --- OFFLINE CACHE (ROOM) VE FIREBASE (REMOTE) VERİLERİNİ BİRLEŞTİRME ---
+    val distanceMeters = remember(currentLocation, service.latitude, service.longitude) {
+        if (currentLocation != null && service.latitude != null && service.longitude != null) {
+            LocationHelper.calculateDistanceInMetres(
+                currentLocation!!.latitude, currentLocation!!.longitude,
+                service.latitude, service.longitude
+            )
+        } else null
+    }
+
+    val assignedPersonnelName = if (service.assignedPersonnelId != null) {
+        personnelList.find { it.id == service.assignedPersonnelId }?.fullName ?: "Personel Bulunamadı"
+    } else "Atanmadı"
+
+    val isLocked = isCompleted || isCancelled
+    val canAddContent = personnelId != null && service.assignedPersonnelId == personnelId && !isLocked && service.status != ServiceStatus.BEKLIYOR
+
     val combinedNotes = remember(serviceNotes, remoteNotes) {
         val remoteAsObjects = remoteNotes.map { map ->
             ServiceNote(
@@ -191,44 +244,45 @@ fun ServiceDetailScreen(
             val url = map["downloadUrl"] as? String ?: ""
             val type = map["photoType"] as? String ?: "DİĞER"
             ServicePhoto(
-                serviceRecordId = serviceId,
-                personnelId = 0,
-                photoType = type,
-                localUri = url,
-                timestamp = (map["timestamp"] as? Long) ?: 0L,
-                photoUri = url,
-                photoCategory = type
+                serviceRecordId = serviceId, personnelId = 0, photoType = type, localUri = url, timestamp = (map["timestamp"] as? Long) ?: 0L, photoUri = url, photoCategory = type
             )
         }
         (remoteAsObjects + servicePhotos).distinctBy { it.photoUri.ifBlank { it.localUri } }
     }
 
     val closingKeywords = listOf("closing", "kapanis", "kapanış", "sonuc", "sonuç", "sonrasi", "sonrası")
-
-    val operationalNotes = combinedNotes.filter { note ->
-        val t = (note.noteType ?: "").trim().lowercase(Locale.ROOT)
-        !closingKeywords.any { t.contains(it) }
-    }
-
-    val operationalPhotos = combinedPhotos.filter { photo ->
-        val t = (photo.photoType ?: photo.photoCategory ?: "").trim().lowercase(Locale.ROOT)
-        !closingKeywords.any { t.contains(it) }
-    }
-
-    val closingNoteItem = combinedNotes.firstOrNull { note ->
-        val t = (note.noteType ?: "").trim().lowercase(Locale.ROOT)
-        closingKeywords.any { t.contains(it) }
-    } ?: combinedNotes.lastOrNull()
-
-    val closingAfterPhotos = combinedPhotos.filter { photo ->
-        val t = (photo.photoType ?: photo.photoCategory ?: "").trim().lowercase(Locale.ROOT)
-        closingKeywords.any { t.contains(it) }
-    }
-
-    // İmza için Remote and Local Birleşimi
+    val operationalNotes = combinedNotes.filter { note -> !closingKeywords.any { (note.noteType ?: "").trim().lowercase(Locale.ROOT).contains(it) } }
+    val operationalPhotos = combinedPhotos.filter { photo -> !closingKeywords.any { (photo.photoType ?: photo.photoCategory ?: "").trim().lowercase(Locale.ROOT).contains(it) } }
+    val closingNoteItem = combinedNotes.firstOrNull { note -> closingKeywords.any { (note.noteType ?: "").trim().lowercase(Locale.ROOT).contains(it) } } ?: combinedNotes.lastOrNull()
+    val closingAfterPhotos = combinedPhotos.filter { photo -> closingKeywords.any { (photo.photoType ?: photo.photoCategory ?: "").trim().lowercase(Locale.ROOT).contains(it) } }
     val remoteSignatureUrl = remoteSignatures.firstOrNull()?.get("downloadUrl") as? String
     val effectiveSignaturePath = closingSignature?.signatureLocalUri ?: remoteSignatureUrl
-    // ------------------------------------------------------------------------
+
+    fun openNavigation(lat: Double, lon: Double) {
+        val gmmIntentUri = Uri.parse("google.navigation:q=$lat,$lon")
+        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri).apply { setPackage("com.google.android.apps.maps") }
+        try { context.startActivity(mapIntent) } catch (e: Exception) {
+            val fallbackUri = Uri.parse("geo:$lat,$lon?q=$lat,$lon")
+            val fallbackIntent = Intent(Intent.ACTION_VIEW, fallbackUri)
+            try { context.startActivity(fallbackIntent) } catch (ex: Exception) {
+                Toast.makeText(context, "Harita uygulaması bulunamadı.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun getEtaMinutes(distMeters: Float): Int {
+        return (distMeters / 500f).roundToInt().coerceAtLeast(1)
+    }
+
+    @Composable
+    fun getFreshnessInfo(timeMillis: Long): Pair<String, Color> {
+        val diffMins = TimeUnit.MILLISECONDS.toMinutes(System.currentTimeMillis() - timeMillis)
+        return when {
+            diffMins <= 2 -> Pair("Güncel (${if(diffMins == 0L) "az önce" else "$diffMins dk önce"})", Color(0xFF4CAF50))
+            diffMins <= 5 -> Pair("Yakın zamanda güncellendi ($diffMins dk önce)", Color(0xFFFF9800))
+            else -> Pair("Konum eski ($diffMins dk önce)", MaterialTheme.colorScheme.error)
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -236,23 +290,11 @@ fun ServiceDetailScreen(
             TopAppBar(
                 title = { Text(if (personnelId != null) "İş Emri Akışı" else "İş Emri Takibi (Admin)", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri Dön")
-                    }
+                    IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri Dön") }
                 },
                 actions = {
-                    // SAĞ ÜST GEÇMİŞ (X) BUTONU
-                    TextButton(
-                        onClick = {
-                            val fId = service.firestoreId.orEmpty()
-                            onNavigateToHistory(fId, service.id, service.companyName)
-                        }
-                    ) {
-                        Text(
-                            text = "Geçmiş (${serviceHistory.size})",
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                    TextButton(onClick = { onNavigateToHistory(service.firestoreId.orEmpty(), service.id, service.companyName) }) {
+                        Text(text = "Geçmiş (${serviceHistory.size})", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
@@ -260,7 +302,7 @@ fun ServiceDetailScreen(
         }
     ) { paddingValues ->
         if (personnelId == null) {
-            // ADMIN EKRANI (İzleme Modu)
+            // ADMIN EKRANI (Admin serbestçe dolaşabilir)
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -293,11 +335,7 @@ fun ServiceDetailScreen(
                         when (adminSelectedStep) {
                             0 -> {
                                 Text("İş Emri Temel Bilgileri", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                ElevatedCard(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(16.dp),
-                                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-                                ) {
+                                ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                     Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                             Text(text = "İş No: #${service.id}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -308,12 +346,7 @@ fun ServiceDetailScreen(
                                                 },
                                                 shape = RoundedCornerShape(8.dp)
                                             ) {
-                                                Text(
-                                                    text = "Öncelik: ${service.priority}",
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold
-                                                )
+                                                Text(text = "Öncelik: ${service.priority}", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                             }
                                         }
 
@@ -325,10 +358,6 @@ fun ServiceDetailScreen(
                                         InfoRow(icon = Icons.Default.ConfirmationNumber, label = "Seri No", value = service.serialNumber)
                                         InfoRow(icon = Icons.Default.LocationOn, label = "Lokasyon", value = service.location)
                                         InfoRow(icon = Icons.Default.Home, label = "Adres", value = service.address ?: "Belirtilmedi")
-                                        InfoRow(icon = Icons.Default.DateRange, label = "Kayıt Tarihi", value = service.date)
-                                        if (!service.plannedDate.isNullOrBlank()) {
-                                            InfoRow(icon = Icons.Default.Schedule, label = "Planlanan Tarih", value = service.plannedDate)
-                                        }
                                         InfoRow(icon = Icons.Default.ReportProblem, label = "Arıza Nedeni", value = service.issueDescription)
                                         InfoRow(icon = Icons.Default.Badge, label = "Atanan Personel", value = assignedPersonnelName)
                                         InfoRow(icon = Icons.Default.Info, label = "Mevcut Durum", value = service.status)
@@ -337,13 +366,8 @@ fun ServiceDetailScreen(
                             }
                             1 -> {
                                 Text("Görev Durumu ve Personel", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-
                                 if (isRejected) {
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
+                                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), shape = RoundedCornerShape(12.dp)) {
                                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                             Text(text = "🔴 İptal / Reddedildi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
                                             Text(text = "Red Nedeni: ${service.rejectionReason}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
@@ -364,25 +388,19 @@ fun ServiceDetailScreen(
                             }
                             2 -> {
                                 Text("Saha İşlemleri ve Takip", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-
                                 if (adminActualStep < 2 && !isRejected) {
                                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                                         Text("Bu aşamada henüz işlem yapılmadı.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 } else {
                                     if (service.status == ServiceStatus.PARCA_BEKLENIYOR) {
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
+                                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer), shape = RoundedCornerShape(12.dp)) {
                                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                                 Text(text = "🟡 Parça Bekleniyor", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer)
                                                 Text(text = "Personel işlemi durdurdu ve gerekli yedek parça teminini bekliyor.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
                                             }
                                         }
                                     }
-
                                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                         Column(modifier = Modifier.padding(16.dp)) {
                                             Text("Saha İşlem Notları", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
@@ -390,13 +408,10 @@ fun ServiceDetailScreen(
                                             if (operationalNotes.isEmpty()) {
                                                 Text("Eklenmiş işlem notu bulunmuyor.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             } else {
-                                                operationalNotes.forEach { note ->
-                                                    Text("• ${note.note}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 2.dp))
-                                                }
+                                                operationalNotes.forEach { note -> Text("• ${note.note}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 2.dp)) }
                                             }
                                         }
                                     }
-
                                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                         Column(modifier = Modifier.padding(16.dp)) {
                                             Text("İşlem Fotoğrafları", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
@@ -409,12 +424,7 @@ fun ServiceDetailScreen(
                                                     Text(text = category, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                                                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         items(photos) { photo ->
-                                                            AsyncImage(
-                                                                model = photo.localUri,
-                                                                contentDescription = null,
-                                                                modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)).clickable { selectedImageUri = photo.localUri },
-                                                                contentScale = ContentScale.Crop
-                                                            )
+                                                            AsyncImage(model = photo.localUri, contentDescription = null, modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)).clickable { selectedImageUri = photo.localUri }, contentScale = ContentScale.Crop)
                                                         }
                                                     }
                                                 }
@@ -425,7 +435,6 @@ fun ServiceDetailScreen(
                             }
                             3 -> {
                                 Text("İş Sonucu & Onay", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-
                                 if (!isCompleted) {
                                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                                         Text("İş henüz tamamlanmadı. Kapanış verileri bekleniyor.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -437,7 +446,6 @@ fun ServiceDetailScreen(
                                             Text("Tamamlayan Personel: $assignedPersonnelName", style = MaterialTheme.typography.bodyMedium)
                                         }
                                     }
-
                                     if (closingNoteItem != null) {
                                         ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -446,35 +454,23 @@ fun ServiceDetailScreen(
                                             }
                                         }
                                     }
-
                                     if (closingAfterPhotos.isNotEmpty()) {
                                         ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                                 Text("Kapanış / Sonrası Fotoğrafı", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     items(closingAfterPhotos) { photo ->
-                                                        AsyncImage(
-                                                            model = photo.localUri,
-                                                            contentDescription = "Sonrası Fotoğrafı",
-                                                            modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)).clickable { selectedImageUri = photo.localUri },
-                                                            contentScale = ContentScale.Crop
-                                                        )
+                                                        AsyncImage(model = photo.localUri, contentDescription = "Sonrası Fotoğrafı", modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)).clickable { selectedImageUri = photo.localUri }, contentScale = ContentScale.Crop)
                                                     }
                                                 }
                                             }
                                         }
                                     }
-
                                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text("Müşteri Dijital İmzası", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                             if (!effectiveSignaturePath.isNullOrBlank()) {
-                                                AsyncImage(
-                                                    model = effectiveSignaturePath,
-                                                    contentDescription = "Dijital İmza",
-                                                    modifier = Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
-                                                    contentScale = ContentScale.Fit
-                                                )
+                                                AsyncImage(model = effectiveSignaturePath, contentDescription = "Dijital İmza", modifier = Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentScale = ContentScale.Fit)
                                             } else {
                                                 Text("İmza bulunmuyor.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
@@ -486,7 +482,7 @@ fun ServiceDetailScreen(
                     }
                 }
 
-                // --- ALT KISIM OPERASYONEL BUTONLAR ---
+                // Alt Kısım Operasyonel Butonlar
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
@@ -551,7 +547,7 @@ fun ServiceDetailScreen(
                 }
             }
         } else {
-            // PERSONEL EKRANI
+            // PERSONEL EKRANI (Güvenlik kilidi uygulanmış stepper)
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -569,19 +565,21 @@ fun ServiceDetailScreen(
                         horizontalArrangement = Arrangement.SpaceAround,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        StepIndicator(stepNumber = 1, title = "Bilgi", actualStep = currentStep, selectedStep = currentStep, onClick = { currentStep = 0 })
-                        StepIndicator(stepNumber = 2, title = "Görev", actualStep = currentStep, selectedStep = currentStep, onClick = { currentStep = 1 })
-                        StepIndicator(stepNumber = 3, title = "İşlem", actualStep = currentStep, selectedStep = currentStep, onClick = { currentStep = 2 })
-                        StepIndicator(stepNumber = 4, title = "Onay", actualStep = currentStep, selectedStep = currentStep, onClick = { currentStep = 3 })
+                        StepIndicator(stepNumber = 1, title = "Bilgi", actualStep = maxAllowedStep, selectedStep = currentStep, onClick = { currentStep = 0 })
+                        StepIndicator(stepNumber = 2, title = "Görev", actualStep = maxAllowedStep, selectedStep = currentStep, onClick = {
+                            if (maxAllowedStep >= 1) currentStep = 1 else coroutineScope.launch { snackbarHostState.showSnackbar("Bu aşama henüz kilitli.") }
+                        })
+                        StepIndicator(stepNumber = 3, title = "İşlem", actualStep = maxAllowedStep, selectedStep = currentStep, onClick = {
+                            if (maxAllowedStep >= 2) currentStep = 2 else coroutineScope.launch { snackbarHostState.showSnackbar("Bu aşamaya geçmek için önce görevi kabul etmelisiniz.") }
+                        })
+                        StepIndicator(stepNumber = 4, title = "Onay", actualStep = maxAllowedStep, selectedStep = currentStep, onClick = {
+                            if (maxAllowedStep >= 3) currentStep = 3 else coroutineScope.launch { snackbarHostState.showSnackbar("Onay aşamasına geçebilmek için önce işlemi tamamlamalısınız.") }
+                        })
                     }
                 }
 
                 if (isRejected) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
+                    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), shape = RoundedCornerShape(12.dp)) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(text = "🔴 Reddedildi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
                             Text(text = "Red Nedeni: ${service.rejectionReason}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
@@ -597,11 +595,7 @@ fun ServiceDetailScreen(
                         when (currentStep) {
                             0 -> {
                                 Text("1. İş Emri Bilgileri", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                ElevatedCard(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(16.dp),
-                                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-                                ) {
+                                ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                     Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                         Text(text = "İş No: #${service.id}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                         Text(text = service.companyName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -609,140 +603,203 @@ fun ServiceDetailScreen(
                                         InfoRow(icon = Icons.Default.Person, label = "Yetkili", value = service.contactPerson ?: "Belirtilmedi")
                                         InfoRow(icon = Icons.Default.Phone, label = "Telefon", value = service.contactPhone ?: "Belirtilmedi")
                                         InfoRow(icon = Icons.Default.Devices, label = "Cihaz", value = "${service.deviceType} (${service.deviceModel})")
-                                        InfoRow(icon = Icons.Default.ConfirmationNumber, label = "Seri No", value = service.serialNumber)
                                         InfoRow(icon = Icons.Default.LocationOn, label = "Lokasyon", value = service.location)
                                         InfoRow(icon = Icons.Default.Home, label = "Adres", value = service.address ?: "Belirtilmedi")
-                                        InfoRow(icon = Icons.Default.DateRange, label = "Kayıt Tarihi", value = service.date)
-                                        if (!service.plannedDate.isNullOrBlank()) {
-                                            InfoRow(icon = Icons.Default.Schedule, label = "Planlanan Tarih", value = service.plannedDate)
-                                        }
                                         InfoRow(icon = Icons.Default.ReportProblem, label = "Arıza Nedeni", value = service.issueDescription)
-                                        InfoRow(icon = Icons.Default.PriorityHigh, label = "Öncelik", value = service.priority)
                                     }
                                 }
                             }
                             1 -> {
                                 Text("2. Görev Değerlendirme", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
                                 if (service.status == ServiceStatus.BEKLIYOR) {
                                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                             Text("Size yeni bir görev atandı. Lütfen inceleyip karar veriniz.", style = MaterialTheme.typography.bodyMedium)
                                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                                Button(
-                                                    onClick = { viewModel.acceptService(service.id, personnelId!!) },
-                                                    modifier = Modifier.weight(1f),
-                                                    shape = RoundedCornerShape(12.dp)
-                                                ) {
-                                                    Text("Kabul Et")
-                                                }
-                                                Button(
-                                                    onClick = { rejectionReasonText = ""; rejectError = ""; showRejectDialog = true },
-                                                    modifier = Modifier.weight(1f),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                                    shape = RoundedCornerShape(12.dp)
-                                                ) {
-                                                    Text("Reddet")
-                                                }
+                                                Button(onClick = { viewModel.acceptService(service.id, personnelId!!) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("Kabul Et") }
+                                                Button(onClick = { rejectionReasonText = ""; rejectError = ""; showRejectDialog = true }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), shape = RoundedCornerShape(12.dp)) { Text("Reddet") }
                                             }
                                         }
                                     }
-                                } else if (isRejected) {
-                                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                        Text("Bu görevi reddettiniz. Akış sonlandırılmıştır.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                                    }
-                                } else {
-                                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                        Text("Görev kabul edildi (Yolda). 'İşlem' aşamasına geçebilirsiniz.", color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
+                                }
+
+                                ElevatedCard(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), shape = RoundedCornerShape(16.dp)) {
+                                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("İş Konumu", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+                                        }
+
+                                        if (service.latitude == null || service.longitude == null) {
+                                            Text("Bu iş emri için harita konumu belirlenmemiş.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                                        } else {
+                                            Column {
+                                                Text(service.location, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                Text(service.address ?: "Adres belirtilmemiş", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            HorizontalDivider()
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text("Mesafe", style = MaterialTheme.typography.labelMedium)
+                                                    val distTxt = if (distanceMeters != null) {
+                                                        if (distanceMeters < 1000) "${distanceMeters.roundToInt()} m uzaktasınız" else "%.1f km uzaktasınız".format(distanceMeters / 1000.0).replace('.', ',')
+                                                    } else "Hesaplanıyor..."
+                                                    Text(distTxt, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                                    Text("Güncel konumunuza göre yaklaşık mesafe", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                                Button(onClick = { openNavigation(service.latitude, service.longitude) }, shape = RoundedCornerShape(12.dp)) {
+                                                    Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Yol Tarifi Al")
+                                                }
+                                            }
+                                            if (distanceMeters != null) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Column {
+                                                        Text("Tahmini Varış Süresi", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                        Text("Yaklaşık ${getEtaMinutes(distanceMeters)} dk (trafik durumuna göre değişebilir)", style = MaterialTheme.typography.labelSmall)
+                                                    }
+                                                }
+                                            }
+                                            if (currentLocation != null) {
+                                                val freshness = getFreshnessInfo(currentLocation!!.time)
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.GpsFixed, contentDescription = null, modifier = Modifier.size(16.dp), tint = freshness.second)
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Column {
+                                                        Text("Konum Güncelliği", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                        Text("● ${freshness.first}", style = MaterialTheme.typography.labelSmall, color = freshness.second)
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                             2 -> {
-                                Text("3. Saha İşlemleri ve Takip", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text("3. İşlem", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text("İşlemi başlatmak için konuma yaklaşınız.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
                                 if (!isLocked) {
-                                    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                                        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                            Text("Mevcut Durum: ${service.status}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    ElevatedCard(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), shape = RoundedCornerShape(16.dp)) {
+                                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text("İş Konumu", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                                    Text(service.location, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                                }
+                                                if (service.latitude != null && service.longitude != null) {
+                                                    OutlinedButton(onClick = { openNavigation(service.latitude, service.longitude) }, shape = RoundedCornerShape(8.dp)) {
+                                                        Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text("Yol Tarifi")
+                                                    }
+                                                }
+                                            }
 
-                                            if (service.status == ServiceStatus.YOLDA) {
-                                                Button(
-                                                    onClick = { viewModel.startServiceWork(service.id, personnelId!!) },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    shape = RoundedCornerShape(12.dp)
-                                                ) {
-                                                    Text("İşleme Başla")
+                                            HorizontalDivider()
+
+                                            if (service.latitude == null || service.longitude == null) {
+                                                Text("Bu iş emri için harita konumu belirlenmemiş.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                                            } else {
+                                                val isVerified = distanceMeters != null && distanceMeters <= ServiceViewModel.SERVICE_START_RADIUS_METERS
+
+                                                Column {
+                                                    Text("Güncel Mesafe", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                    val distTxt = if (distanceMeters != null) {
+                                                        if (distanceMeters < 1000) "${distanceMeters.roundToInt()} m" else "%.1f km".format(distanceMeters / 1000.0).replace('.', ',')
+                                                    } else "Hesaplanıyor..."
+                                                    Text("$distTxt uzaktasınız", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = if(isVerified) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error)
+                                                    Text("iş konumuna olan anlık mesafe", style = MaterialTheme.typography.labelSmall)
                                                 }
-                                            } else if (service.status == ServiceStatus.ISLEME_BASLANDI) {
-                                                Button(
-                                                    onClick = { onNavigateToClosingForm(service.id, personnelId!!) },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                                ) {
-                                                    Text("Tamamlandı / Kapanış Formunu Doldur")
+
+                                                Column {
+                                                    Text("GPS Doğrulama Durumu", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                    if (isVerified) {
+                                                        Text("✓ İş konumu doğrulandı", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                                                    } else {
+                                                        Text("! İş konumuna yaklaşmalısınız", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                                                        Text("işleme başlamak için 250 m mesafe kuralı geçerlidir.", style = MaterialTheme.typography.labelSmall)
+                                                    }
                                                 }
-                                                Button(
-                                                    onClick = { viewModel.setParcaBekleniyor(service.id, personnelId!!) },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                                                ) {
-                                                    Text("Parça Değişimi / Parça Bekleniyor")
-                                                }
-                                            } else if (service.status == ServiceStatus.PARCA_BEKLENIYOR) {
-                                                Text("Parça bekleniyor durumunda. Parça temin edildikten sonra işleme devam edebilirsiniz.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-                                                Button(
-                                                    onClick = { onNavigateToClosingForm(service.id, personnelId!!) },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                                ) {
-                                                    Text("Kapanış Formunu Doldur ve İşi Tamamla")
+
+                                                if (service.status == ServiceStatus.YOLDA) {
+                                                    Button(
+                                                        onClick = {
+                                                            if (service.latitude == null) {
+                                                                viewModel.startServiceWork(service.id, personnelId!!)
+                                                            } else if (isVerified) {
+                                                                viewModel.verifyAndStartServiceWork(service.id, personnelId!!, distanceMeters!!)
+                                                            } else {
+                                                                coroutineScope.launch { snackbarHostState.showSnackbar("İşleme başlamak için konuma 250m'den daha yakın olmalısınız.") }
+                                                            }
+                                                        },
+                                                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                                        enabled = isVerified || service.latitude == null,
+                                                        shape = RoundedCornerShape(12.dp)
+                                                    ) {
+                                                        if (!isVerified && service.latitude != null) Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text("İşleme Başla")
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                }
 
-                                ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                                    Column(modifier = Modifier.padding(16.dp)) {
-                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                            Text("Saha İşlem Notları", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                            if (canAddContent) {
-                                                TextButton(onClick = { showAddNoteDialog = true }) { Text("Not Ekle") }
-                                            }
-                                        }
-                                        if (operationalNotes.isEmpty()) {
-                                            Text("Henüz ara not eklenmemiş.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        } else {
-                                            operationalNotes.forEach { note ->
-                                                Text("• ${note.note}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 2.dp))
-                                            }
-                                        }
-                                    }
-                                }
+                                    if (service.status == ServiceStatus.ISLEME_BASLANDI || service.status == ServiceStatus.PARCA_BEKLENIYOR) {
+                                        ElevatedCard(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), shape = RoundedCornerShape(16.dp)) {
+                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                Button(
+                                                    onClick = { onNavigateToClosingForm(service.id, personnelId!!) },
+                                                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                                ) { Text("Tamamlandı / Kapanış Formunu Doldur") }
 
-                                ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                                    Column(modifier = Modifier.padding(16.dp)) {
-                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                            Text("İşlem Fotoğrafları", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                            if (canAddContent) {
-                                                TextButton(onClick = { showCategoryDialog = true }) { Text("Fotoğraf Ekle") }
+                                                if (service.status != ServiceStatus.PARCA_BEKLENIYOR) {
+                                                    Button(
+                                                        onClick = { viewModel.setParcaBekleniyor(service.id, personnelId!!) },
+                                                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                                    ) { Text("Parça Değişimi / Parça Bekleniyor") }
+                                                } else {
+                                                    Text("Parça bekleniyor durumunda. Parça temin edildikten sonra işleme devam edebilirsiniz.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                                }
                                             }
                                         }
-                                        if (operationalPhotos.isEmpty()) {
-                                            Text("Henüz işlem fotoğrafı eklenmemiş.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        } else {
-                                            val groupedPhotos = operationalPhotos.groupBy { it.photoType ?: it.photoCategory ?: "DİĞER" }
-                                            groupedPhotos.forEach { (category, photos) ->
-                                                Text(text = category, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-                                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    items(photos) { photo ->
-                                                        AsyncImage(
-                                                            model = photo.localUri,
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)).clickable { selectedImageUri = photo.localUri },
-                                                            contentScale = ContentScale.Crop
-                                                        )
+
+                                        ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                                            Column(modifier = Modifier.padding(16.dp)) {
+                                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                    Text("Saha İşlem Notları", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                    if (canAddContent) TextButton(onClick = { showAddNoteDialog = true }) { Text("Not Ekle") }
+                                                }
+                                                if (operationalNotes.isEmpty()) Text("Henüz ara not eklenmemiş.", style = MaterialTheme.typography.bodySmall)
+                                                else operationalNotes.forEach { note -> Text("• ${note.note}", style = MaterialTheme.typography.bodyMedium) }
+                                            }
+                                        }
+
+                                        ElevatedCard(modifier = Modifier.fillMaxWidth().padding(top=8.dp), shape = RoundedCornerShape(16.dp)) {
+                                            Column(modifier = Modifier.padding(16.dp)) {
+                                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                    Text("İşlem Fotoğrafları", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                    if (canAddContent) TextButton(onClick = { showCategoryDialog = true }) { Text("Fotoğraf Ekle") }
+                                                }
+                                                if (operationalPhotos.isEmpty()) {
+                                                    Text("Henüz fotoğraf eklenmemiş.", style = MaterialTheme.typography.bodySmall)
+                                                } else {
+                                                    val groupedPhotos = operationalPhotos.groupBy { it.photoType ?: it.photoCategory ?: "DİĞER" }
+                                                    groupedPhotos.forEach { (cat, photos) ->
+                                                        Text(text = cat, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                            items(photos) { photo ->
+                                                                AsyncImage(model = photo.localUri, contentDescription = null, modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -751,54 +808,42 @@ fun ServiceDetailScreen(
                                 }
                             }
                             3 -> {
-                                Text("4. İş Emri Onaylandı", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text("Bu iş emri başarıyla tamamlanmıştır.", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                        val assigned = personnelList.find { it.id == service.assignedPersonnelId }
-                                        Text("Tamamlayan: ${assigned?.fullName ?: "Bilinmiyor"}")
-                                    }
-                                }
+                                Text("4. İş Emri Onay & Sonuç", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
-                                if (closingNoteItem != null) {
-                                    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Text("Kapanış Açıklaması / Sonuç", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                            Text("• ${closingNoteItem.note}", style = MaterialTheme.typography.bodyMedium)
+                                // ONAY İÇERİĞİ KONTROLÜ (Gerçek tamamlanma durumuna göre)
+                                if (!isCompleted) {
+                                    ElevatedCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), shape = RoundedCornerShape(16.dp)) {
+                                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                                            Text("İş henüz tamamlanmadı. Lütfen kapanış sürecini bitiriniz.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
-                                }
-
-                                if (closingAfterPhotos.isNotEmpty()) {
+                                } else {
                                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Text("Kapanış / Sonrası Fotoğrafı", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                items(closingAfterPhotos) { photo ->
-                                                    AsyncImage(
-                                                        model = photo.localUri,
-                                                        contentDescription = "Sonrası Fotoğrafı",
-                                                        modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)).clickable { selectedImageUri = photo.localUri },
-                                                        contentScale = ContentScale.Crop
-                                                    )
-                                                }
+                                        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text("Bu iş emri başarıyla tamamlanmıştır.", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            Text("Tamamlayan: ${personnelList.find { it.id == service.assignedPersonnelId }?.fullName ?: "Bilinmiyor"}")
+                                        }
+                                    }
+
+                                    if (closingNoteItem != null) {
+                                        ElevatedCard(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), shape = RoundedCornerShape(16.dp)) {
+                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text("Kapanış Açıklaması / Sonuç", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                Text("• ${closingNoteItem.note}", style = MaterialTheme.typography.bodyMedium)
                                             }
                                         }
                                     }
-                                }
 
-                                ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text("Müşteri Dijital İmzası", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                        if (!effectiveSignaturePath.isNullOrBlank()) {
-                                            AsyncImage(
-                                                model = effectiveSignaturePath,
-                                                contentDescription = "Dijital İmza",
-                                                modifier = Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
-                                                contentScale = ContentScale.Fit
-                                            )
-                                        } else {
-                                            Text("İmza bulunmuyor.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (closingAfterPhotos.isNotEmpty()) {
+                                        ElevatedCard(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), shape = RoundedCornerShape(16.dp)) {
+                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text("Kapanış / Sonrası Fotoğrafı", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    items(closingAfterPhotos) { photo ->
+                                                        AsyncImage(model = photo.localUri, contentDescription = "Sonrası Fotoğrafı", modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -808,50 +853,34 @@ fun ServiceDetailScreen(
                 }
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
                 ) {
                     Button(
                         onClick = { if (currentStep > 0) currentStep-- else onNavigateBack() },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
                         shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(if (currentStep > 0) "Geri" else "Çıkış / Geri Dön")
-                    }
+                    ) { Text(if (currentStep > 0) "Geri" else "Çıkış / Geri Dön") }
 
                     if (currentStep < 3) {
-                        val canProceed = when (currentStep) {
-                            0 -> true
-                            1 -> service.status != ServiceStatus.BEKLIYOR && !isRejected
-                            2 -> service.status == ServiceStatus.TAMAMLANDI
-                            else -> false
-                        }
+                        // "Devam Et" kuralı da maxAllowedStep'e bağlandı
+                        val canProceed = currentStep < maxAllowedStep
                         Button(
                             onClick = {
-                                if (canProceed) currentStep++ else {
-                                    coroutineScope.launch { snackbarHostState.showSnackbar("Lütfen önce mevcut aşamayı tamamlayın.") }
-                                }
+                                if (canProceed) currentStep++
+                                else coroutineScope.launch { snackbarHostState.showSnackbar("Lütfen önce mevcut aşamadaki işlemleri tamamlayın.") }
                             },
                             shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Devam Et")
-                        }
+                        ) { Text("Devam Et") }
                     } else {
                         Button(
-                            onClick = onNavigateBack,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("İşlemi Tamamla & Çık")
-                        }
+                            onClick = onNavigateBack, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary), shape = RoundedCornerShape(12.dp)
+                        ) { Text("Çık") }
                     }
                 }
             }
         }
     }
 
-    // Dialoglar (Assign, Status, Reject, Category, Note, Delete) aynı kalıyor...
     if (showAssignDialog) {
         var selectedPersonnelId by remember { mutableStateOf<Int?>(null) }
         AlertDialog(
@@ -866,32 +895,16 @@ fun ServiceDetailScreen(
                     LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
                         items(personnelList) { p ->
                             val isRejecter = isRejected && p.id == service.assignedPersonnelId
-                            Row(
-                                modifier = Modifier.fillMaxWidth().clickable { selectedPersonnelId = p.id }.padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            Row(modifier = Modifier.fillMaxWidth().clickable { selectedPersonnelId = p.id }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 RadioButton(selected = (selectedPersonnelId == p.id), onClick = { selectedPersonnelId = p.id })
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (isRejecter) "${p.fullName} (Reddetti)" else p.fullName,
-                                    color = if (isRejecter) MaterialTheme.colorScheme.error else Color.Unspecified
-                                )
+                                Text(text = if (isRejecter) "${p.fullName} (Reddetti)" else p.fullName, color = if (isRejecter) MaterialTheme.colorScheme.error else Color.Unspecified)
                             }
                         }
                     }
                 }
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (selectedPersonnelId != null) {
-                            viewModel.reassignService(service.id, selectedPersonnelId, null)
-                        }
-                        showAssignDialog = false
-                    },
-                    enabled = selectedPersonnelId != null
-                ) { Text("Ata / Kaydet") }
-            },
+            confirmButton = { Button(onClick = { if (selectedPersonnelId != null) { viewModel.reassignService(service.id, selectedPersonnelId, null) }; showAssignDialog = false }, enabled = selectedPersonnelId != null) { Text("Ata / Kaydet") } },
             dismissButton = { TextButton(onClick = { showAssignDialog = false }) { Text("İptal") } }
         )
     }
@@ -913,11 +926,7 @@ fun ServiceDetailScreen(
                     }
                 }
             },
-            confirmButton = {
-                Button(onClick = { viewModel.updateStatus(service.id, selectedStatus); showStatusDialog = false }) {
-                    Text("Güncelle")
-                }
-            },
+            confirmButton = { Button(onClick = { viewModel.updateStatus(service.id, selectedStatus); showStatusDialog = false }) { Text("Güncelle") } },
             dismissButton = { TextButton(onClick = { showStatusDialog = false }) { Text("İptal") } }
         )
     }
@@ -927,27 +936,13 @@ fun ServiceDetailScreen(
             onDismissRequest = { showRejectDialog = false },
             title = { Text("İş Emrini Reddet") },
             text = {
-                OutlinedTextField(
-                    value = rejectionReasonText,
-                    onValueChange = { rejectionReasonText = it; if (it.isNotBlank()) rejectError = "" },
-                    label = { Text("Red Nedeni (Zorunlu)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = rejectError.isNotEmpty(),
-                    minLines = 3
-                )
+                OutlinedTextField(value = rejectionReasonText, onValueChange = { rejectionReasonText = it; if (it.isNotBlank()) rejectError = "" }, label = { Text("Red Nedeni (Zorunlu)") }, modifier = Modifier.fillMaxWidth(), isError = rejectError.isNotEmpty(), minLines = 3)
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        if (rejectionReasonText.isBlank()) {
-                            rejectError = "Red nedeni boş bırakılamaz."
-                        } else {
-                            showRejectDialog = false
-                            viewModel.rejectService(service.id, rejectionReasonText.trim(), personnelId!!)
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) { Text("Reddet Onayla") }
+                Button(onClick = {
+                    if (rejectionReasonText.isBlank()) rejectError = "Red nedeni boş bırakılamaz."
+                    else { showRejectDialog = false; viewModel.rejectService(service.id, rejectionReasonText.trim(), personnelId!!) }
+                }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Reddet Onayla") }
             },
             dismissButton = { TextButton(onClick = { showRejectDialog = false }) { Text("İptal") } }
         )
@@ -960,10 +955,7 @@ fun ServiceDetailScreen(
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     PhotoCategory.values().forEach { category ->
-                        TextButton(
-                            onClick = { pendingCategory = category.name; showCategoryDialog = false; onNavigateToCamera() },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text(category.name, textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth()) }
+                        TextButton(onClick = { pendingCategory = category.name; showCategoryDialog = false; onNavigateToCamera() }, modifier = Modifier.fillMaxWidth()) { Text(category.name, textAlign = TextAlign.Start, modifier = Modifier.fillMaxWidth()) }
                     }
                 }
             },
@@ -975,16 +967,10 @@ fun ServiceDetailScreen(
         AlertDialog(
             onDismissRequest = { showAddNoteDialog = false },
             title = { Text("Servis Notu Ekle") },
-            text = {
-                OutlinedTextField(value = newNoteText, onValueChange = { newNoteText = it }, placeholder = { Text("Notunuz...") }, modifier = Modifier.fillMaxWidth())
-            },
+            text = { OutlinedTextField(value = newNoteText, onValueChange = { newNoteText = it }, placeholder = { Text("Notunuz...") }, modifier = Modifier.fillMaxWidth()) },
             confirmButton = {
                 Button(onClick = {
-                    if (newNoteText.isNotBlank() && personnelId != null) {
-                        viewModel.addServiceNote(ServiceNote(serviceRecordId = service.id, personnelId = personnelId, note = newNoteText.trim(), createdAt = System.currentTimeMillis()))
-                        showAddNoteDialog = false
-                        newNoteText = ""
-                    }
+                    if (newNoteText.isNotBlank() && personnelId != null) { viewModel.addServiceNote(ServiceNote(serviceRecordId = service.id, personnelId = personnelId, note = newNoteText.trim(), createdAt = System.currentTimeMillis())); showAddNoteDialog = false; newNoteText = "" }
                 }) { Text("Kaydet") }
             },
             dismissButton = { TextButton(onClick = { showAddNoteDialog = false }) { Text("İptal") } }
@@ -996,9 +982,7 @@ fun ServiceDetailScreen(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Sil") },
             text = { Text("Silmek istediğinize emin misiniz?") },
-            confirmButton = {
-                Button(onClick = { viewModel.deleteRecord(service); showDeleteDialog = false; onNavigateBack() }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Sil") }
-            },
+            confirmButton = { Button(onClick = { viewModel.deleteRecord(service); showDeleteDialog = false; onNavigateBack() }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Sil") } },
             dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("İptal") } }
         )
     }
@@ -1006,10 +990,7 @@ fun ServiceDetailScreen(
 
 @Composable
 fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.width(8.dp))
         Text(text = "$label: ", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1018,73 +999,11 @@ fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String
 }
 
 @Composable
-fun ServiceHistoryTimelineSection(historyList: List<Map<String, Any>>) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("İşlem Geçmişi", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            HorizontalDivider()
-
-            if (historyList.isEmpty()) {
-                Text("Henüz işlem geçmişi bulunmuyor.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
-                val sortedHistory = historyList.sortedBy { (it["timestamp"] as? Long) ?: 0L }
-                sortedHistory.forEach { history ->
-                    val title = history["title"] as? String ?: "İşlem"
-                    val description = history["description"] as? String ?: ""
-                    val performedByName = history["performedByName"] as? String ?: "Sistem"
-                    val performedByRole = history["performedByRole"] as? String ?: ""
-                    val timestamp = history["timestamp"] as? Long ?: 0L
-
-                    val formattedDate = if (timestamp > 0) {
-                        android.text.format.DateFormat.format("dd.MM.yyyy HH:mm", java.util.Date(timestamp)).toString()
-                    } else ""
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(20.dp)) {
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(10.dp)
-                            ) {}
-                            Box(modifier = Modifier.width(2.dp).height(35.dp).background(MaterialTheme.colorScheme.outlineVariant))
-                        }
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                            if (description.isNotBlank()) {
-                                Text(text = description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(text = "$performedByName ($performedByRole)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
-                                if (formattedDate.isNotBlank()) {
-                                    Text(text = "• $formattedDate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun StepIndicator(stepNumber: Int, title: String, actualStep: Int, selectedStep: Int, onClick: () -> Unit) {
     val isCompleted = actualStep != -1 && stepNumber - 1 < actualStep
     val isCurrent = actualStep != -1 && stepNumber - 1 == selectedStep
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
-    ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onClick)) {
         Surface(
             shape = RoundedCornerShape(50),
             color = when {
@@ -1095,20 +1014,10 @@ fun StepIndicator(stepNumber: Int, title: String, actualStep: Int, selectedStep:
             modifier = Modifier.size(28.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = if (isCompleted) "✓" else "$stepNumber",
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Text(text = if (isCompleted) "✓" else "$stepNumber", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             }
         }
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-            color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Text(text = title, style = MaterialTheme.typography.labelSmall, fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal, color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

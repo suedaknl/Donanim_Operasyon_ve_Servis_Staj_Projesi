@@ -18,7 +18,6 @@ class FirestoreServiceDataSource(
         return try {
             if (firestoreId.isBlank()) return Result.failure(IllegalArgumentException("Firestore ID boş."))
 
-            // DÜZELTME: Dosya yolundaki bozuk "file:/" tekrarları temizlendi, güvenli URI oluşturuldu
             val cleanPath = localUriString.replace("file://", "").replace("file:", "")
             val uri = if (localUriString.startsWith("content://")) {
                 android.net.Uri.parse(localUriString)
@@ -50,7 +49,6 @@ class FirestoreServiceDataSource(
         return try {
             if (firestoreId.isBlank()) return Result.failure(IllegalArgumentException("Firestore ID boş."))
 
-            // DÜZELTME: İmza dosya yolu temizlenip güvenli URI'ye çevrildi
             val cleanPath = localUriString.replace("file://", "").replace("file:", "")
             val uri = if (localUriString.startsWith("content://")) {
                 android.net.Uri.parse(localUriString)
@@ -145,7 +143,9 @@ class FirestoreServiceDataSource(
                 "plannedDate" to record.plannedDate,
                 "assignedPersonnelUid" to record.assignedPersonnelUid,
                 "firestoreId" to record.firestoreId,
-                "rejectionReason" to record.rejectionReason
+                "rejectionReason" to record.rejectionReason,
+                "latitude" to record.latitude,   // YENİ EKLENDİ
+                "longitude" to record.longitude  // YENİ EKLENDİ
             )
 
             if (!record.firestoreId.isNullOrEmpty()) {
@@ -185,7 +185,9 @@ class FirestoreServiceDataSource(
                     plannedDate = document.getString("plannedDate"),
                     firestoreId = document.id,
                     assignedPersonnelUid = document.getString("assignedPersonnelUid"),
-                    rejectionReason = document.getString("rejectionReason")
+                    rejectionReason = document.getString("rejectionReason"),
+                    latitude = document.getDouble("latitude"),   // YENİ EKLENDİ
+                    longitude = document.getDouble("longitude")  // YENİ EKLENDİ
                 )
                 servicesList.add(service)
             }
@@ -215,7 +217,9 @@ class FirestoreServiceDataSource(
                 "plannedDate" to record.plannedDate,
                 "assignedPersonnelUid" to record.assignedPersonnelUid,
                 "firestoreId" to firestoreId,
-                "rejectionReason" to record.rejectionReason
+                "rejectionReason" to record.rejectionReason,
+                "latitude" to record.latitude,   // YENİ EKLENDİ
+                "longitude" to record.longitude  // YENİ EKLENDİ
             )
 
             collection.document(firestoreId).set(serviceMap).await()
@@ -360,7 +364,9 @@ class FirestoreServiceDataSource(
                     plannedDate = document.getString("plannedDate"),
                     firestoreId = document.id,
                     assignedPersonnelUid = document.getString("assignedPersonnelUid"),
-                    rejectionReason = document.getString("rejectionReason")
+                    rejectionReason = document.getString("rejectionReason"),
+                    latitude = document.getDouble("latitude"),   // YENİ EKLENDİ
+                    longitude = document.getDouble("longitude")  // YENİ EKLENDİ
                 )
                 servicesList.add(service)
             }

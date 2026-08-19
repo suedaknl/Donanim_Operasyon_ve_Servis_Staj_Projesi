@@ -473,7 +473,28 @@ class ServiceRepository(
             Result.failure(e)
         }
     }
+    // ServiceRepository.kt içerisine eklenecek YENİ fonksiyon:
+    suspend fun verifyAndStartServiceWork(recordId: Int, personnelId: Int, distance: Float) {
+        val record = serviceDao.getServiceById(recordId) ?: return
 
+        // Sadece iş durumu YOLDA ise doğrulama yap (History'ye iki kez yazılmasını engeller)
+        if (record.status == com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus.YOLDA) {
+            val firestoreId = record.firestoreId
+            if (!firestoreId.isNullOrBlank()) {
+                // 1. History'ye "Konum Doğrulandı" logu at
+                recordHistory(
+                    firestoreId = firestoreId,
+                    eventType = "LOCATION_VERIFIED",
+                    title = "İş Konumu Doğrulandı",
+                    description = "Personel iş noktasına ${distance.toInt()} m uzaklıkta.",
+                    status = com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus.ISLEME_BASLANDI,
+                    performedByRole = "Personel"
+                )
+            }
+            // 2. Normal "İşleme Başla" durumuna geçir
+            updateStatus(recordId, com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus.ISLEME_BASLANDI)
+        }
+    }
     suspend fun syncServicesFromFirestore(
         personnelUid: String,
         localPersonnelId: Int

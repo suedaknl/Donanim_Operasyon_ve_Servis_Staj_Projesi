@@ -79,3 +79,58 @@ fun ServiceHistoryScreen(
         }
     }
 }
+@Composable
+fun ServiceHistoryTimelineSection(historyList: List<Map<String, Any>>) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (historyList.isEmpty()) {
+                Text("Henüz işlem geçmişi bulunmuyor.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                val sortedHistory = historyList.sortedBy { (it["timestamp"] as? Long) ?: 0L }
+                sortedHistory.forEach { history ->
+                    val title = history["title"] as? String ?: "İşlem"
+                    val description = history["description"] as? String ?: ""
+                    val performedByName = history["performedByName"] as? String ?: "Sistem"
+                    val performedByRole = history["performedByRole"] as? String ?: ""
+                    val timestamp = history["timestamp"] as? Long ?: 0L
+
+                    val formattedDate = if (timestamp > 0) {
+                        android.text.format.DateFormat.format("dd.MM.yyyy HH:mm", java.util.Date(timestamp)).toString()
+                    } else ""
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(20.dp)) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(10.dp)
+                            ) {}
+                            Box(modifier = Modifier.width(2.dp).height(35.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            if (description.isNotBlank()) {
+                                Text(text = description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(text = "$performedByName ($performedByRole)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                                if (formattedDate.isNotBlank()) {
+                                    Text(text = "• $formattedDate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

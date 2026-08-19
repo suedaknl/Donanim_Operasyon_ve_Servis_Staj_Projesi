@@ -47,6 +47,15 @@ class PersonnelRepository(private val personnelDao: PersonnelDao) {
         return firestoreDataSource.getPersonnel(uid)
     }
 
+    suspend fun updateLocation(uid: String, lat: Double, lon: Double) {
+        firestoreDataSource.updatePersonnelLocation(uid, lat, lon)
+    }
+
+    // --- YENİ EKLENEN FONKSİYON: Admin Haritası İçin Canlı Konumları Çekme ---
+    suspend fun getLivePersonnelLocations(): Result<List<Map<String, Any>>> {
+        return firestoreDataSource.getPersonnelLocations()
+    }
+
     // --- PERSONEL OLUŞTURMA: FIRESTORE VE ROOM SENKRONİZASYONU ---
     suspend fun addPersonnelWithFirebaseSync(personnel: Personnel): Result<Unit> {
         return try {

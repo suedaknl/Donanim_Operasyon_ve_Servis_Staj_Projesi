@@ -46,7 +46,7 @@ fun StandaloneUserFormScreen(
 ) {
     val statusOptions = listOf("Hepsi") + ServiceStatus.all
     val priorityOptions = listOf("Hepsi", "Düşük", "Normal", "Yüksek", "Acil")
-    val tabs = listOf("Tümü", "Atanmamış", "Atanan", "Devam Eden", "Tamamlanan")
+    val tabs = listOf("Tümü", "Atanmamış", "Atanan", "Yolda", "İşlemde", "Tamamlanan")
 
     var showFilterSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -55,26 +55,29 @@ fun StandaloneUserFormScreen(
         serviceViewModel.syncAdminData()
     }
 
-    // DİKKAT: Üstteki kafa karıştırıcı TopAppBar ve çakışan FAB bu ekrandan tamamen temizlendi.
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
+            val safeTabIndex = kotlin.math.max(0, tabs.indexOf(selectedTab))
+
+            // KRİTİK ÇÖZÜM 1: ScrollableTabRow'a belirli bir yükseklik verildi
             ScrollableTabRow(
-                selectedTabIndex = tabs.indexOf(selectedTab),
+                selectedTabIndex = safeTabIndex,
                 edgePadding = 8.dp,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
-                tabs.forEach { tab ->
+                tabs.forEachIndexed { index, tab ->
                     Tab(
-                        selected = selectedTab == tab,
+                        selected = safeTabIndex == index,
                         onClick = { onTabSelected(tab) },
-                        text = { Text(tab, fontWeight = if (selectedTab == tab) FontWeight.Bold else FontWeight.Normal) }
+                        text = { Text(tab, fontWeight = if (safeTabIndex == index) FontWeight.Bold else FontWeight.Normal) }
                     )
                 }
             }
@@ -119,9 +122,11 @@ fun StandaloneUserFormScreen(
             HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
 
             if (serviceList.isEmpty()) {
+                // KRİTİK ÇÖZÜM 2: Box'a fillMaxSize() yerine weight(1f) verildi
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .weight(1f)
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -137,9 +142,11 @@ fun StandaloneUserFormScreen(
                     )
                 }
             } else {
+                // KRİTİK ÇÖZÜM 3: LazyColumn'a fillMaxSize() yerine weight(1f) verildi
                 LazyColumn(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .weight(1f)
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 90.dp)

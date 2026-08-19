@@ -4,6 +4,7 @@ plugins {
     id("com.google.devtools.ksp")
     id("com.google.gms.google-services")
 }
+
 android {
     namespace = "com.example.donanim_operasyon_ve_servis_staj_projesi"
     compileSdk = 36
@@ -16,6 +17,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // DOĞRU YER BURASI: API Key'i local.properties'den okuyup Manifest'e aktarıyoruz
+        val mapsApiKey = project.findProperty("MAPS_API_KEY") as? String ?: ""
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     buildTypes {
@@ -53,21 +58,25 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.7.7")
+
     // Coil - Modern resim yükleme kütüphanesi
     implementation("io.coil-kt:coil-compose:2.6.0")
-    // Firebase BoM (Tüm Firebase paketlerinin sürümlerini otomatik uyumlu tutar)
+
+    // Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:32.8.0"))
-
-    // Firebase Auth (Güncel kütüphane, -ktx DEĞİL)
     implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-storage-ktx")
 
-    // Firebase task'lerini Coroutine ile (await) temiz bir şekilde kullanabilmek için
+    // Firebase task'lerini Coroutine ile kullanabilmek için
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
-    // Firestore dependency (BoM kullanıldığı için versiyonsuz)
-    implementation("com.google.firebase:firebase-firestore")
+    // Konum ve Harita Kütüphaneleri
+    implementation("com.google.android.gms:play-services-location:21.2.0")
+    implementation("com.google.maps.android:maps-compose:2.11.4")
+    implementation("com.google.android.gms:play-services-maps:18.1.0")
 
-
+    // Test Kütüphaneleri
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
@@ -76,17 +85,16 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
+    // Room
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
-    // CameraX Dependencies
-    val cameraxVersion = "1.3.1" // Mevcut projene uygun, stabil bir sürümdür.
+    // CameraX
+    val cameraxVersion = "1.3.1"
     implementation("androidx.camera:camera-core:$cameraxVersion")
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
-    // Firebase Storage dependency'sini ekle
-    implementation("com.google.firebase:firebase-storage-ktx")
 }
