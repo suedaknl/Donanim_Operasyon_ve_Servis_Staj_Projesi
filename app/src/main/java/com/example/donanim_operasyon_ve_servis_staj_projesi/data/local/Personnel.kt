@@ -14,5 +14,8 @@ data class Personnel(
     val isActive: Boolean = true,
     val email: String = "",
     val firebaseUid: String? = null,
-    val gender: String = "ERKEK" // Yeni eklenen alan (Varsayılan güvenli değer)
+    val gender: String = "ERKEK",
+    val currentLatitude: Double? = null,
+    val currentLongitude: Double? = null,
+    val lastLocationUpdate: Long? = null
 )
