@@ -232,185 +232,208 @@ fun HomeScreen(
             onDismissRequest = { showFilterSheet = false },
             sheetState = sheetState
         ) {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .fillMaxHeight(0.85f)
+                    .padding(horizontal = 24.dp)
             ) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Gelişmiş Filtreler", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        TextButton(onClick = {
-                            serviceViewModel.clearAllAdvancedFilters()
-                            showFilterSheet = false
-                        }) {
-                            Text("Filtreleri Temizle", color = MaterialTheme.colorScheme.error)
-                        }
+                // Üst Sabit Alan
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Gelişmiş Filtreler", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = {
+                        serviceViewModel.clearAllAdvancedFilters()
+                        showFilterSheet = false
+                    }) {
+                        Text("Filtreleri Temizle", color = MaterialTheme.colorScheme.error)
                     }
                 }
 
-                item {
-                    Text("Sıralama", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("En yeni", "En eski", "Önceliği yüksek olan").forEach { sortOpt ->
-                            FilterChip(
-                                selected = tempSortOption == sortOpt,
-                                onClick = { tempSortOption = sortOpt },
-                                label = { Text(sortOpt) }
-                            )
+                HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+
+                // Orta Scrollable Alan
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp)
+                ) {
+                    item {
+                        Text("Sıralama", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("En yeni", "En eski", "Önceliği yüksek olan").forEach { sortOpt ->
+                                FilterChip(
+                                    selected = tempSortOption == sortOpt,
+                                    onClick = { tempSortOption = sortOpt },
+                                    label = { Text(sortOpt) }
+                                )
+                            }
                         }
                     }
-                }
 
-                item {
-                    Text("Durumlar", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    val availableStatuses = listOf(ServiceStatus.BEKLIYOR, ServiceStatus.YOLDA, ServiceStatus.ISLEME_BASLANDI, ServiceStatus.PARCA_BEKLENIYOR, ServiceStatus.TAMAMLANDI, ServiceStatus.IPTAL)
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        availableStatuses.chunked(3).forEach { rowStatuses ->
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                rowStatuses.forEach { st ->
-                                    FilterChip(
-                                        selected = tempSelectedStatuses.contains(st),
-                                        onClick = {
-                                            tempSelectedStatuses = if (tempSelectedStatuses.contains(st)) tempSelectedStatuses - st else tempSelectedStatuses + st
-                                        },
-                                        label = { Text(st, style = MaterialTheme.typography.labelSmall) }
-                                    )
+                    item {
+                        Text("Durumlar", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        val availableStatuses = listOf(ServiceStatus.BEKLIYOR, ServiceStatus.YOLDA, ServiceStatus.ISLEME_BASLANDI, ServiceStatus.PARCA_BEKLENIYOR, ServiceStatus.TAMAMLANDI, ServiceStatus.IPTAL)
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            availableStatuses.chunked(3).forEach { rowStatuses ->
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    rowStatuses.forEach { st ->
+                                        FilterChip(
+                                            selected = tempSelectedStatuses.contains(st),
+                                            onClick = {
+                                                tempSelectedStatuses = if (tempSelectedStatuses.contains(st)) tempSelectedStatuses - st else tempSelectedStatuses + st
+                                            },
+                                            label = { Text(st, style = MaterialTheme.typography.labelSmall) }
+                                        )
+                                    }
                                 }
+                            }
+                        }
+                    }
+
+                    item {
+                        Text("Öncelik", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("Düşük", "Normal", "Yüksek", "Acil").forEach { pri ->
+                                FilterChip(
+                                    selected = tempSelectedPriorities.contains(pri),
+                                    onClick = {
+                                        tempSelectedPriorities = if (tempSelectedPriorities.contains(pri)) tempSelectedPriorities - pri else tempSelectedPriorities + pri
+                                    },
+                                    label = { Text(pri) }
+                                )
+                            }
+                        }
+                    }
+
+                    item {
+                        Text("Atama Durumu", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("Tümü", "Atanmış", "Atanmamış").forEach { assignOpt ->
+                                FilterChip(
+                                    selected = tempAssignmentStatus == assignOpt,
+                                    onClick = { tempAssignmentStatus = assignOpt },
+                                    label = { Text(assignOpt) }
+                                )
+                            }
+                        }
+                    }
+
+                    item {
+                        Text("Atanan Personel", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        val selectedPersonnelLabel = if (tempSelectedPersonnel == null || tempSelectedPersonnel == "Tümü") {
+                            "Tüm Personeller"
+                        } else {
+                            personnelList.find { it.id.toString() == tempSelectedPersonnel || it.firebaseUid == tempSelectedPersonnel }?.fullName ?: tempSelectedPersonnel!!
+                        }
+                        OutlinedButton(
+                            onClick = { activeDialog = "personnel" },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text(selectedPersonnelLabel)
+                                Icon(Icons.Default.ArrowDropDown, null)
+                            }
+                        }
+                    }
+
+                    item {
+                        Text("Cihaz Türü", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        val selectedDeviceLabel = tempSelectedDeviceType?.takeIf { it.isNotBlank() } ?: "Tüm Cihaz Türleri"
+                        OutlinedButton(
+                            onClick = { activeDialog = "device" },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text(selectedDeviceLabel)
+                                Icon(Icons.Default.ArrowDropDown, null)
+                            }
+                        }
+                    }
+
+                    item {
+                        Text("Firma", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        val selectedCompanyLabel = tempSelectedCompany?.takeIf { it.isNotBlank() && it != "Tümü" } ?: "Tüm Firmalar"
+                        OutlinedButton(
+                            onClick = { activeDialog = "company" },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text(selectedCompanyLabel)
+                                Icon(Icons.Default.ArrowDropDown, null)
+                            }
+                        }
+                    }
+
+                    item {
+                        Text("Lokasyon", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        val selectedLocationLabel = tempSelectedLocation?.takeIf { it.isNotBlank() && it != "Tümü" } ?: "Tüm Lokasyonlar"
+                        OutlinedButton(
+                            onClick = { activeDialog = "location" },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text(selectedLocationLabel)
+                                Icon(Icons.Default.ArrowDropDown, null)
                             }
                         }
                     }
                 }
 
-                item {
-                    Text("Öncelik", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Düşük", "Normal", "Yüksek", "Acil").forEach { pri ->
-                            FilterChip(
-                                selected = tempSelectedPriorities.contains(pri),
-                                onClick = {
-                                    tempSelectedPriorities = if (tempSelectedPriorities.contains(pri)) tempSelectedPriorities - pri else tempSelectedPriorities + pri
-                                },
-                                label = { Text(pri) }
-                            )
-                        }
-                    }
-                }
-
-                item {
-                    Text("Atama Durumu", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Tümü", "Atanmış", "Atanmamış").forEach { assignOpt ->
-                            FilterChip(
-                                selected = tempAssignmentStatus == assignOpt,
-                                onClick = { tempAssignmentStatus = assignOpt },
-                                label = { Text(assignOpt) }
-                            )
-                        }
-                    }
-                }
-
-                item {
-                    Text("Atanan Personel", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    val selectedPersonnelLabel = if (tempSelectedPersonnel == null || tempSelectedPersonnel == "Tümü") {
-                        "Tüm Personeller"
-                    } else {
-                        personnelList.find { it.id.toString() == tempSelectedPersonnel || it.firebaseUid == tempSelectedPersonnel }?.fullName ?: tempSelectedPersonnel!!
-                    }
-                    OutlinedButton(
-                        onClick = { activeDialog = "personnel" },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                // Alt Sabit Alan
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surface
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp)
                     ) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(selectedPersonnelLabel)
-                            Icon(Icons.Default.ArrowDropDown, null)
+                        Button(
+                            onClick = {
+                                serviceViewModel.updateAdvancedFilters(
+                                    dateFilter = "Tümü",
+                                    start = null,
+                                    end = null,
+                                    statuses = tempSelectedStatuses,
+                                    priorities = tempSelectedPriorities,
+                                    deviceTypes = if (tempSelectedDeviceType.isNullOrBlank()) emptySet() else setOf(tempSelectedDeviceType!!),
+                                    personnel = tempSelectedPersonnel,
+                                    company = tempSelectedCompany,
+                                    location = tempSelectedLocation,
+                                    assignment = tempAssignmentStatus,
+                                    sort = tempSortOption
+                                )
+                                showFilterSheet = false
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Filtreleri Uygula", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
                     }
-                }
-
-                item {
-                    Text("Cihaz Türü", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    val selectedDeviceLabel = tempSelectedDeviceType?.takeIf { it.isNotBlank() } ?: "Tüm Cihaz Türleri"
-                    OutlinedButton(
-                        onClick = { activeDialog = "device" },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(selectedDeviceLabel)
-                            Icon(Icons.Default.ArrowDropDown, null)
-                        }
-                    }
-                }
-
-                item {
-                    Text("Firma", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    val selectedCompanyLabel = tempSelectedCompany?.takeIf { it.isNotBlank() && it != "Tümü" } ?: "Tüm Firmalar"
-                    OutlinedButton(
-                        onClick = { activeDialog = "company" },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(selectedCompanyLabel)
-                            Icon(Icons.Default.ArrowDropDown, null)
-                        }
-                    }
-                }
-
-                item {
-                    Text("Lokasyon", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    val selectedLocationLabel = tempSelectedLocation?.takeIf { it.isNotBlank() && it != "Tümü" } ?: "Tüm Lokasyonlar"
-                    OutlinedButton(
-                        onClick = { activeDialog = "location" },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(selectedLocationLabel)
-                            Icon(Icons.Default.ArrowDropDown, null)
-                        }
-                    }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = {
-                            serviceViewModel.updateAdvancedFilters(
-                                dateFilter = "Tümü",
-                                start = null,
-                                end = null,
-                                statuses = tempSelectedStatuses,
-                                priorities = tempSelectedPriorities,
-                                deviceTypes = if (tempSelectedDeviceType.isNullOrBlank()) emptySet() else setOf(tempSelectedDeviceType!!),
-                                personnel = tempSelectedPersonnel,
-                                company = tempSelectedCompany,
-                                location = tempSelectedLocation,
-                                assignment = tempAssignmentStatus,
-                                sort = tempSortOption
-                            )
-                            showFilterSheet = false
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Filtreleri Uygula")
-                    }
-                    Spacer(modifier = Modifier.height(32.dp))
                 }
             }
         }

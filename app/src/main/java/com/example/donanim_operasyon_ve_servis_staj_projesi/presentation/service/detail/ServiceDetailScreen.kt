@@ -444,15 +444,53 @@ fun ServiceDetailScreen(
                                 Text("İş Sonucu & Onay", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
                                 if (isCompleted) {
-                                    ElevatedCard(
+                                    // SADELEŞTİRİLMİŞ SERVİS RAPORU KARTI
+                                    Card(
                                         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                                         shape = RoundedCornerShape(16.dp),
-                                        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                                     ) {
-                                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Text("Kurumsal Servis Raporu (PDF)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                            Text("Tamamlanan bu iş emri için A4 formatında servis raporu oluşturabilir ve paylaşabilirsiniz.", style = MaterialTheme.typography.bodySmall)
-                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                                    modifier = Modifier.size(40.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Icon(
+                                                            Icons.Default.PictureAsPdf,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            modifier = Modifier.size(22.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        "Servis Raporu",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        "Tamamlanan iş emrinin servis raporunu görüntüleyebilir veya paylaşabilirsiniz.",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
                                                 Button(
                                                     onClick = {
                                                         val pdfFile = ServiceReportPdfGenerator.generatePdf(
@@ -476,11 +514,11 @@ fun ServiceDetailScreen(
                                                         }
                                                     },
                                                     modifier = Modifier.weight(1f),
-                                                    shape = RoundedCornerShape(8.dp)
+                                                    shape = RoundedCornerShape(12.dp)
                                                 ) {
                                                     Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
                                                     Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Oluştur & Görüntüle")
+                                                    Text("PDF Görüntüle")
                                                 }
                                                 OutlinedButton(
                                                     onClick = {
@@ -505,7 +543,7 @@ fun ServiceDetailScreen(
                                                         }
                                                     },
                                                     modifier = Modifier.weight(1f),
-                                                    shape = RoundedCornerShape(8.dp)
+                                                    shape = RoundedCornerShape(12.dp)
                                                 ) {
                                                     Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                                                     Spacer(modifier = Modifier.width(4.dp))
