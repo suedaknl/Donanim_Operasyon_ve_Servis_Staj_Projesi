@@ -1,5 +1,6 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -392,7 +393,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                 "Atanmamış" -> record.assignedPersonnelId == null && record.assignedPersonnelUid.isNullOrBlank()
                 else -> true
             }
-
             val dateMatch = when (dateFilter) {
                 "Tümü" -> true
                 else -> true
