@@ -2,6 +2,7 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.servic
 
 import android.location.Geocoder
 import android.os.Build
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +25,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.Service
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -55,13 +57,25 @@ fun AddServiceScreen(
     var address by rememberSaveable { mutableStateOf("") }
     var plannedDate by rememberSaveable { mutableStateOf("") }
 
+    // DatePicker & TimePicker Dialog State'leri
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var tempSelectedDateMillis by remember { mutableStateOf<Long?>(null) }
+
+    val datePickerState = rememberDatePickerState()
+    val timePickerState = rememberTimePickerState(
+        initialHour = 12,
+        initialMinute = 0,
+        is24Hour = true
+    )
+
     var latitude by rememberSaveable { mutableStateOf<Double?>(null) }
     var longitude by rememberSaveable { mutableStateOf<Double?>(null) }
 
     var showError by remember { mutableStateOf(false) }
     var showLocationWarningDialog by remember { mutableStateOf(false) }
 
-    // Kiritk Düzeltme: Haritadan dönüldüğünde DB'den eski (boş) verilerin tekrar çekilip
+    // Kritik Düzeltme: Haritadan dönüldüğünde DB'den eski (boş) verilerin tekrar çekilip
     // kullanıcı seçimlerinin ezilmesini engellemek için kontrol flag'i
     var isInitialized by rememberSaveable { mutableStateOf(false) }
 
@@ -343,15 +357,34 @@ fun AddServiceScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            OutlinedTextField(
-                value = plannedDate,
-                onValueChange = { plannedDate = it },
-                label = { Text("Planlanan Ziyaret Tarihi / Saati") },
-                leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
+            // Planlanan Ziyaret Tarihi / Saati (Tıklanabilir, klavye girişi kapalı, görünüm aktif)
+            Box(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = plannedDate,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Planlanan Ziyaret Tarihi / Saati") },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.DateRange,
+                            contentDescription = "Tarih ve saat seç"
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable {
+                            showDatePicker = true
+                        }
+                )
+            }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
@@ -427,6 +460,72 @@ fun AddServiceScreen(
                 Text(if (isDuplicating) "Yeni İş Emri Oluştur" else "Kaydet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         }
+    }
+
+    // Material 3 DatePickerDialog
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            tempSelectedDateMillis = millis
+                            showDatePicker = false
+                            showTimePicker = true
+                        }
+                    }
+                ) {
+                    Text("İleri")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("İptal")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    // Material 3 TimePickerDialog
+    if (showTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            title = { Text("Planlanan Saat") },
+            text = {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    TimePicker(state = timePickerState)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showTimePicker = false
+                        tempSelectedDateMillis?.let { millis ->
+                            val calendar = Calendar.getInstance().apply {
+                                timeInMillis = millis
+                                set(Calendar.HOUR_OF_DAY, timePickerState.hour)
+                                set(Calendar.MINUTE, timePickerState.minute)
+                            }
+                            val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale("tr", "TR"))
+                            plannedDate = formatter.format(calendar.time)
+                        }
+                    }
+                ) {
+                    Text("Tamam")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) {
+                    Text("İptal")
+                }
+            }
+        )
     }
 
     if (showLocationWarningDialog) {
