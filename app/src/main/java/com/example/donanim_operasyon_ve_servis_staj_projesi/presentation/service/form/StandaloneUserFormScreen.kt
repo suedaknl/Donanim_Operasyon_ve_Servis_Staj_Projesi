@@ -51,6 +51,9 @@ fun StandaloneUserFormScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    var tempSelectedFilter by remember { mutableStateOf(selectedFilter) }
+    var tempSelectedPriority by remember { mutableStateOf(selectedPriority) }
+
     LaunchedEffect(Unit) {
         serviceViewModel.syncAdminData()
     }
@@ -64,7 +67,6 @@ fun StandaloneUserFormScreen(
         ) {
             val safeTabIndex = kotlin.math.max(0, tabs.indexOf(selectedTab))
 
-            // KRİTİK ÇÖZÜM 1: ScrollableTabRow'a belirli bir yükseklik verildi
             ScrollableTabRow(
                 selectedTabIndex = safeTabIndex,
                 edgePadding = 8.dp,
@@ -108,7 +110,11 @@ fun StandaloneUserFormScreen(
 
                 val isFilterActive = selectedFilter != "Hepsi" || selectedPriority != "Hepsi"
                 FilledIconButton(
-                    onClick = { showFilterSheet = true },
+                    onClick = {
+                        tempSelectedFilter = selectedFilter
+                        tempSelectedPriority = selectedPriority
+                        showFilterSheet = true
+                    },
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = if (isFilterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = if (isFilterActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -122,7 +128,6 @@ fun StandaloneUserFormScreen(
             HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
 
             if (serviceList.isEmpty()) {
-                // KRİTİK ÇÖZÜM 2: Box'a fillMaxSize() yerine weight(1f) verildi
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -142,7 +147,6 @@ fun StandaloneUserFormScreen(
                     )
                 }
             } else {
-                // KRİTİK ÇÖZÜM 3: LazyColumn'a fillMaxSize() yerine weight(1f) verildi
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -211,6 +215,122 @@ fun StandaloneUserFormScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showFilterSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showFilterSheet = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.75f)
+                    .padding(horizontal = 24.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Filtreler", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = {
+                        onClearFilters()
+                        showFilterSheet = false
+                    }) {
+                        Text("Filtreleri Temizle", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp)
+                ) {
+                    item {
+                        Text("Durum Filtresi", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            statusOptions.chunked(3).forEach { rowOpts ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    rowOpts.forEach { opt ->
+                                        FilterChip(
+                                            selected = tempSelectedFilter == opt,
+                                            onClick = { tempSelectedFilter = opt },
+                                            label = { Text(opt, style = MaterialTheme.typography.labelSmall) },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    // Eğer satırda 3'ten az eleman varsa boşluk doldurma (esnememesi için weight eklendi)
+                                    repeat(3 - rowOpts.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        Text("Öncelik Filtresi", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            priorityOptions.chunked(3).forEach { rowOpts ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    rowOpts.forEach { pri ->
+                                        FilterChip(
+                                            selected = tempSelectedPriority == pri,
+                                            onClick = { tempSelectedPriority = pri },
+                                            label = { Text(pri, style = MaterialTheme.typography.labelSmall) },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    repeat(3 - rowOpts.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surface
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                onFilterSelected(tempSelectedFilter)
+                                onPrioritySelected(tempSelectedPriority)
+                                showFilterSheet = false
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Filtreleri Uygula", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
