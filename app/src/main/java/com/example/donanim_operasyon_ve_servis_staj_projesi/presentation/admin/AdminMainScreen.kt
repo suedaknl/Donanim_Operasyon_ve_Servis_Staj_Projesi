@@ -32,7 +32,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.Service
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home.HomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.AdminMapScreen // YENİ EKLENDİ: Gerçek harita ekranı import edildi
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.AdminMapScreen
 import com.google.firebase.auth.FirebaseAuth
 import kotlin.math.roundToInt
 
@@ -58,11 +58,11 @@ fun AdminMainScreen(
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
 
-    // FAB'ın hareket edebileceği maksimum limitler (Scaffold slot'una göre relatif)
-    val minX = with(density) { -(configuration.screenWidthDp.dp - 80.dp).toPx() } // Sola maksimum
-    val maxX = 0f // Sağa maksimum (Zaten en sağda başlıyor)
-    val minY = with(density) { -(configuration.screenHeightDp.dp - 180.dp).toPx() } // Yukarı maksimum (Üst barı korur)
-    val maxY = 0f // Aşağı maksimum (Alt navigasyonun altına girmesini engeller)
+    // FAB'ın hareket edebileceği maksimum limitler
+    val minX = with(density) { -(configuration.screenWidthDp.dp - 80.dp).toPx() }
+    val maxX = 0f
+    val minY = with(density) { -(configuration.screenHeightDp.dp - 180.dp).toPx() }
+    val maxY = 0f
 
     Scaffold(
         bottomBar = {
@@ -110,57 +110,74 @@ fun AdminMainScreen(
                         .pointerInput(Unit) {
                             detectDragGestures { change, dragAmount ->
                                 change.consume()
-                                // FAB sınırlandırmaları uygulanıyor (CoerceIn)
                                 fabOffsetX = (fabOffsetX + dragAmount.x).coerceIn(minX, maxX)
                                 fabOffsetY = (fabOffsetY + dragAmount.y).coerceIn(minY, maxY)
                             }
                         }
                 ) {
-                    DropdownMenu(
-                        expanded = showFabMenu,
-                        onDismissRequest = { showFabMenu = false },
-                        modifier = Modifier.width(220.dp)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Yeni İş Emri Ekle", fontWeight = FontWeight.Medium) },
-                            leadingIcon = { Icon(Icons.Default.AddCircle, null, tint = MaterialTheme.colorScheme.primary) },
-                            onClick = {
-                                showFabMenu = false
-                                onNavigateToAddService()
-                            }
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("Personel Ekle", fontWeight = FontWeight.Medium) },
-                            leadingIcon = { Icon(Icons.Default.PersonAdd, null, tint = MaterialTheme.colorScheme.primary) },
-                            onClick = {
-                                showFabMenu = false
-                                onNavigateToAddPersonnel()
-                            }
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("AI Asistan (Yakında)", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.secondary) },
-                            leadingIcon = { Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.secondary) },
-                            onClick = {
-                                showFabMenu = false
-                                Toast.makeText(context, "Yapay zeka asistanı yakında hizmetinizde olacak.", Toast.LENGTH_SHORT).show()
-                            }
-                        )
-                    }
+                    if (selectedTab == 0) {
+                        // Sadece Ana Sayfa (Tab 0) için açılır menülü FAB
+                        DropdownMenu(
+                            expanded = showFabMenu,
+                            onDismissRequest = { showFabMenu = false },
+                            modifier = Modifier.width(220.dp)
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Yeni İş Emri Ekle", fontWeight = FontWeight.Medium) },
+                                leadingIcon = { Icon(Icons.Default.AddCircle, null, tint = MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    showFabMenu = false
+                                    onNavigateToAddService()
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Personel Ekle", fontWeight = FontWeight.Medium) },
+                                leadingIcon = { Icon(Icons.Default.PersonAdd, null, tint = MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    showFabMenu = false
+                                    onNavigateToAddPersonnel()
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("AI Asistan (Yakında)", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.secondary) },
+                                leadingIcon = { Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.secondary) },
+                                onClick = {
+                                    showFabMenu = false
+                                    Toast.makeText(context, "Yapay zeka asistanı yakında hizmetinizde olacak.", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
 
-                    FloatingActionButton(
-                        onClick = { showFabMenu = !showFabMenu },
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
-                            contentDescription = "Hızlı İşlem Menüsü",
-                            modifier = Modifier.size(28.dp)
-                        )
+                        FloatingActionButton(
+                            onClick = { showFabMenu = !showFabMenu },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            shape = RoundedCornerShape(16.dp),
+                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
+                                contentDescription = "Hızlı İşlem Menüsü",
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    } else if (selectedTab == 1) {
+                        // İş Emirleri (Tab 1) için menüsüz, doğrudan yeni iş emri ekleyen düz FAB
+                        FloatingActionButton(
+                            onClick = { onNavigateToAddService() },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            shape = RoundedCornerShape(16.dp),
+                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Yeni İş Emri Ekle",
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -173,10 +190,10 @@ fun AdminMainScreen(
                     personnelViewModel = personnelViewModel,
                     onCardClick = { statusTab ->
                         serviceViewModel.updateAdminSelectedStatusTab(statusTab)
-                        selectedTab = 1 // İş Emirleri sekmesine yönlendir
+                        selectedTab = 1
                     },
                     onPersonnelCardClick = {
-                        selectedTab = 2 // Personeller sekmesine yönlendir
+                        selectedTab = 2
                     }
                 )
 
@@ -208,12 +225,10 @@ fun AdminMainScreen(
                     )
                 }
 
-                // 3 NUMARALI SEKME ARTIK GERÇEK HARİTA EKRANI OLDU:
                 3 -> AdminMapScreen(
                     serviceViewModel = serviceViewModel,
                     personnelViewModel = personnelViewModel,
                     onNavigateToServiceDetail = { serviceId ->
-                        // Haritadan gelen ID ile mevcut ServiceRecord'u bulup detay ekranına yönlendiriyoruz
                         val targetService = serviceViewModel.serviceRecords.value.find { it.id == serviceId }
                         if (targetService != null) {
                             onServiceClick(targetService)
