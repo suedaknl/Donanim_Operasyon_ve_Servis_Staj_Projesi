@@ -29,7 +29,6 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.splash.
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModelFactory
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.camera.CameraScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.ClosingFormScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
@@ -60,9 +59,7 @@ fun AppNavigation() {
         )
     }
 
-    val serviceFactory = remember { ServiceViewModelFactory(serviceRepository) }
-
-    val sharedServiceViewModel: ServiceViewModel = viewModel(factory = serviceFactory)
+    val sharedServiceViewModel: ServiceViewModel = hiltViewModel()
     val sessionManager = remember { SessionManager(context) }
     val authRepository = remember { AuthRepository() }
 

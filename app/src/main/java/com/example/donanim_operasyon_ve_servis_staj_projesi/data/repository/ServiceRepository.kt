@@ -11,12 +11,13 @@ import kotlinx.coroutines.flow.Flow
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.remote.FirestoreServiceDataSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
-class ServiceRepository(
+class ServiceRepository @Inject constructor(
     private val serviceDao: ServiceDao,
-    private val personnelDao: PersonnelDao,
-    private val firestoreDataSource: FirestoreServiceDataSource = FirestoreServiceDataSource()
+    private val personnelDao: PersonnelDao
 ) {
+    private val firestoreDataSource = FirestoreServiceDataSource()
 
     suspend fun insertRecord(record: ServiceRecord) {
         val personnelUid = record.assignedPersonnelId?.let { personnelId ->

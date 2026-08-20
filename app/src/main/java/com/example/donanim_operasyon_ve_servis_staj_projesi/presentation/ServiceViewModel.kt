@@ -4,9 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.*
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
 import kotlinx.coroutines.Dispatchers
@@ -14,18 +12,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Locale
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class ServiceViewModelFactory(private val repository: ServiceRepository) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        if (modelClass.isAssignableFrom(ServiceViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ServiceViewModel(repository) as T
-        }
-        throw IllegalArgumentException("Bilinmeyen ViewModel sınıfı")
-    }
-}
-
-class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() {
+@HiltViewModel
+class ServiceViewModel @Inject constructor(
+    private val repository: ServiceRepository
+) : ViewModel() {
 
     // --- TEMEL STATE'LER ---
     private val _serviceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
