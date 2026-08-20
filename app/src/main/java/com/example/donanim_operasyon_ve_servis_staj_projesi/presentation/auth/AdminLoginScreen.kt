@@ -15,10 +15,10 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 
 @Composable
 fun AdminLoginScreen(
+    authRepository: AuthRepository,
     onLoginSuccess: () -> Unit
 ) {
     // Firebase Auth Repository ve Coroutine Scope
-    val authRepository = remember { AuthRepository() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }

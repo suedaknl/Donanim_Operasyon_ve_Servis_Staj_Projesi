@@ -22,12 +22,12 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 
 @Composable
 fun SplashScreen(
+    authRepository: AuthRepository,
     // DİKKAT: Artık yönlendirilecek rotayı (String) dışarı iletiyor
     onSplashFinished: (String) -> Unit
 ) {
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
-    val authRepository = remember { AuthRepository() }
 
     // Animasyonların tetikleyicisi olarak kullanılacak state
     var startAnimation by remember { mutableStateOf(false) }

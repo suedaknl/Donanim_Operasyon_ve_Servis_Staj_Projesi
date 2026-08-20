@@ -44,7 +44,9 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personn
 import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(
+    authRepository: AuthRepository
+) {
     val navController = rememberNavController()
 
     val context = LocalContext.current
@@ -52,12 +54,11 @@ fun AppNavigation() {
 
     val sharedServiceViewModel: ServiceViewModel = hiltViewModel()
     val sessionManager = remember { SessionManager(context) }
-    val authRepository = remember { AuthRepository() }
-
     NavHost(navController = navController, startDestination = "splash") {
 
         composable("splash") {
             SplashScreen(
+                authRepository = authRepository,
                 onSplashFinished = { destination ->
                     navController.navigate(destination) {
                         popUpTo("splash") { inclusive = true }
@@ -75,6 +76,7 @@ fun AppNavigation() {
 
         composable("admin_login") {
             AdminLoginScreen(
+                authRepository = authRepository,
                 onLoginSuccess = {
                     navController.navigate("home") {
                         popUpTo("welcome") { inclusive = true }
@@ -86,6 +88,7 @@ fun AppNavigation() {
         composable("personnel_login") {
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
             PersonnelLoginScreen(
+                authRepository = authRepository,
                 viewModel = personnelViewModel,
                 onLoginSuccess = { personnelId ->
                     navController.navigate("personnel_welcome/$personnelId") {

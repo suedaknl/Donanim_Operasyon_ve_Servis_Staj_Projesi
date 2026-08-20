@@ -16,13 +16,13 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelV
 
 @Composable
 fun PersonnelLoginScreen(
+    authRepository: AuthRepository,
     viewModel: PersonnelViewModel,
     onLoginSuccess: (Int) -> Unit,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
-    val authRepository = remember { AuthRepository() }
     val coroutineScope = rememberCoroutineScope()
 
     var email by remember { mutableStateOf(sessionManager.getLastUsername()) }

@@ -11,11 +11,18 @@ import androidx.compose.ui.Modifier
 import com.example.donanim_operasyon_ve_servis_staj_projesi.navigation.AppNavigation
 import com.example.donanim_operasyon_ve_servis_staj_projesi.ui.theme.Donanim_Operasyon_ve_Servis_Staj_ProjesiTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var authRepository: AuthRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
         setContent {
             Donanim_Operasyon_ve_Servis_Staj_ProjesiTheme {
@@ -24,7 +31,9 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     // Artık uygulamamız Navigasyon dosyası üzerinden başlıyor
-                    AppNavigation()
+                    AppNavigation(
+                        authRepository = authRepository
+                    )
                 }
             }
         }
