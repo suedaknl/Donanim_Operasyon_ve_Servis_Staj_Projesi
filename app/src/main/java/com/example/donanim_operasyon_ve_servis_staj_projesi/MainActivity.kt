@@ -10,7 +10,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.donanim_operasyon_ve_servis_staj_projesi.navigation.AppNavigation
 import com.example.donanim_operasyon_ve_servis_staj_projesi.ui.theme.Donanim_Operasyon_ve_Servis_Staj_ProjesiTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

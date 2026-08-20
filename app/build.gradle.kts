@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("com.google.gms.google-services")
+    id("com.google.dagger.hilt.android")
 }
 
 android {
@@ -70,6 +71,9 @@ dependencies {
 
     // Firebase task'lerini Coroutine ile kullanabilmek için
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+
+    implementation("com.google.dagger:hilt-android:2.51.1")
+    ksp("com.google.dagger:hilt-android-compiler:2.51.1")
 
     // Konum ve Harita Kütüphaneleri
     implementation("com.google.android.gms:play-services-location:21.2.0")
