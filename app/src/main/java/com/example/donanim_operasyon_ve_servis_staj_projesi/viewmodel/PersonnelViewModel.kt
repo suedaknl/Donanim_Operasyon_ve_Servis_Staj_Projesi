@@ -16,7 +16,6 @@ import kotlinx.coroutines.withContext
 
 class PersonnelViewModel(private val repository: PersonnelRepository) : ViewModel() {
 
-    // Firebase servislerini tanımlıyoruz
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
 
@@ -26,6 +25,112 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery = _searchQuery.asStateFlow()
+
+    private val _selectedRole = MutableStateFlow("Tümü")
+    val selectedRole = _selectedRole.asStateFlow()
+
+    private val _selectedStatus = MutableStateFlow("Tümü")
+    val selectedStatus = _selectedStatus.asStateFlow()
+
+    private val _sortOption = MutableStateFlow("İsim (A-Z)")
+    val sortOption = _sortOption.asStateFlow()
+
+    private val _currentPage = MutableStateFlow(1)
+    val currentPage: StateFlow<Int> = _currentPage
+    val pageSize = 4
+
+    val availableRoles: StateFlow<List<String>> =
+        personnelList
+            .map { list ->
+                listOf("Tümü") +
+                        list.map { it.role }
+                            .filter { it.isNotBlank() }
+                            .distinct()
+                            .sorted()
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5000),
+                listOf("Tümü")
+            )
+
+    val activeFilterCount: StateFlow<Int> =
+        combine(
+            _selectedRole,
+            _selectedStatus
+        ) { role, status ->
+            var count = 0
+            if (role != "Tümü") count++
+            if (status != "Tümü") count++
+            count
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            0
+        )
+
+    val filteredPersonnelList: StateFlow<List<Personnel>> =
+        combine(
+            personnelList,
+            _searchQuery,
+            _selectedRole,
+            _selectedStatus,
+            _sortOption
+        ) { list, query, role, status, sort ->
+            var result = list
+
+            if (query.isNotBlank()) {
+                result = result.filter { personnel ->
+                    personnel.fullName.contains(query, ignoreCase = true) ||
+                            personnel.role.contains(query, ignoreCase = true) ||
+                            personnel.phoneNumber.contains(query, ignoreCase = true) ||
+                            personnel.username.contains(query, ignoreCase = true)
+                }
+            }
+
+            if (role != "Tümü") {
+                result = result.filter { it.role.equals(role, ignoreCase = true) }
+            }
+
+            if (status != "Tümü") {
+                val active = status == "Aktif"
+                result = result.filter { it.isActive == active }
+            }
+
+            when (sort) {
+                "İsim (A-Z)" -> result.sortedBy { it.fullName.lowercase() }
+                "İsim (Z-A)" -> result.sortedByDescending { it.fullName.lowercase() }
+                "Aktif Önce" -> result.sortedByDescending { it.isActive }
+                "Pasif Önce" -> result.sortedBy { it.isActive }
+                else -> result
+            }
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList()
+        )
+
+    val totalPages: StateFlow<Int> = filteredPersonnelList.map { list ->
+        if (list.isEmpty()) 1 else (list.size + pageSize - 1) / pageSize
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1)
+
+    val pagedPersonnelList: StateFlow<List<Personnel>> = combine(
+        filteredPersonnelList,
+        _currentPage
+    ) { list, page ->
+        val maxPage = if (list.isEmpty()) 1 else (list.size + pageSize - 1) / pageSize
+        val safePage = page.coerceIn(1, maxPage)
+        val startIndex = (safePage - 1) * pageSize
+        val endIndex = (startIndex + pageSize).coerceAtMost(list.size)
+        if (startIndex < list.size) {
+            list.subList(startIndex, endIndex)
+        } else {
+            emptyList()
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _locationStatus = MutableStateFlow("Konum Bekleniyor...")
     val locationStatus = _locationStatus.asStateFlow()
@@ -51,7 +156,6 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
         _locationStatus.value = status
     }
 
-    // PERSONELİN KENDİ KONUMUNU GÜNCELLEMESİ (Firebase'e yazar)
     fun updatePersonnelLocation(lat: Double, lon: Double) {
         val userId = auth.currentUser?.uid ?: return
         viewModelScope.launch(Dispatchers.IO) {
@@ -60,7 +164,7 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
                     mapOf(
                         "currentLatitude" to lat,
                         "currentLongitude" to lon,
-                        "latitude" to lat, // İki tarafın da uyumlu olması için
+                        "latitude" to lat,
                         "longitude" to lon,
                         "lastUpdated" to System.currentTimeMillis()
                     )
@@ -75,7 +179,6 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
         }
     }
 
-    // ADMIN TARAFI İÇİN KONUM GÜNCELLEME (Repository üzerinden)
     fun updateCurrentLocation(uid: String, lat: Double, lon: Double) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -167,5 +270,40 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
 
     fun deletePersonnel(personnel: Personnel) {
         viewModelScope.launch { repository.deletePersonnel(personnel) }
+    }
+
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+        _currentPage.value = 1
+    }
+
+    fun updateSelectedRole(role: String) {
+        _selectedRole.value = role
+        _currentPage.value = 1
+    }
+
+    fun updateSelectedStatus(status: String) {
+        _selectedStatus.value = status
+        _currentPage.value = 1
+    }
+
+    fun updateSortOption(option: String) {
+        _sortOption.value = option
+        _currentPage.value = 1
+    }
+
+    fun setPage(page: Int) {
+        val max = totalPages.value
+        if (page in 1..max) {
+            _currentPage.value = page
+        }
+    }
+
+    fun clearAllFilters() {
+        _selectedRole.value = "Tümü"
+        _selectedStatus.value = "Tümü"
+        _searchQuery.value = ""
+        _sortOption.value = "İsim (A-Z)"
+        _currentPage.value = 1
     }
 }

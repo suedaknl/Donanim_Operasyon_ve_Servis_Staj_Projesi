@@ -23,14 +23,13 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home.HomeScreen
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelListScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.list.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.AdminMapScreen
 import com.google.firebase.auth.FirebaseAuth
@@ -44,6 +43,7 @@ fun AdminMainScreen(
     onServiceClick: (ServiceRecord) -> Unit,
     onNavigateToAddPersonnel: () -> Unit,
     onNavigateToEditPersonnel: (Int) -> Unit,
+    onNavigateToPersonnelDetail: (Int) -> Unit,
     onLogOut: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -218,10 +218,12 @@ fun AdminMainScreen(
                 2 -> {
                     PersonnelListScreen(
                         viewModel = personnelViewModel,
-                        serviceViewModel = serviceViewModel,
                         onNavigateToAddPersonnel = onNavigateToAddPersonnel,
                         onNavigateToEditPersonnel = onNavigateToEditPersonnel,
-                        onNavigateBack = { selectedTab = 0 }
+                        onNavigateBack = { selectedTab = 0 },
+                        onPersonnelClick = { personnelId ->
+                            onNavigateToPersonnelDetail(personnelId) // <--- BURAYA BAĞLA
+                        }
                     )
                 }
 

@@ -1,16 +1,11 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.navigation
 
 import android.widget.Toast
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -23,12 +18,11 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePh
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.AdminLoginScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.PersonnelLoginScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.WelcomeScreen
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home.HomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.AddServiceScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceDetailScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceHistoryScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.AddPersonnelScreen
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelListScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.list.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelWelcomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelMainScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.splash.SplashScreen
@@ -43,7 +37,14 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.AdminMainScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.detail.PersonnelDetailScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.LocationPickerScreen
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
 
 @Composable
 fun AppNavigation() {
@@ -168,6 +169,7 @@ fun AppNavigation() {
                 },
                 onNavigateToAddPersonnel = { navController.navigate("add_personnel") },
                 onNavigateToEditPersonnel = { id -> navController.navigate("add_personnel?personnelId=$id") },
+                onNavigateToPersonnelDetail = { id -> navController.navigate("personnel_detail/$id") },
                 onLogOut = {
                     authRepository.signOut()
                     sessionManager.clearSession()
@@ -209,16 +211,23 @@ fun AppNavigation() {
             )
         }
 
-        composable("personnel_list") {
+        composable(route = "personnel_detail/{personnelId}") { backStackEntry ->
+            val personnelId = backStackEntry.arguments?.getString("personnelId")?.toIntOrNull()
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelList by personnelViewModel.personnelList.collectAsState()
+            val personnel = personnelList.find { it.id == personnelId }
 
-            PersonnelListScreen(
-                viewModel = personnelViewModel,
-                serviceViewModel = sharedServiceViewModel,
-                onNavigateToAddPersonnel = { navController.navigate("add_personnel") },
-                onNavigateToEditPersonnel = { id -> navController.navigate("add_personnel?personnelId=$id") },
-                onNavigateBack = { navController.popBackStack() }
-            )
+            if (personnel != null) {
+                PersonnelDetailScreen(
+                    personnel = personnel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToEdit = { id -> navController.navigate("add_personnel?personnelId=$id") },
+                    onDeletePersonnel = { targetPersonnel ->
+                        personnelViewModel.deletePersonnel(targetPersonnel)
+                        navController.popBackStack()
+                    }
+                )
+            }
         }
 
         composable(
