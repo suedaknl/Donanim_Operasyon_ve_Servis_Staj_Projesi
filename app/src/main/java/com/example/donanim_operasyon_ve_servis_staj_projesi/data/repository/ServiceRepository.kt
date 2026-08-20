@@ -15,9 +15,9 @@ import javax.inject.Inject
 
 class ServiceRepository @Inject constructor(
     private val serviceDao: ServiceDao,
-    private val personnelDao: PersonnelDao
+    private val personnelDao: PersonnelDao,
+    private val firestoreDataSource: FirestoreServiceDataSource
 ) {
-    private val firestoreDataSource = FirestoreServiceDataSource()
 
     suspend fun insertRecord(record: ServiceRecord) {
         val personnelUid = record.assignedPersonnelId?.let { personnelId ->

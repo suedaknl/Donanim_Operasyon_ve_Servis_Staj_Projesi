@@ -7,7 +7,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
@@ -28,7 +27,6 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personn
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.splash.SplashScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.camera.CameraScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.ClosingFormScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
@@ -51,13 +49,6 @@ fun AppNavigation() {
 
     val context = LocalContext.current
     val database = remember { AppDatabase.getDatabase(context) }
-
-    val serviceRepository = remember {
-        ServiceRepository(
-            serviceDao = database.serviceDao(),
-            personnelDao = database.personnelDao()
-        )
-    }
 
     val sharedServiceViewModel: ServiceViewModel = hiltViewModel()
     val sessionManager = remember { SessionManager(context) }

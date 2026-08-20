@@ -3,9 +3,10 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.data.remote
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import javax.inject.Inject
 
-class FirestorePersonnelDataSource(
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+class FirestorePersonnelDataSource @Inject constructor(
+    private val firestore: FirebaseFirestore
 ) {
     private val collection = firestore.collection("personnel")
 
@@ -62,8 +63,6 @@ class FirestorePersonnelDataSource(
 
     suspend fun updatePersonnelLocation(uid: String, lat: Double, lon: Double): Result<Unit> {
         return try {
-            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-            val collection = db.collection("personnel")
 
             // Personel dokümanını UID ile bul
             val snapshot = collection.whereEqualTo("firebaseUid", uid).get().await()

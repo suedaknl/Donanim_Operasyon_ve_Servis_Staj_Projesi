@@ -9,9 +9,9 @@ import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 class PersonnelRepository @Inject constructor(
-    private val personnelDao: PersonnelDao
+    private val personnelDao: PersonnelDao,
+    private val firestoreDataSource: FirestorePersonnelDataSource
 ) {
-    private val firestoreDataSource: FirestorePersonnelDataSource = FirestorePersonnelDataSource()
 
     fun getAllPersonnel(): Flow<List<Personnel>> {
         return personnelDao.getAllPersonnel()

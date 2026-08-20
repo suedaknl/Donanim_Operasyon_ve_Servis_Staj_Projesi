@@ -5,10 +5,11 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRe
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
+import javax.inject.Inject
 
-class FirestoreServiceDataSource(
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
-    private val storage: FirebaseStorage = FirebaseStorage.getInstance()
+class FirestoreServiceDataSource @Inject constructor(
+    private val firestore: FirebaseFirestore,
+    private val storage: FirebaseStorage
 ) {
     private val collection = firestore.collection("services")
 
