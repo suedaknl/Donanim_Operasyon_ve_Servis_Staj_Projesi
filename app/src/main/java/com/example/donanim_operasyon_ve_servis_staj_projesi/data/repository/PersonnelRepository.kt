@@ -6,8 +6,11 @@ import kotlinx.coroutines.flow.Flow
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.remote.FirestorePersonnelDataSource
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import javax.inject.Inject
 
-class PersonnelRepository(private val personnelDao: PersonnelDao) {
+class PersonnelRepository @Inject constructor(
+    private val personnelDao: PersonnelDao
+) {
     private val firestoreDataSource: FirestorePersonnelDataSource = FirestorePersonnelDataSource()
 
     fun getAllPersonnel(): Flow<List<Personnel>> {

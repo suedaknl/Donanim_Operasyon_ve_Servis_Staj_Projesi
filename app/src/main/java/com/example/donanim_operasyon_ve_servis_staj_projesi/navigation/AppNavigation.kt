@@ -26,9 +26,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personn
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelWelcomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelMainScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.splash.SplashScreen
-import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.PersonnelRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModelFactory
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModelFactory
@@ -46,6 +44,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.profile.EditProfileScreen
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun AppNavigation() {
@@ -53,9 +52,6 @@ fun AppNavigation() {
 
     val context = LocalContext.current
     val database = remember { AppDatabase.getDatabase(context) }
-
-    val personnelRepository = remember { PersonnelRepository(database.personnelDao()) }
-    val personnelFactory = remember { PersonnelViewModelFactory(personnelRepository) }
 
     val serviceRepository = remember {
         ServiceRepository(
@@ -100,7 +96,7 @@ fun AppNavigation() {
         }
 
         composable("personnel_login") {
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
             PersonnelLoginScreen(
                 viewModel = personnelViewModel,
                 onLoginSuccess = { personnelId ->
@@ -117,7 +113,7 @@ fun AppNavigation() {
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
             PersonnelWelcomeScreen(
                 personnelId = personnelId,
@@ -159,7 +155,7 @@ fun AppNavigation() {
         }
 
         composable("home") {
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
             AdminMainScreen(
                 serviceViewModel = sharedServiceViewModel,
@@ -186,7 +182,7 @@ fun AppNavigation() {
                 "photo_uri",
                 null
             ).collectAsState()
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
             ServiceDetailScreen(
                 viewModel = sharedServiceViewModel,
@@ -214,7 +210,7 @@ fun AppNavigation() {
 
         composable(route = "personnel_detail/{personnelId}") { backStackEntry ->
             val personnelId = backStackEntry.arguments?.getString("personnelId")?.toIntOrNull()
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
             val personnelList by personnelViewModel.personnelList.collectAsState()
             val personnel = personnelList.find { it.id == personnelId }
 
@@ -299,7 +295,7 @@ fun AppNavigation() {
                 }
             )
         ) { backStackEntry ->
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
             val personnelIdStr = backStackEntry.arguments?.getString("personnelId")
             val actualId = personnelIdStr?.toIntOrNull()
 
@@ -315,7 +311,7 @@ fun AppNavigation() {
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
             EditProfileScreen(
                 personnelId = personnelId,
@@ -332,7 +328,7 @@ fun AppNavigation() {
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
             // Edit ekranından dönüldüğünde profil tab'ının (index 3) seçili kalmasını sağlar
             val initialTab = backStackEntry.savedStateHandle.get<Int>("selected_tab") ?: 0
@@ -403,7 +399,7 @@ fun AppNavigation() {
         composable("service_detail/{serviceId}") { backStackEntry ->
             val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
             val returnedPhotoUri = backStackEntry.savedStateHandle.get<String>("photo_uri")
-            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
             ServiceDetailScreen(
                 viewModel = sharedServiceViewModel,

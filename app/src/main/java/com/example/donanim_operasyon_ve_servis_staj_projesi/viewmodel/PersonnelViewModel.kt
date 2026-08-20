@@ -15,8 +15,13 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class PersonnelViewModel(private val repository: PersonnelRepository) : ViewModel() {
+@HiltViewModel
+class PersonnelViewModel @Inject constructor(
+    private val repository: PersonnelRepository
+) : ViewModel() {
 
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
