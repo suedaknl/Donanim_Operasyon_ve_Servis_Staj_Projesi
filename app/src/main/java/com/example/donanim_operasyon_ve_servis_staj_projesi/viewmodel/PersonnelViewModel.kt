@@ -20,11 +20,10 @@ import javax.inject.Inject
 
 @HiltViewModel
 class PersonnelViewModel @Inject constructor(
-    private val repository: PersonnelRepository
+    private val repository: PersonnelRepository,
+    private val auth: FirebaseAuth,
+    private val firestore: FirebaseFirestore
 ) : ViewModel() {
-
-    private val auth = FirebaseAuth.getInstance()
-    private val firestore = FirebaseFirestore.getInstance()
 
     val personnelList: StateFlow<List<Personnel>> = repository.getAllPersonnel()
         .stateIn(
@@ -167,7 +166,7 @@ class PersonnelViewModel @Inject constructor(
     }
 
     fun updatePassword(currentPass: String, newPass: String) {
-        val user = FirebaseAuth.getInstance().currentUser
+        val user = auth.currentUser
         val email = user?.email
 
         if (email.isNullOrEmpty()) {
