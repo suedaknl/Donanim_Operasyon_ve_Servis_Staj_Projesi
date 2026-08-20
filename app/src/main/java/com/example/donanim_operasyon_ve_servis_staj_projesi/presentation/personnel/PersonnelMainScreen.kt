@@ -43,18 +43,21 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.LocationHelper
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.google.android.gms.location.*
 import kotlin.math.roundToInt
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.profile.PersonnelProfileScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PersonnelMainScreen(
     personnelId: Int,
+    initialTab: Int = 0, // <--- Eklendi
     serviceViewModel: ServiceViewModel,
     personnelViewModel: PersonnelViewModel,
     onNavigateToServiceDetail: (Int) -> Unit,
+    onNavigateToEditPersonnel: (Int) -> Unit,
     onLogOut: () -> Unit,
     onNavigateToCameraForService: (Int, String) -> Unit = { _, _ -> }
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(initialTab) } // <--- Güncellendi
     val context = LocalContext.current
 
     // En temiz ve hatasız Sürüklenebilir FAB State'leri
@@ -342,7 +345,16 @@ fun PersonnelMainScreen(
                     }
                 }
                 2 -> PersonnelMapScreen(viewModel = serviceViewModel)
-                3 -> PersonnelProfileContent(personnel = currentPersonnel, onLogOut = onLogOut)
+                // PersonnelMainScreen.kt içinde selectedTab == 3 durumundaki çağrı:
+                3 -> PersonnelProfileScreen(
+                    personnel = currentPersonnel,
+                    locationStatus = locationStatus,
+                    viewModel = personnelViewModel,
+                    onEditProfile = { id ->
+                        onNavigateToEditPersonnel(id)
+                    },
+                    onLogOut = onLogOut
+                )
             }
         }
     }
@@ -578,56 +590,5 @@ fun SummaryCard(modifier: Modifier = Modifier, title: String, count: Int, color:
             Text(count.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = color)
             Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-    }
-}
-
-@Composable
-fun PersonnelProfileContent(personnel: Personnel?, onLogOut: () -> Unit) {
-    val context = LocalContext.current
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Spacer(modifier = Modifier.height(16.dp))
-        Box(modifier = Modifier.size(90.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(50.dp))
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(personnel?.fullName ?: "Personel Adı", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(personnel?.role ?: "Saha Personeli", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-        Spacer(modifier = Modifier.height(20.dp))
-        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-            Column {
-                ProfileMenuItem(Icons.Default.Email, personnel?.email ?: "E-posta belirtilmedi")
-                HorizontalDivider()
-                ProfileMenuItem(Icons.Default.Phone, personnel?.phoneNumber ?: "Telefon belirtilmedi")
-                HorizontalDivider()
-                ProfileMenuItem(Icons.Default.Wc, "Cinsiyet: ${personnel?.gender ?: "Belirtilmedi"}")
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-            Column {
-                ProfileMenuItem(Icons.Default.Lock, "Şifre Değiştir", true) { Toast.makeText(context, "Şifre değiştirme ekranı hazırlanıyor.", Toast.LENGTH_SHORT).show() }
-                HorizontalDivider()
-                ProfileMenuItem(Icons.Default.HelpOutline, "Destek ve Yardım", true) { Toast.makeText(context, "Destek talebi özelliği yakında eklenecektir.", Toast.LENGTH_SHORT).show() }
-                HorizontalDivider()
-                ProfileMenuItem(Icons.Default.Edit, "Profil Bilgilerini Güncelle", true) { Toast.makeText(context, "Bilgi güncelleme talebiniz yöneticiye iletildi.", Toast.LENGTH_SHORT).show() }
-            }
-        }
-        Spacer(modifier = Modifier.weight(1f))
-        Button(onClick = onLogOut, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), shape = RoundedCornerShape(12.dp)) {
-            Icon(Icons.Default.Logout, null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Çıkış Yap", style = MaterialTheme.typography.titleMedium)
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-    }
-}
-
-@Composable
-fun ProfileMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, isAction: Boolean = false, onClick: () -> Unit = {}) {
-    Row(modifier = Modifier.fillMaxWidth().clickable(enabled = isAction, onClick = onClick).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
-        Spacer(modifier = Modifier.width(16.dp))
-        Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        if (isAction) Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.profile.EditProfileScreen
 
 @Composable
 fun AppNavigation() {
@@ -310,11 +311,31 @@ fun AppNavigation() {
         }
 
         composable(
+            route = "edit_profile/{personnelId}",
+            arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
+            val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+
+            EditProfileScreen(
+                personnelId = personnelId,
+                viewModel = personnelViewModel,
+                onNavigateBack = {
+                    navController.previousBackStackEntry?.savedStateHandle?.set("selected_tab", 3)
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
             route = "personnel_main/{personnelId}",
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val personnelViewModel: PersonnelViewModel = viewModel(factory = personnelFactory)
+
+            // Edit ekranından dönüldüğünde profil tab'ının (index 3) seçili kalmasını sağlar
+            val initialTab = backStackEntry.savedStateHandle.get<Int>("selected_tab") ?: 0
 
             val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>("photo_uri", null).collectAsState()
             val photoServiceId = backStackEntry.savedStateHandle.get<Int>("photo_service_id")
@@ -343,10 +364,14 @@ fun AppNavigation() {
 
             PersonnelMainScreen(
                 personnelId = personnelId,
+                initialTab = initialTab, // <--- Eklendi
                 serviceViewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
                 onNavigateToServiceDetail = { serviceId ->
                     navController.navigate("personnel_service_detail/$serviceId/$personnelId")
+                },
+                onNavigateToEditPersonnel = { id ->
+                    navController.navigate("edit_profile/$id")
                 },
                 onLogOut = {
                     authRepository.signOut()

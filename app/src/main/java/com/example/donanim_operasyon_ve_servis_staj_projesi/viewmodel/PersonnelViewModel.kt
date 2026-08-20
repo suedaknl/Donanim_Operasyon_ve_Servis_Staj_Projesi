@@ -1,6 +1,8 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel
 
 import android.content.Context
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
@@ -41,6 +43,9 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
     private val _currentPage = MutableStateFlow(1)
     val currentPage: StateFlow<Int> = _currentPage
     val pageSize = 4
+
+    private val _passwordUpdateState = mutableStateOf<Result<Unit>?>(null)
+    val passwordUpdateState: State<Result<Unit>?> = _passwordUpdateState
 
     val availableRoles: StateFlow<List<String>> =
         personnelList
@@ -154,6 +159,46 @@ class PersonnelViewModel(private val repository: PersonnelRepository) : ViewMode
 
     fun updateLocationStatus(status: String) {
         _locationStatus.value = status
+    }
+
+    fun updatePassword(currentPass: String, newPass: String) {
+        val user = FirebaseAuth.getInstance().currentUser
+        val email = user?.email
+
+        if (email.isNullOrEmpty()) {
+            _passwordUpdateState.value = Result.failure(Exception("Oturum açmış kullanıcı bulunamadı."))
+            return
+        }
+
+        val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(email, currentPass)
+
+        user.reauthenticate(credential).addOnCompleteListener { reauthTask ->
+            if (reauthTask.isSuccessful) {
+                user.updatePassword(newPass).addOnCompleteListener { updateTask ->
+                    if (updateTask.isSuccessful) {
+                        _passwordUpdateState.value = Result.success(Unit)
+                    } else {
+                        val errorMsg = translateFirebaseError(updateTask.exception?.message)
+                        _passwordUpdateState.value = Result.failure(Exception(errorMsg))
+                    }
+                }
+            } else {
+                val errorMsg = translateFirebaseError(reauthTask.exception?.message)
+                _passwordUpdateState.value = Result.failure(Exception(errorMsg))
+            }
+        }
+    }
+
+    fun resetPasswordState() {
+        _passwordUpdateState.value = null
+    }
+
+    private fun translateFirebaseError(message: String?): String {
+        return when {
+            message.orEmpty().contains("password", ignoreCase = true) && message.orEmpty().contains("6", ignoreCase = true) -> "Yeni şifre en az 6 karakter olmalıdır."
+            message.orEmpty().contains("credentials", ignoreCase = true) || message.orEmpty().contains("mismatch", ignoreCase = true) -> "Mevcut şifreniz hatalı."
+            else -> "İşlem başarısız oldu. Lütfen tekrar deneyin."
+        }
     }
 
     fun updatePersonnelLocation(lat: Double, lon: Double) {
