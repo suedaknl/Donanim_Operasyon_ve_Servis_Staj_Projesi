@@ -29,7 +29,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -38,18 +37,18 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.*
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.PersonnelMapScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.profile.PersonnelProfileScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.StandaloneUserFormScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.LocationHelper
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.google.android.gms.location.*
 import kotlin.math.roundToInt
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.profile.PersonnelProfileScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PersonnelMainScreen(
     personnelId: Int,
-    initialTab: Int = 0, // <--- Eklendi
+    initialTab: Int = 0,
     serviceViewModel: ServiceViewModel,
     personnelViewModel: PersonnelViewModel,
     onNavigateToServiceDetail: (Int) -> Unit,
@@ -57,14 +56,12 @@ fun PersonnelMainScreen(
     onLogOut: () -> Unit,
     onNavigateToCameraForService: (Int, String) -> Unit = { _, _ -> }
 ) {
-    var selectedTab by remember { mutableIntStateOf(initialTab) } // <--- Güncellendi
+    var selectedTab by remember { mutableIntStateOf(initialTab) }
     val context = LocalContext.current
 
-    // En temiz ve hatasız Sürüklenebilir FAB State'leri
     var fabOffsetX by remember { mutableStateOf(0f) }
     var fabOffsetY by remember { mutableStateOf(0f) }
 
-    // Dialog State'leri
     var showNoteDialog by remember { mutableStateOf(false) }
     var showPhotoDialog by remember { mutableStateOf(false) }
 
@@ -75,17 +72,14 @@ fun PersonnelMainScreen(
     LaunchedEffect(currentPersonnelUid) {
         if (!currentPersonnelUid.isNullOrEmpty()) {
             serviceViewModel.setCurrentPersonnelUid(currentPersonnelUid)
-            // Emülatör konumunu simüle etmek için test koordinatını doğrudan gönderiyoruz
             personnelViewModel.updateCurrentLocation(currentPersonnelUid, 40.5139, 34.9612)
             personnelViewModel.updateLocationStatus("Konum: Aktif")
         }
     }
 
     val filteredPersonnelServices by serviceViewModel.filteredPersonnelServiceRecords.collectAsState()
-
     val allPersonnelRawServices by serviceViewModel.personnelServiceRecords.collectAsState()
 
-    // GÜVENLİK GÜNCELLEMESİ: FAB üzerinden eklenecek not ve fotoğraflar sadece İŞLEME BAŞLANDI ve PARÇA BEKLENİYOR statüsündeki işler için geçerli olabilir.
     val activeServicesForFab = remember(allPersonnelRawServices, personnelId) {
         allPersonnelRawServices.filter {
             it.assignedPersonnelId == personnelId &&
@@ -95,7 +89,6 @@ fun PersonnelMainScreen(
     }
 
     val locationStatus by personnelViewModel.locationStatus.collectAsState()
-
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     val locationCallback = remember {
@@ -221,12 +214,6 @@ fun PersonnelMainScreen(
                         modifier = Modifier.width(260.dp)
                     ) {
                         DropdownMenuItem(
-                            text = { Text("İş Emirlerine Git", fontWeight = FontWeight.Medium) },
-                            leadingIcon = { Icon(Icons.Default.Assignment, null, tint = MaterialTheme.colorScheme.primary) },
-                            onClick = { showFabMenu = false; selectedTab = 1 }
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
                             text = {
                                 Column {
                                     Text("Hızlı Not Ekle", fontWeight = FontWeight.Medium, color = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified)
@@ -265,15 +252,6 @@ fun PersonnelMainScreen(
                                 }
                             }
                         )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("AI Asistanı (Yakında)", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.secondary) },
-                            leadingIcon = { Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.secondary) },
-                            onClick = {
-                                showFabMenu = false
-                                Toast.makeText(context, "Yapay zeka asistanı yakında hizmetinizde olacak.", Toast.LENGTH_SHORT).show()
-                            }
-                        )
                     }
 
                     FloatingActionButton(
@@ -297,6 +275,7 @@ fun PersonnelMainScreen(
             when (selectedTab) {
                 0 -> PersonnelHomeContent(
                     personnel = currentPersonnel,
+                    rawServices = allPersonnelRawServices,
                     myServices = filteredPersonnelServices,
                     onNavigateToServiceDetail = onNavigateToServiceDetail,
                     onGoToAssignments = { filter ->
@@ -304,7 +283,6 @@ fun PersonnelMainScreen(
                         serviceViewModel.updateSelectedFilter("Hepsi")
                         serviceViewModel.updateSelectedPriorityFilter("Hepsi")
 
-                        // İsimler StandaloneUserFormScreen'deki listeyle birebir aynı olmalı
                         when (filter) {
                             "Atanan" -> serviceViewModel.updateSelectedTab("Atanan")
                             "Yolda" -> serviceViewModel.updateSelectedTab("Yolda")
@@ -345,14 +323,11 @@ fun PersonnelMainScreen(
                     }
                 }
                 2 -> PersonnelMapScreen(viewModel = serviceViewModel)
-                // PersonnelMainScreen.kt içinde selectedTab == 3 durumundaki çağrı:
                 3 -> PersonnelProfileScreen(
                     personnel = currentPersonnel,
                     locationStatus = locationStatus,
                     viewModel = personnelViewModel,
-                    onEditProfile = { id ->
-                        onNavigateToEditPersonnel(id)
-                    },
+                    onEditProfile = { id -> onNavigateToEditPersonnel(id) },
                     onLogOut = onLogOut
                 )
             }
@@ -470,14 +445,16 @@ fun PersonnelMainScreen(
 @Composable
 fun PersonnelHomeContent(
     personnel: Personnel?,
+    rawServices: List<ServiceRecord>,
     myServices: List<ServiceRecord>,
     onNavigateToServiceDetail: (Int) -> Unit,
     onGoToAssignments: (String) -> Unit
 ) {
-    val assignedCount = myServices.count { it.status == ServiceStatus.BEKLIYOR }
-    val acceptedCount = myServices.count { it.status == ServiceStatus.YOLDA }
-    val inProgressCount = myServices.count { it.status == ServiceStatus.ISLEME_BASLANDI || it.status == ServiceStatus.PARCA_BEKLENIYOR }
-    val completedCount = myServices.count { it.status == ServiceStatus.TAMAMLANDI }
+    // Sayaçlar ham (tüm) personel işleri üzerinden hesaplanır, böylece filtre değişiminden etkilenmez
+    val assignedCount = rawServices.count { it.status == ServiceStatus.BEKLIYOR }
+    val acceptedCount = rawServices.count { it.status == ServiceStatus.YOLDA }
+    val inProgressCount = rawServices.count { it.status == ServiceStatus.ISLEME_BASLANDI || it.status == ServiceStatus.PARCA_BEKLENIYOR }
+    val completedCount = rawServices.count { it.status == ServiceStatus.TAMAMLANDI }
 
     val activeServices = myServices.filter {
         it.status != ServiceStatus.TAMAMLANDI && it.status != ServiceStatus.IPTAL
@@ -534,7 +511,7 @@ fun PersonnelHomeContent(
                         color = MaterialTheme.colorScheme.tertiary
                     )
                     SummaryCard(
-                        modifier = Modifier.weight(1f).clickable { onGoToAssignments("Tamamlandı") },
+                        modifier = Modifier.weight(1f).clickable { onGoToAssignments("Tamamlanan") },
                         title = "Tamamlanan",
                         count = completedCount,
                         color = Color(0xFF4CAF50)

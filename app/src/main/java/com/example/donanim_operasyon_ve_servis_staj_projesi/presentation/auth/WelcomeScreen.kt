@@ -47,7 +47,7 @@ fun WelcomeScreen(
 
         // Büyük Başlık
         Text(
-            text = "Donanım Operasyon\nve\nServis Yönetim Sistemi",
+            text = "Servis Takip",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,

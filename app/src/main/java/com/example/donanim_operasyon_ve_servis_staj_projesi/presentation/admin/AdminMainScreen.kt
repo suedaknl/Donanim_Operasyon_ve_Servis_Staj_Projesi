@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.home.HomeScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.service.list.AdminServiceListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.list.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.AdminMapScreen
@@ -63,6 +63,9 @@ fun AdminMainScreen(
     val maxX = 0f
     val minY = with(density) { -(configuration.screenHeightDp.dp - 180.dp).toPx() }
     val maxY = 0f
+
+    val filteredServices by serviceViewModel.filteredServiceRecords.collectAsState()
+    val personnelList by personnelViewModel.personnelList.collectAsState()
 
     Scaffold(
         bottomBar = {
@@ -198,16 +201,13 @@ fun AdminMainScreen(
                 )
 
                 1 -> {
-                    val serviceList by serviceViewModel.filteredServiceRecords.collectAsState()
-                    val personnelList by personnelViewModel.personnelList.collectAsState()
-
-                    HomeScreen(
-                        serviceList = serviceList,
+                    AdminServiceListScreen(
+                        serviceList = filteredServices,
                         personnelList = personnelList,
                         selectedTab = serviceViewModel.adminSelectedStatusTab,
-                        onTabSelected = { serviceViewModel.updateAdminSelectedStatusTab(it) },
+                        onTabSelected = { tab -> serviceViewModel.updateAdminSelectedStatusTab(tab) },
                         searchQuery = serviceViewModel.adminSearchQuery,
-                        onSearchQueryChange = { serviceViewModel.updateAdminSearchQuery(it) },
+                        onSearchQueryChange = { query -> serviceViewModel.updateAdminSearchQuery(query) },
                         serviceViewModel = serviceViewModel,
                         onNavigateToAddService = onNavigateToAddService,
                         onServiceClick = onServiceClick,
@@ -222,7 +222,7 @@ fun AdminMainScreen(
                         onNavigateToEditPersonnel = onNavigateToEditPersonnel,
                         onNavigateBack = { selectedTab = 0 },
                         onPersonnelClick = { personnelId ->
-                            onNavigateToPersonnelDetail(personnelId) // <--- BURAYA BAĞLA
+                            onNavigateToPersonnelDetail(personnelId)
                         }
                     )
                 }

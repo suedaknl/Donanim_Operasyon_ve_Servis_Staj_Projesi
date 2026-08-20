@@ -1,6 +1,5 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation
 
-import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -8,19 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePhoto
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.*
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -36,12 +27,12 @@ class ServiceViewModelFactory(private val repository: ServiceRepository) : ViewM
 
 class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() {
 
+    // --- TEMEL STATE'LER ---
     private val _serviceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
     val serviceRecords: StateFlow<List<ServiceRecord>> = _serviceRecords.asStateFlow()
 
     private val _personnelServiceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
-    val personnelServiceRecords: StateFlow<List<ServiceRecord>> =
-        _personnelServiceRecords.asStateFlow()
+    val personnelServiceRecords: StateFlow<List<ServiceRecord>> = _personnelServiceRecords.asStateFlow()
 
     private val _selectedRecord = MutableStateFlow<ServiceRecord?>(null)
     val selectedRecord: StateFlow<ServiceRecord?> = _selectedRecord.asStateFlow()
@@ -52,22 +43,7 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     private val _servicePhotos = MutableStateFlow<List<ServicePhoto>>(emptyList())
     val servicePhotos: StateFlow<List<ServicePhoto>> = _servicePhotos.asStateFlow()
 
-    private var notesJob: Job? = null
-    private var photosJob: Job? = null
-
-    private val _searchQueryFlow = MutableStateFlow("")
-    private val _selectedPriorityFilterFlow = MutableStateFlow("Hepsi")
-    private val _selectedTabFlow = MutableStateFlow("Tümü")
-    private val _currentPersonnelUidFlow = MutableStateFlow<String?>(null)
-
-    fun setCurrentPersonnelUid(uid: String?) {
-        _currentPersonnelUidFlow.value = uid
-    }
-
-    private val _serviceClosingSignature =
-        MutableStateFlow<com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceClosingSignature?>(
-            null
-        )
+    private val _serviceClosingSignature = MutableStateFlow<ServiceClosingSignature?>(null)
     val serviceClosingSignature = _serviceClosingSignature.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
@@ -77,6 +53,7 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         _errorMessage.value = null
     }
 
+    // --- PERSONEL AKIŞ STATE'LERİ ---
     var searchQuery by mutableStateOf("")
         private set
 
@@ -89,7 +66,16 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     var selectedTab by mutableStateOf("Tümü")
         private set
 
-    // --- ADMIN AKIŞ VE STATE TANIMLARI ---
+    private val _searchQueryFlow = MutableStateFlow("")
+    private val _selectedPriorityFilterFlow = MutableStateFlow("Hepsi")
+    private val _selectedTabFlow = MutableStateFlow("Tümü")
+    private val _currentPersonnelUidFlow = MutableStateFlow<String?>(null)
+
+    fun setCurrentPersonnelUid(uid: String?) {
+        _currentPersonnelUidFlow.value = uid
+    }
+
+    // --- ADMIN AKIŞ VE FİLTRE STATE'LERİ ---
     private val _adminSelectedStatusTab = MutableStateFlow("Tümü")
     var adminSelectedStatusTab by mutableStateOf("Tümü")
         private set
@@ -119,33 +105,30 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     var selectedDeviceTypesFilter = mutableStateOf(setOf<String>())
         private set
 
-    private val _selectedPersonnelFilter = MutableStateFlow<String?>("Tümü")
     var selectedPersonnelFilter by mutableStateOf<String?>("Tümü")
-        private set
-
-    private val _selectedCompanyFilter = MutableStateFlow<String?>("Tümü")
     var selectedCompanyFilter by mutableStateOf<String?>("Tümü")
-        private set
-
-    private val _selectedLocationFilter = MutableStateFlow<String?>("Tümü")
     var selectedLocationFilter by mutableStateOf<String?>("Tümü")
-        private set
-
-    private val _selectedAssignmentStatusFilter = MutableStateFlow("Tümü")
     var selectedAssignmentStatusFilter by mutableStateOf("Tümü")
-        private set
-
-    private val _selectedSortOption = MutableStateFlow("En yeni")
     var selectedSortOption by mutableStateOf("En yeni")
-        private set
 
+    // --- PAGINATION STATE'LERİ ---
+    private val _adminCurrentPage = MutableStateFlow(1)
+    val adminCurrentPage: StateFlow<Int> = _adminCurrentPage.asStateFlow()
+
+    private val _currentPage = MutableStateFlow(1)
+    val currentPage: StateFlow<Int> = _currentPage.asStateFlow()
+    val pageSize = 4
+
+    // --- KAPANIŞ VE MEDYA STATE'LERİ ---
     private val _closingNote = MutableStateFlow("")
     val closingNote = _closingNote.asStateFlow()
 
     private val _closingSignatureUri = MutableStateFlow<String?>(null)
     val closingSignatureUri = _closingSignatureUri.asStateFlow()
 
-    // --- FIREBASE REMOTE STATE'LERİ ---
+    private val _closingAfterPhotoUri = MutableStateFlow<String?>(null)
+    val closingAfterPhotoUri = _closingAfterPhotoUri.asStateFlow()
+
     private val _remotePhotos = MutableStateFlow<List<Map<String, Any>>>(emptyList())
     val remotePhotos: StateFlow<List<Map<String, Any>>> = _remotePhotos.asStateFlow()
 
@@ -165,169 +148,148 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
     private val _closingState = MutableStateFlow<ClosingState>(ClosingState.Idle)
     val closingState = _closingState.asStateFlow()
 
-    private val _closingAfterPhotoUri = MutableStateFlow<String?>(null)
-    val closingAfterPhotoUri = _closingAfterPhotoUri.asStateFlow()
-
     private val _serviceHistory = MutableStateFlow<List<Map<String, Any>>>(emptyList())
     val serviceHistory: StateFlow<List<Map<String, Any>>> = _serviceHistory.asStateFlow()
+
+    private var notesJob: Job? = null
+    private var photosJob: Job? = null
 
     companion object {
         const val SERVICE_START_RADIUS_METERS = 250f
     }
 
-    fun verifyAndStartServiceWork(recordId: Int, personnelId: Int, distance: Float) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.verifyAndStartServiceWork(recordId, personnelId, distance)
-            loadRecords()
-            loadRecordsForPersonnel(personnelId)
-            _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.ISLEME_BASLANDI)
+    // --- 1. FILTERED SERVICE RECORDS (TÜM STATE'LERDEN SONRA) ---
+    val filteredServiceRecords: StateFlow<List<ServiceRecord>> = combine(
+        _serviceRecords,
+        _adminSelectedStatusTab,
+        _adminSearchQuery,
+        _selectedStatusesFilter,
+        _selectedPrioritiesFilter
+    ) { records, tab, query, statuses, priorities ->
+        Triple(records, tab, Triple(query, statuses, priorities))
+    }.combine(
+        combine(
+            _selectedDeviceTypesFilter,
+            MutableStateFlow(selectedPersonnelFilter),
+            MutableStateFlow(selectedCompanyFilter),
+            MutableStateFlow(selectedLocationFilter),
+            MutableStateFlow(selectedAssignmentStatusFilter)
+        ) { types, personnel, company, location, assignment ->
+            Triple(types, personnel, Triple(company, location, assignment))
+        }
+    ) { firstTriple, secondTriple ->
+        val records = firstTriple.first
+        val tab = firstTriple.second
+        val query = firstTriple.third.first
+        val statuses = firstTriple.third.second
+        val priorities = firstTriple.third.third
+
+        val types = secondTriple.first
+        val personnel = secondTriple.second
+        val company = secondTriple.third.first
+        val location = secondTriple.third.second
+        val assignment = secondTriple.third.third
+
+        filterAdminRecords(
+            records = records,
+            tab = tab,
+            query = query,
+            statuses = statuses,
+            priorities = priorities,
+            deviceTypes = types,
+            personnel = personnel,
+            company = company,
+            location = location,
+            assignment = assignment,
+            dateFilter = "Tümü",
+            sort = selectedSortOption
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // --- 2. ADMIN DİNAMİK PAGINATION FLOWS (1. Sayfa 3, Sonrakiler 5 Kayıt) ---
+    val admintotalPages: StateFlow<Int> = filteredServiceRecords.map { list ->
+        if (list.isEmpty()) 1
+        else if (list.size <= 3) 1
+        else 1 + (list.size - 3 + 4) / 5
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1)
+
+    val adminPagedServiceRecords: StateFlow<List<ServiceRecord>> = combine(
+        filteredServiceRecords,
+        _adminCurrentPage
+    ) { list, page ->
+        if (list.isEmpty()) return@combine emptyList()
+        val maxPage = if (list.size <= 3) 1 else 1 + (list.size - 3 + 4) / 5
+        val safePage = page.coerceIn(1, maxPage)
+
+        val startIndex: Int
+        val endIndex: Int
+
+        if (safePage == 1) {
+            startIndex = 0
+            endIndex = minOf(3, list.size)
+        } else {
+            startIndex = 3 + (safePage - 2) * 5
+            endIndex = minOf(startIndex + 5, list.size)
+        }
+
+        if (startIndex < list.size && startIndex < endIndex) {
+            list.subList(startIndex, endIndex)
+        } else {
+            emptyList()
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun setAdminPage(page: Int) {
+        val max = admintotalPages.value
+        if (page in 1..max) {
+            _adminCurrentPage.value = page
         }
     }
 
-    fun loadServiceHistory(firestoreId: String) {
-        if (firestoreId.isBlank()) return
-        viewModelScope.launch(Dispatchers.IO) {
+    // --- 3. PERSONEL FILTERED & PAGINATION FLOWS ---
+    val filteredPersonnelServiceRecords = combine(
+        _personnelServiceRecords,
+        _searchQueryFlow,
+        _selectedPriorityFilterFlow,
+        _selectedTabFlow,
+        _currentPersonnelUidFlow
+    ) { records, query, priority, tab, currentUid ->
+        filterPersonnelRecords(records, query, priority, tab, currentUid)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val totalPages: StateFlow<Int> = filteredPersonnelServiceRecords.map { list ->
+        if (list.isEmpty()) 1 else (list.size + pageSize - 1) / pageSize
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1)
+
+    val pagedPersonnelServiceRecords: StateFlow<List<ServiceRecord>> = combine(
+        filteredPersonnelServiceRecords,
+        _currentPage
+    ) { list, page ->
+        val maxPage = if (list.isEmpty()) 1 else (list.size + pageSize - 1) / pageSize
+        val safePage = page.coerceIn(1, maxPage)
+        val startIndex = (safePage - 1) * pageSize
+        val endIndex = (startIndex + pageSize).coerceAtMost(list.size)
+        if (startIndex < list.size) list.subList(startIndex, endIndex) else emptyList()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun setPage(page: Int) {
+        val max = totalPages.value
+        if (page in 1..max) {
+            _currentPage.value = page
+        }
+    }
+
+    init {
+        viewModelScope.launch {
             try {
-                repository.getRemoteHistoryForService(firestoreId).onSuccess { historyList ->
-                    _serviceHistory.value = historyList
-                }
+                repository.syncAllServices()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
     }
 
-    fun updateClosingAfterPhotoUri(uri: String?) {
-        _closingAfterPhotoUri.value = uri
-    }
-
-    private fun filterPersonnelRecords(
-        records: List<ServiceRecord>,
-        query: String,
-        priority: String,
-        tab: String,
-        currentUid: String?
-    ): List<ServiceRecord> {
-        val lowerQuery = query.trim().lowercase(Locale.ROOT)
-
-        val personnelBaseRecords = records.filter { record ->
-            val matchesPersonnel = if (!currentUid.isNullOrEmpty()) {
-                record.assignedPersonnelUid == currentUid || record.assignedPersonnelId?.toString() == currentUid
-            } else {
-                true
-            }
-            matchesPersonnel && record.status != ServiceStatus.IPTAL
-        }
-
-        return personnelBaseRecords.filter { record ->
-            val matchesSearch = if (lowerQuery.isEmpty()) true else {
-                record.companyName.lowercase(Locale.ROOT).contains(lowerQuery) ||
-                        record.deviceType.lowercase(Locale.ROOT).contains(lowerQuery) ||
-                        record.serialNumber.lowercase(Locale.ROOT).contains(lowerQuery) ||
-                        record.location.lowercase(Locale.ROOT).contains(lowerQuery)
-            }
-            val matchesPriority = if (priority == "Hepsi") true else record.priority == priority
-
-            val matchesTab = when (tab) {
-                "Tümü" -> true
-                "Bekleyen", "Atanmış" -> record.status == ServiceStatus.BEKLIYOR
-                "Yolda" -> record.status == ServiceStatus.YOLDA
-                "İşlemde", "Devam Eden" -> record.status == ServiceStatus.ISLEME_BASLANDI || record.status == ServiceStatus.PARCA_BEKLENIYOR
-                "Tamamlanan" -> record.status == ServiceStatus.TAMAMLANDI
-                else -> true
-            }
-
-            matchesSearch && matchesPriority && matchesTab
-        }
-    }
-
-    fun updateAdminSelectedStatusTab(status: String) {
-        adminSelectedStatusTab = status
-        _adminSelectedStatusTab.value = status
-    }
-
-    fun updateAdminSearchQuery(query: String) {
-        adminSearchQuery = query
-        _adminSearchQuery.value = query
-        updateSearchQuery(query)
-    }
-
-    fun updateAdvancedFilters(
-        dateFilter: String,
-        start: Long?,
-        end: Long?,
-        statuses: Set<String>,
-        priorities: Set<String>,
-        deviceTypes: Set<String>,
-        personnel: String?,
-        company: String?,
-        location: String?,
-        assignment: String,
-        sort: String
-    ) {
-        selectedDateFilter = dateFilter
-        customStartDate = start
-        customEndDate = end
-        selectedStatusesFilter.value = statuses
-        selectedPrioritiesFilter.value = priorities
-        selectedDeviceTypesFilter.value = deviceTypes
-        selectedPersonnelFilter = personnel
-        selectedCompanyFilter = company
-        selectedLocationFilter = location
-        selectedAssignmentStatusFilter = assignment
-        selectedSortOption = sort
-
-        _selectedStatusesFilter.value = statuses
-        _selectedPrioritiesFilter.value = priorities
-        _selectedDeviceTypesFilter.value = deviceTypes
-        _selectedPersonnelFilter.value = personnel
-        _selectedCompanyFilter.value = company
-        _selectedLocationFilter.value = location
-        _selectedAssignmentStatusFilter.value = assignment
-        _selectedSortOption.value = sort
-    }
-
-    fun clearAllAdvancedFilters() {
-        selectedDateFilter = "Tümü"
-        customStartDate = null
-        customEndDate = null
-        selectedStatusesFilter.value = emptySet()
-        selectedPrioritiesFilter.value = emptySet()
-        selectedDeviceTypesFilter.value = emptySet()
-        selectedPersonnelFilter = "Tümü"
-        selectedCompanyFilter = "Tümü"
-        selectedLocationFilter = "Tümü"
-        selectedAssignmentStatusFilter = "Tümü"
-        selectedSortOption = "En yeni"
-        adminSearchQuery = ""
-        adminSelectedStatusTab = "Tümü"
-        _adminSearchQuery.value = ""
-        _adminSelectedStatusTab.value = "Tümü"
-        _selectedStatusesFilter.value = emptySet()
-        _selectedPrioritiesFilter.value = emptySet()
-        _selectedDeviceTypesFilter.value = emptySet()
-        _selectedPersonnelFilter.value = "Tümü"
-        _selectedCompanyFilter.value = "Tümü"
-        _selectedLocationFilter.value = "Tümü"
-        _selectedAssignmentStatusFilter.value = "Tümü"
-        _selectedSortOption.value = "En yeni"
-    }
-
-    val activeFilterCount: Int
-        get() {
-            var count = 0
-            if (selectedDateFilter != "Tümü") count++
-            if (selectedStatusesFilter.value.isNotEmpty()) count++
-            if (selectedPrioritiesFilter.value.isNotEmpty()) count++
-            if (selectedDeviceTypesFilter.value.isNotEmpty()) count++
-            if (!selectedPersonnelFilter.isNullOrBlank() && selectedPersonnelFilter != "Tümü") count++
-            if (!selectedCompanyFilter.isNullOrBlank() && selectedCompanyFilter != "Tümü") count++
-            if (!selectedLocationFilter.isNullOrBlank() && selectedLocationFilter != "Tümü") count++
-            if (selectedAssignmentStatusFilter != "Tümü") count++
-            if (selectedSortOption != "En yeni") count++
-            return count
-        }
-
+    // --- FİLTRELEME FONKSİYONLARI ---
     private fun filterAdminRecords(
         records: List<ServiceRecord>,
         tab: String,
@@ -393,12 +355,8 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                 "Atanmamış" -> record.assignedPersonnelId == null && record.assignedPersonnelUid.isNullOrBlank()
                 else -> true
             }
-            val dateMatch = when (dateFilter) {
-                "Tümü" -> true
-                else -> true
-            }
 
-            tabMatch && queryMatch && statusMatch && priorityMatch && deviceMatch && personnelMatch && companyMatch && locationMatch && assignmentMatch && dateMatch
+            tabMatch && queryMatch && statusMatch && priorityMatch && deviceMatch && personnelMatch && companyMatch && locationMatch && assignmentMatch
         }
 
         return filtered.sortedWith(
@@ -417,73 +375,152 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         )
     }
 
-    val filteredServiceRecords: StateFlow<List<ServiceRecord>> = combine(
-        _serviceRecords,
-        _adminSelectedStatusTab,
-        _adminSearchQuery,
-        _selectedStatusesFilter,
-        _selectedPrioritiesFilter
-    ) { records, tab, query, statuses, priorities ->
-        Triple(records, tab, Triple(query, statuses, priorities))
-    }.combine(
-        combine(
-            _selectedDeviceTypesFilter,
-            _selectedPersonnelFilter,
-            _selectedCompanyFilter,
-            _selectedLocationFilter,
-            _selectedAssignmentStatusFilter
-        ) { types, personnel, company, location, assignment ->
-            Triple(types, personnel, Triple(company, location, assignment))
-        }
-    ) { firstTriple, secondTriple ->
-        val records = firstTriple.first
-        val tab = firstTriple.second
-        val query = firstTriple.third.first
-        val statuses = firstTriple.third.second
-        val priorities = firstTriple.third.third
+    private fun filterPersonnelRecords(
+        records: List<ServiceRecord>,
+        query: String,
+        priority: String,
+        tab: String,
+        currentUid: String?
+    ): List<ServiceRecord> {
+        val lowerQuery = query.trim().lowercase(Locale.ROOT)
 
-        val types = secondTriple.first
-        val personnel = secondTriple.second
-        val company = secondTriple.third.first
-        val location = secondTriple.third.second
-        val assignment = secondTriple.third.third
-
-        filterAdminRecords(
-            records = records,
-            tab = tab,
-            query = query,
-            statuses = statuses,
-            priorities = priorities,
-            deviceTypes = types,
-            personnel = personnel,
-            company = company,
-            location = location,
-            assignment = assignment,
-            dateFilter = "Tümü",
-            sort = selectedSortOption
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val filteredPersonnelServiceRecords = combine(
-        _personnelServiceRecords,
-        _searchQueryFlow,
-        _selectedPriorityFilterFlow,
-        _selectedTabFlow,
-        _currentPersonnelUidFlow
-    ) { records, query, priority, tab, currentUid ->
-        filterPersonnelRecords(records, query, priority, tab, currentUid)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    init {
-        viewModelScope.launch {
-            try {
-                repository.syncAllServices()
-            } catch (e: Exception) {
-                e.printStackTrace()
+        val personnelBaseRecords = records.filter { record ->
+            val matchesPersonnel = if (!currentUid.isNullOrEmpty()) {
+                record.assignedPersonnelUid == currentUid || record.assignedPersonnelId?.toString() == currentUid
+            } else {
+                true
             }
+            matchesPersonnel && record.status != ServiceStatus.IPTAL
+        }
+
+        return personnelBaseRecords.filter { record ->
+            val matchesSearch = if (lowerQuery.isEmpty()) true else {
+                record.companyName.lowercase(Locale.ROOT).contains(lowerQuery) ||
+                        record.deviceType.lowercase(Locale.ROOT).contains(lowerQuery) ||
+                        record.serialNumber.lowercase(Locale.ROOT).contains(lowerQuery) ||
+                        record.location.lowercase(Locale.ROOT).contains(lowerQuery)
+            }
+            val matchesPriority = if (priority == "Hepsi") true else record.priority == priority
+
+            val matchesTab = when (tab) {
+                "Tümü" -> true
+                "Bekleyen", "Atanmış" -> record.status == ServiceStatus.BEKLIYOR
+                "Yolda" -> record.status == ServiceStatus.YOLDA
+                "İşlemde", "Devam Eden" -> record.status == ServiceStatus.ISLEME_BASLANDI || record.status == ServiceStatus.PARCA_BEKLENIYOR
+                "Tamamlanan" -> record.status == ServiceStatus.TAMAMLANDI
+                else -> true
+            }
+
+            matchesSearch && matchesPriority && matchesTab
         }
     }
 
+    // --- STATE GÜNCELLEME VE SAYFA SIFIRLAMA METOTLARI ---
+    fun updateAdminSelectedStatusTab(status: String) {
+        adminSelectedStatusTab = status
+        _adminSelectedStatusTab.value = status
+        _adminCurrentPage.value = 1
+    }
+
+    fun updateAdminSearchQuery(query: String) {
+        adminSearchQuery = query
+        _adminSearchQuery.value = query
+        updateSearchQuery(query)
+        _adminCurrentPage.value = 1
+    }
+
+    fun updateAdvancedFilters(
+        dateFilter: String,
+        start: Long?,
+        end: Long?,
+        statuses: Set<String>,
+        priorities: Set<String>,
+        deviceTypes: Set<String>,
+        personnel: String?,
+        company: String?,
+        location: String?,
+        assignment: String,
+        sort: String
+    ) {
+        selectedDateFilter = dateFilter
+        customStartDate = start
+        customEndDate = end
+        selectedStatusesFilter.value = statuses
+        selectedPrioritiesFilter.value = priorities
+        selectedDeviceTypesFilter.value = deviceTypes
+        selectedPersonnelFilter = personnel
+        selectedCompanyFilter = company
+        selectedLocationFilter = location
+        selectedAssignmentStatusFilter = assignment
+        selectedSortOption = sort
+
+        _selectedStatusesFilter.value = statuses
+        _selectedPrioritiesFilter.value = priorities
+        _selectedDeviceTypesFilter.value = deviceTypes
+        _adminCurrentPage.value = 1
+    }
+
+    fun clearAllAdvancedFilters() {
+        selectedDateFilter = "Tümü"
+        customStartDate = null
+        customEndDate = null
+        selectedStatusesFilter.value = emptySet()
+        selectedPrioritiesFilter.value = emptySet()
+        selectedDeviceTypesFilter.value = emptySet()
+        selectedPersonnelFilter = "Tümü"
+        selectedCompanyFilter = "Tümü"
+        selectedLocationFilter = "Tümü"
+        selectedAssignmentStatusFilter = "Tümü"
+        selectedSortOption = "En yeni"
+        adminSearchQuery = ""
+        adminSelectedStatusTab = "Tümü"
+        _adminSearchQuery.value = ""
+        _adminSelectedStatusTab.value = "Tümü"
+        _selectedStatusesFilter.value = emptySet()
+        _selectedPrioritiesFilter.value = emptySet()
+        _selectedDeviceTypesFilter.value = emptySet()
+        _adminCurrentPage.value = 1
+    }
+
+    val activeFilterCount: Int
+        get() {
+            var count = 0
+            if (selectedDateFilter != "Tümü") count++
+            if (selectedStatusesFilter.value.isNotEmpty()) count++
+            if (selectedPrioritiesFilter.value.isNotEmpty()) count++
+            if (selectedDeviceTypesFilter.value.isNotEmpty()) count++
+            if (!selectedPersonnelFilter.isNullOrBlank() && selectedPersonnelFilter != "Tümü") count++
+            if (!selectedCompanyFilter.isNullOrBlank() && selectedCompanyFilter != "Tümü") count++
+            if (!selectedLocationFilter.isNullOrBlank() && selectedLocationFilter != "Tümü") count++
+            if (selectedAssignmentStatusFilter != "Tümü") count++
+            if (selectedSortOption != "En yeni") count++
+            return count
+        }
+
+    fun updateSearchQuery(query: String) {
+        searchQuery = query
+        _searchQueryFlow.value = query
+        _currentPage.value = 1
+    }
+
+    fun updateSelectedFilter(filter: String) {
+        selectedFilter = filter
+        _currentPage.value = 1
+    }
+
+    fun updateSelectedPriorityFilter(filter: String) {
+        selectedPriorityFilter = filter
+        _selectedPriorityFilterFlow.value = filter
+        _currentPage.value = 1
+    }
+
+    fun updateSelectedTab(tab: String) {
+        selectedTab = tab
+        _selectedTabFlow.value = tab
+        _currentPage.value = 1
+    }
+
+    // --- REPOSITORY VE VERİ YÖNETİMİ ---
     fun loadRecords() {
         viewModelScope.launch(Dispatchers.IO) {
             val records = repository.getAllRecords()
@@ -498,32 +535,17 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
-    fun updateSearchQuery(query: String) {
-        searchQuery = query
-        _searchQueryFlow.value = query
+    fun syncAdminData() {
+        viewModelScope.launch {
+            repository.syncAllServices()
+            val updatedList = repository.getAllRecords()
+            _serviceRecords.value = updatedList
+        }
     }
 
-    fun updateSelectedFilter(filter: String) {
-        selectedFilter = filter
-    }
-
-    fun updateSelectedPriorityFilter(filter: String) {
-        selectedPriorityFilter = filter
-        _selectedPriorityFilterFlow.value = filter
-    }
-
-    fun updateSelectedTab(tab: String) {
-        selectedTab = tab
-        _selectedTabFlow.value = tab
-    }
-
-    fun selectRecord(record: ServiceRecord) {
-        _selectedRecord.value = record
-    }
-
-    fun clearSelection() {
-        _selectedRecord.value = null
-    }
+    fun selectRecord(record: ServiceRecord) { _selectedRecord.value = record }
+    fun clearSelection() { _selectedRecord.value = null }
+    fun getServiceById(id: Int): ServiceRecord? = serviceRecords.value.find { it.id == id }
 
     fun insertRecord(record: ServiceRecord) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -536,27 +558,6 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         viewModelScope.launch(Dispatchers.IO) {
             repository.deleteRecord(record)
             loadRecords()
-        }
-    }
-
-    fun reassignService(recordId: Int, newPersonnelId: Int?, newPersonnelUid: String?) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
-
-            if (currentRecord.status == ServiceStatus.TAMAMLANDI) {
-                _errorMessage.value = "Tamamlanmış bir iş emri yeniden atanamaz."
-                return@launch
-            }
-
-            val updatedRecord = currentRecord.copy(
-                assignedPersonnelId = newPersonnelId,
-                assignedPersonnelUid = newPersonnelUid,
-                status = if (currentRecord.status == ServiceStatus.IPTAL) ServiceStatus.BEKLIYOR else currentRecord.status,
-                rejectionReason = null
-            )
-            repository.updateService(updatedRecord)
-            loadRecords()
-            _selectedRecord.value = updatedRecord
         }
     }
 
@@ -582,6 +583,15 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             repository.updateStatus(recordId, newStatus)
             loadRecords()
             _selectedRecord.value = _selectedRecord.value?.copy(status = newStatus)
+        }
+    }
+
+    fun verifyAndStartServiceWork(recordId: Int, personnelId: Int, distance: Float) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.verifyAndStartServiceWork(recordId, personnelId, distance)
+            loadRecords()
+            loadRecordsForPersonnel(personnelId)
+            _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.ISLEME_BASLANDI)
         }
     }
 
@@ -621,18 +631,30 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
             if (result.isSuccess) {
                 loadRecords()
                 loadRecordsForPersonnel(personnelId)
-                _selectedRecord.value = _selectedRecord.value?.copy(
-                    status = ServiceStatus.IPTAL,
-                    rejectionReason = rejectionReason
-                )
+                _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.IPTAL, rejectionReason = rejectionReason)
             } else {
                 _errorMessage.value = result.exceptionOrNull()?.message ?: "İş reddedilirken bir hata oluştu."
             }
         }
     }
 
-    fun getServiceById(id: Int): ServiceRecord? {
-        return serviceRecords.value.find { it.id == id }
+    fun reassignService(recordId: Int, newPersonnelId: Int?, newPersonnelUid: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
+            if (currentRecord.status == ServiceStatus.TAMAMLANDI) {
+                _errorMessage.value = "Tamamlanmış bir iş emri yeniden atanamaz."
+                return@launch
+            }
+            val updatedRecord = currentRecord.copy(
+                assignedPersonnelId = newPersonnelId,
+                assignedPersonnelUid = newPersonnelUid,
+                status = if (currentRecord.status == ServiceStatus.IPTAL) ServiceStatus.BEKLIYOR else currentRecord.status,
+                rejectionReason = null
+            )
+            repository.updateService(updatedRecord)
+            loadRecords()
+            _selectedRecord.value = updatedRecord
+        }
     }
 
     fun clearAssignedPersonnel(personnelId: Int) {
@@ -642,59 +664,32 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
         }
     }
 
+    // --- NOTLAR, FOTOĞRAFLAR VE KAPANIŞ İŞLEMLERİ ---
     fun loadServiceNotes(serviceRecordId: Int) {
         notesJob?.cancel()
         notesJob = viewModelScope.launch(Dispatchers.IO) {
-            try {
-                repository.getNotesForService(serviceRecordId).collect { notes ->
-                    _serviceNotes.value = notes
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            repository.getNotesForService(serviceRecordId).collect { _serviceNotes.value = it }
         }
     }
 
     fun addServiceNote(note: ServiceNote) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                repository.insertServiceNote(note)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        viewModelScope.launch(Dispatchers.IO) { repository.insertServiceNote(note) }
     }
 
     fun loadServicePhotos(serviceRecordId: Int) {
         photosJob?.cancel()
         photosJob = viewModelScope.launch(Dispatchers.IO) {
-            try {
-                repository.getPhotosForService(serviceRecordId).collect { photos ->
-                    _servicePhotos.value = photos
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            repository.getPhotosForService(serviceRecordId).collect { _servicePhotos.value = it }
         }
     }
 
     fun addServicePhoto(photo: ServicePhoto) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                repository.insertServicePhoto(photo)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        viewModelScope.launch(Dispatchers.IO) { repository.insertServicePhoto(photo) }
     }
 
-    fun updateClosingNote(note: String) {
-        _closingNote.value = note
-    }
-
-    fun updateClosingSignatureUri(uri: String?) {
-        _closingSignatureUri.value = uri
-    }
+    fun updateClosingNote(note: String) { _closingNote.value = note }
+    fun updateClosingSignatureUri(uri: String?) { _closingSignatureUri.value = uri }
+    fun updateClosingAfterPhotoUri(uri: String?) { _closingAfterPhotoUri.value = uri }
 
     fun resetClosingState() {
         _closingState.value = ClosingState.Idle
@@ -705,62 +700,36 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
 
     fun loadClosingSignature(serviceId: Int) {
         viewModelScope.launch {
-            try {
-                val signature = repository.getClosingSignatureByServiceId(serviceId)
-                _serviceClosingSignature.value = signature
-            } catch (e: Exception) {
-                _serviceClosingSignature.value = null
-            }
+            _serviceClosingSignature.value = try { repository.getClosingSignatureByServiceId(serviceId) } catch (e: Exception) { null }
         }
     }
 
-    fun syncAdminData() {
-        viewModelScope.launch {
-            repository.syncAllServices()
-            val updatedList = repository.getAllRecords()
-            _serviceRecords.value = updatedList
+    fun loadServiceHistory(firestoreId: String) {
+        if (firestoreId.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.getRemoteHistoryForService(firestoreId).onSuccess { _serviceHistory.value = it }
         }
     }
 
     fun loadRemoteMediaAndNotes(firestoreId: String) {
         if (firestoreId.isBlank()) return
-
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                repository.getRemoteNotesForService(firestoreId).onSuccess { notesList ->
-                    _remoteNotes.value = notesList
-                }
-                repository.getRemotePhotosForService(firestoreId).onSuccess { photosList ->
-                    _remotePhotos.value = photosList
-                }
-                repository.getRemoteSignaturesForService(firestoreId).onSuccess { sigList ->
-                    _remoteSignatures.value = sigList
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            repository.getRemoteNotesForService(firestoreId).onSuccess { _remoteNotes.value = it }
+            repository.getRemotePhotosForService(firestoreId).onSuccess { _remotePhotos.value = it }
+            repository.getRemoteSignaturesForService(firestoreId).onSuccess { _remoteSignatures.value = it }
         }
     }
 
     fun syncMyServices(firebaseUid: String, localPersonnelId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                repository.syncServicesFromFirestore(
-                    personnelUid = firebaseUid,
-                    localPersonnelId = localPersonnelId
-                )
-                val updatedRecords = repository.getRecordsByPersonnelId(localPersonnelId)
-                _personnelServiceRecords.value = updatedRecords
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            repository.syncServicesFromFirestore(firebaseUid, localPersonnelId)
+            _personnelServiceRecords.value = repository.getRecordsByPersonnelId(localPersonnelId)
         }
     }
 
     fun submitClosingForm(serviceId: Int, personnelId: Int) {
         viewModelScope.launch {
             _closingState.value = ClosingState.Loading
-
             val currentRecord = getServiceById(serviceId)
             val note = _closingNote.value
             val signature = _closingSignatureUri.value
@@ -781,16 +750,9 @@ class ServiceViewModel(private val repository: ServiceRepository) : ViewModel() 
                 photoCategory = "SONRASI"
             )
             addServicePhoto(photoEntity)
-
             val completedRecord = currentRecord.copy(status = ServiceStatus.TAMAMLANDI)
 
-            val result = repository.completeServiceWork(
-                serviceRecord = completedRecord,
-                personnelId = personnelId,
-                closingNoteText = note,
-                signatureUri = signature
-            )
-
+            val result = repository.completeServiceWork(completedRecord, personnelId, note, signature)
             if (result.isSuccess) {
                 _closingState.value = ClosingState.Success
                 loadRecords()
