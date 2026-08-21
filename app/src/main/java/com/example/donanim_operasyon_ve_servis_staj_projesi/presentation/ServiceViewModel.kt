@@ -14,12 +14,13 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.CompleteServiceUseCase
 
 @HiltViewModel
 class ServiceViewModel @Inject constructor(
-    private val repository: ServiceRepository
+    private val repository: ServiceRepository,
+    private val completeServiceUseCase: CompleteServiceUseCase
 ) : ViewModel() {
-
     // --- TEMEL STATE'LER ---
     private val _serviceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
     val serviceRecords: StateFlow<List<ServiceRecord>> = _serviceRecords.asStateFlow()
@@ -723,36 +724,42 @@ class ServiceViewModel @Inject constructor(
     fun submitClosingForm(serviceId: Int, personnelId: Int) {
         viewModelScope.launch {
             _closingState.value = ClosingState.Loading
-            val currentRecord = getServiceById(serviceId)
+
             val note = _closingNote.value
             val signature = _closingSignatureUri.value
             val afterPhoto = _closingAfterPhotoUri.value
 
-            if (currentRecord == null || signature == null || note.isBlank() || afterPhoto == null) {
-                _closingState.value = ClosingState.Error("Eksik veri: Lütfen kapanış notu, imza ve sonrası fotoğrafını eksiksiz doldurun.")
+            if (note.isBlank()) {
+                _closingState.value = ClosingState.Error("Kapanış notu eksik.")
                 return@launch
             }
 
-            val photoEntity = ServicePhoto(
-                serviceRecordId = serviceId,
-                personnelId = personnelId,
-                photoType = "SONRASI",
-                localUri = afterPhoto,
-                timestamp = System.currentTimeMillis(),
-                photoUri = afterPhoto,
-                photoCategory = "SONRASI"
-            )
-            addServicePhoto(photoEntity)
-            val completedRecord = currentRecord.copy(status = ServiceStatus.TAMAMLANDI)
+            if (signature.isNullOrBlank()) {
+                _closingState.value = ClosingState.Error("Dijital imza eksik.")
+                return@launch
+            }
 
-            val result = repository.completeServiceWork(completedRecord, personnelId, note, signature)
+            if (afterPhoto.isNullOrBlank()) {
+                _closingState.value = ClosingState.Error("Sonrası fotoğrafı eksik.")
+                return@launch
+            }
+
+            val result = completeServiceUseCase(
+                serviceId = serviceId,
+                personnelId = personnelId,
+                closingNoteText = note,
+                signatureUri = signature,
+                afterPhotoUri = afterPhoto
+            )
+
             if (result.isSuccess) {
                 _closingState.value = ClosingState.Success
                 loadRecords()
                 loadRecordsForPersonnel(personnelId)
-                _selectedRecord.value = completedRecord
             } else {
-                _closingState.value = ClosingState.Error(result.exceptionOrNull()?.message ?: "İşlem sırasında bir hata oluştu.")
+                _closingState.value = ClosingState.Error(
+                    result.exceptionOrNull()?.message ?: "İşlem sırasında bilinmeyen bir hata oluştu."
+                )
             }
         }
     }
