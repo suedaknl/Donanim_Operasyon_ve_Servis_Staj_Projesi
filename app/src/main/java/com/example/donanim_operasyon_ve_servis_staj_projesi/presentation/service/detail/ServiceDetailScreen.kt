@@ -6,7 +6,6 @@ import android.location.Location
 import android.net.Uri
 import android.os.Looper
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -32,7 +31,6 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
@@ -41,12 +39,11 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNo
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePhoto
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.components.ServiceApprovalSection
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.LocationHelper
-import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.ServiceReportPdfGenerator
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.google.android.gms.location.*
 import kotlinx.coroutines.launch
-import java.io.File
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
@@ -123,12 +120,6 @@ fun ServiceDetailScreen(
     }
 
     var adminSelectedTab by rememberSaveable { mutableIntStateOf(0) }
-
-    // Accordion states for Onay page
-    var isCompletionInfoExpanded by rememberSaveable { mutableStateOf(false) }
-    var isClosingResultExpanded by rememberSaveable { mutableStateOf(false) }
-    var isDigitalSignatureExpanded by rememberSaveable { mutableStateOf(false) }
-    var isActionsExpanded by rememberSaveable { mutableStateOf(false) }
 
     var showAssignDialog by remember { mutableStateOf(false) }
     var showStatusDialog by remember { mutableStateOf(false) }
@@ -259,8 +250,6 @@ fun ServiceDetailScreen(
     val closingKeywords = listOf("closing", "kapanis", "kapanış", "sonuc", "sonuç", "sonrasi", "sonrası")
     val operationalNotes = combinedNotes.filter { note -> !closingKeywords.any { (note.noteType ?: "").trim().lowercase(Locale.ROOT).contains(it) } }
     val operationalPhotos = combinedPhotos.filter { photo -> !closingKeywords.any { (photo.photoType ?: photo.photoCategory ?: "").trim().lowercase(Locale.ROOT).contains(it) } }
-    val closingNoteItem = combinedNotes.firstOrNull { note -> closingKeywords.any { (note.noteType ?: "").trim().lowercase(Locale.ROOT).contains(it) } } ?: combinedNotes.lastOrNull()
-    val closingAfterPhotos = combinedPhotos.filter { photo -> closingKeywords.any { (photo.photoType ?: photo.photoCategory ?: "").trim().lowercase(Locale.ROOT).contains(it) } }
     val remoteSignatureUrl = remoteSignatures.firstOrNull()?.get("downloadUrl") as? String
     val effectiveSignaturePath = closingSignature?.signatureLocalUri ?: remoteSignatureUrl
 
@@ -468,368 +457,19 @@ fun ServiceDetailScreen(
                                 }
                             }
                             3 -> {
-                                Text("İş Sonucu & Onay", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-
-                                if (isCompleted) {
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                        shape = RoundedCornerShape(16.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                            ) {
-                                                Surface(
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                                    modifier = Modifier.size(40.dp)
-                                                ) {
-                                                    Box(contentAlignment = Alignment.Center) {
-                                                        Icon(
-                                                            Icons.Default.PictureAsPdf,
-                                                            contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                            modifier = Modifier.size(22.dp)
-                                                        )
-                                                    }
-                                                }
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        "Servis Raporu",
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                    Text(
-                                                        "Tamamlanan iş emrinin servis raporunu görüntüleyebilir veya paylaşabilirsiniz.",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
-                                            }
-
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                Button(
-                                                    onClick = {
-                                                        val pdfFile = ServiceReportPdfGenerator.generatePdf(
-                                                            context = context,
-                                                            record = service,
-                                                            notes = combinedNotes,
-                                                            photos = combinedPhotos,
-                                                            signaturePath = effectiveSignaturePath,
-                                                            history = serviceHistory
-                                                        )
-                                                        if (pdfFile != null && pdfFile.exists()) {
-                                                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
-                                                            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
-                                                                setDataAndType(uri, "application/pdf")
-                                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                            }
-                                                            try { context.startActivity(viewIntent) }
-                                                            catch (e: Exception) { Toast.makeText(context, "PDF okuyucu bulunamadı.", Toast.LENGTH_SHORT).show() }
-                                                        } else {
-                                                            Toast.makeText(context, "Servis raporu oluşturulamadı.", Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    },
-                                                    modifier = Modifier.weight(1f),
-                                                    shape = RoundedCornerShape(12.dp)
-                                                ) {
-                                                    Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("PDF Görüntüle")
-                                                }
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        val pdfFile = ServiceReportPdfGenerator.generatePdf(
-                                                            context = context,
-                                                            record = service,
-                                                            notes = combinedNotes,
-                                                            photos = combinedPhotos,
-                                                            signaturePath = effectiveSignaturePath,
-                                                            history = serviceHistory
-                                                        )
-                                                        if (pdfFile != null && pdfFile.exists()) {
-                                                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
-                                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                                                type = "application/pdf"
-                                                                putExtra(Intent.EXTRA_STREAM, uri)
-                                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                            }
-                                                            context.startActivity(Intent.createChooser(shareIntent, "Raporu Paylaş"))
-                                                        } else {
-                                                            Toast.makeText(context, "Önce PDF üretilmelidir.", Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    },
-                                                    modifier = Modifier.weight(1f),
-                                                    shape = RoundedCornerShape(12.dp)
-                                                ) {
-                                                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Paylaş")
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (!isCompleted) {
-                                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                        Text("İş henüz tamamlanmadı. Kapanış verileri bekleniyor.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                } else {
-                                    // 2. İş Tamamlama Bilgisi Accordion
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                    ) {
-                                        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { isCompletionInfoExpanded = !isCompletionInfoExpanded }
-                                                    .padding(vertical = 4.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "İş Tamamlama Bilgisi",
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                                Icon(
-                                                    imageVector = if (isCompletionInfoExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-
-                                            AnimatedVisibility(visible = isCompletionInfoExpanded) {
-                                                Column(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(top = 8.dp),
-                                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                                ) {
-                                                    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                                                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                            Text("Bu iş emri başarıyla tamamlanmıştır.", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                                            Text("Tamamlayan Personel: $assignedPersonnelName", style = MaterialTheme.typography.bodyMedium)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // 3. Kapanış Açıklaması / Sonuç Accordion (İçinde Sonrası Fotoğrafı ile)
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                    ) {
-                                        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { isClosingResultExpanded = !isClosingResultExpanded }
-                                                    .padding(vertical = 4.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "Kapanış Açıklaması / Sonuç",
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                                Icon(
-                                                    imageVector = if (isClosingResultExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-
-                                            AnimatedVisibility(visible = isClosingResultExpanded) {
-                                                Column(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(top = 8.dp),
-                                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                                ) {
-                                                    if (closingNoteItem != null) {
-                                                        ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                                Text("Kapanış Açıklaması / Sonuç", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                                                Text("• ${closingNoteItem.note}", style = MaterialTheme.typography.bodyMedium)
-                                                            }
-                                                        }
-                                                    }
-                                                    if (closingAfterPhotos.isNotEmpty()) {
-                                                        ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                                Text("Sonrası Fotoğrafı", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                                    items(closingAfterPhotos) { photo ->
-                                                                        AsyncImage(model = photo.localUri, contentDescription = "Sonrası Fotoğrafı", modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)).clickable { selectedImageUri = photo.localUri }, contentScale = ContentScale.Crop)
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // 4. Müşteri Dijital İmzası Accordion
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                    ) {
-                                        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { isDigitalSignatureExpanded = !isDigitalSignatureExpanded }
-                                                    .padding(vertical = 4.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "Müşteri Dijital İmzası",
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                                Icon(
-                                                    imageVector = if (isDigitalSignatureExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-
-                                            AnimatedVisibility(visible = isDigitalSignatureExpanded) {
-                                                Column(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(top = 8.dp),
-                                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                                ) {
-                                                    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                                                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                            if (!effectiveSignaturePath.isNullOrBlank()) {
-                                                                AsyncImage(model = effectiveSignaturePath, contentDescription = "Dijital İmza", modifier = Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentScale = ContentScale.Fit)
-                                                            } else {
-                                                                Text("İmza bulunmuyor.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                // 5. İşlemler Accordion
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                ) {
-                                    Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable { isActionsExpanded = !isActionsExpanded }
-                                                .padding(vertical = 4.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "İşlemler",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                            Icon(
-                                                imageVector = if (isActionsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-
-                                        AnimatedVisibility(visible = isActionsExpanded) {
-                                            Column(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(top = 8.dp),
-                                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                if ((service.status == ServiceStatus.TAMAMLANDI || service.status == ServiceStatus.IPTAL) && !service.isArchived) {
-                                                    Button(
-                                                        onClick = { showArchiveDialog = true },
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                                        shape = RoundedCornerShape(12.dp)
-                                                    ) {
-                                                        Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Text("Arşivle")
-                                                    }
-                                                }
-
-                                                Button(
-                                                    onClick = {
-                                                        val targetId = if (service.id > 0) -service.id else service.id
-                                                        onNavigateToEdit(targetId)
-                                                    },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                                                    shape = RoundedCornerShape(12.dp)
-                                                ) {
-                                                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Text("İş Emrini Çoğalt")
-                                                }
-
-                                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    Button(
-                                                        onClick = { onNavigateToEdit(service.id) },
-                                                        modifier = Modifier.weight(1f),
-                                                        shape = RoundedCornerShape(12.dp)
-                                                    ) {
-                                                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Text("Düzenle")
-                                                    }
-                                                    Button(
-                                                        onClick = { showDeleteDialog = true },
-                                                        modifier = Modifier.weight(1f),
-                                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                                        shape = RoundedCornerShape(12.dp)
-                                                    ) {
-                                                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Text("Sil")
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                ServiceApprovalSection(
+                                    service = service,
+                                    assignedPersonnelName = assignedPersonnelName,
+                                    isCompleted = isCompleted,
+                                    combinedNotes = combinedNotes,
+                                    combinedPhotos = combinedPhotos,
+                                    serviceHistory = serviceHistory,
+                                    effectiveSignaturePath = effectiveSignaturePath,
+                                    onNavigateToEdit = onNavigateToEdit,
+                                    onArchiveClick = { showArchiveDialog = true },
+                                    onDeleteClick = { showDeleteDialog = true },
+                                    onImageClick = { uri -> selectedImageUri = uri }
+                                )
                             }
                         }
                     }
@@ -1112,28 +752,6 @@ fun ServiceDetailScreen(
                                         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text("Bu iş emri başarıyla tamamlanmıştır.", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                             Text("Tamamlayan: $assignedPersonnelName")
-                                        }
-                                    }
-
-                                    if (closingNoteItem != null) {
-                                        ElevatedCard(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), shape = RoundedCornerShape(16.dp)) {
-                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Text("Kapanış Açıklaması / Sonuç", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                                Text("• ${closingNoteItem.note}", style = MaterialTheme.typography.bodyMedium)
-                                            }
-                                        }
-                                    }
-
-                                    if (closingAfterPhotos.isNotEmpty()) {
-                                        ElevatedCard(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), shape = RoundedCornerShape(16.dp)) {
-                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Text("Kapanış / Sonrası Fotoğrafı", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    items(closingAfterPhotos) { photo ->
-                                                        AsyncImage(model = photo.localUri, contentDescription = "Sonrası Fotoğrafı", modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
-                                                    }
-                                                }
-                                            }
                                         }
                                     }
                                 }
