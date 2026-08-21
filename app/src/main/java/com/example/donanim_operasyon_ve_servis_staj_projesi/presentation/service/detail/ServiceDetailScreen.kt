@@ -224,9 +224,13 @@ fun ServiceDetailScreen(
         } else null
     }
 
-    val assignedPersonnelName = if (service.assignedPersonnelId != null) {
-        personnelList.find { it.id == service.assignedPersonnelId }?.fullName ?: "Personel Bulunamadı"
-    } else "Atanmadı"
+    val assignedPersonnelName =
+        service.assignedPersonnelName
+            ?: personnelList.find {
+                it.id == service.assignedPersonnelId ||
+                        it.firebaseUid == service.assignedPersonnelUid
+            }?.fullName
+            ?: "Atanmadı"
 
     val isLocked = isCompleted || isCancelled
     val canAddContent = personnelId != null && service.assignedPersonnelId == personnelId && !isLocked && service.status != ServiceStatus.BEKLIYOR
@@ -940,7 +944,7 @@ fun ServiceDetailScreen(
                                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                                         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text("Bu iş emri başarıyla tamamlanmıştır.", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                            Text("Tamamlayan: ${personnelList.find { it.id == service.assignedPersonnelId }?.fullName ?: "Bilinmiyor"}")
+                                            Text("Tamamlayan: $assignedPersonnelName")
                                         }
                                     }
 

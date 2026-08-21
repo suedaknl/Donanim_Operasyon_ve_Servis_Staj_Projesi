@@ -21,9 +21,13 @@ fun AdminServiceCard(
     personnelList: List<Personnel>,
     onClick: () -> Unit
 ) {
-    val assignedPersonnelName = personnelList.find {
-        it.id.toString() == record.assignedPersonnelId?.toString() || it.firebaseUid == record.assignedPersonnelUid
-    }?.fullName ?: "Atanmadı"
+    val assignedPersonnelName =
+        record.assignedPersonnelName
+            ?: personnelList.find {
+                it.id == record.assignedPersonnelId ||
+                        it.firebaseUid == record.assignedPersonnelUid
+            }?.fullName
+            ?: "Atanmadı"
 
     ElevatedCard(
         modifier = Modifier

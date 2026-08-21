@@ -25,8 +25,27 @@ class PersonnelRepository @Inject constructor(
         personnelDao.updatePersonnel(personnel)
     }
 
-    suspend fun deletePersonnel(personnel: Personnel) {
-        personnelDao.deletePersonnel(personnel)
+    suspend fun deletePersonnel(personnel: Personnel): Result<Unit> {
+        return try {
+            val uid = personnel.firebaseUid
+
+            if (!uid.isNullOrBlank()) {
+                val firestoreResult = firestoreDataSource.deletePersonnel(uid)
+
+                if (firestoreResult.isFailure) {
+                    return Result.failure(
+                        firestoreResult.exceptionOrNull()
+                            ?: Exception("Personel Firestore'dan silinemedi.")
+                    )
+                }
+            }
+
+            personnelDao.deletePersonnel(personnel)
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     // Kullanıcı adını veritabanında arayan fonksiyon

@@ -143,10 +143,11 @@ class FirestoreServiceDataSource @Inject constructor(
                 "address" to record.address,
                 "plannedDate" to record.plannedDate,
                 "assignedPersonnelUid" to record.assignedPersonnelUid,
+                "assignedPersonnelName" to record.assignedPersonnelName,
                 "firestoreId" to record.firestoreId,
                 "rejectionReason" to record.rejectionReason,
-                "latitude" to record.latitude,   // YENİ EKLENDİ
-                "longitude" to record.longitude  // YENİ EKLENDİ
+                "latitude" to record.latitude,
+                "longitude" to record.longitude
             )
 
             if (!record.firestoreId.isNullOrEmpty()) {
@@ -180,6 +181,7 @@ class FirestoreServiceDataSource @Inject constructor(
                     status = document.getString("status") ?: "Bekliyor",
                     date = document.getString("date") ?: "",
                     assignedPersonnelId = null,
+                    assignedPersonnelName = document.getString("assignedPersonnelName"),
                     contactPerson = document.getString("contactPerson"),
                     contactPhone = document.getString("contactPhone"),
                     address = document.getString("address"),

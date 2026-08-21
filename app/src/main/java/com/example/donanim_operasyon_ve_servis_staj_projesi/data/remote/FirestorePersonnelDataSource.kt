@@ -126,4 +126,27 @@ class FirestorePersonnelDataSource @Inject constructor(
             Result.failure(e)
         }
     }
+
+    suspend fun deletePersonnel(uid: String): Result<Unit> {
+        return try {
+            if (uid.isBlank()) {
+                return Result.failure(
+                    IllegalArgumentException("Firebase UID eksik.")
+                )
+            }
+
+            val snapshot = collection
+                .whereEqualTo("firebaseUid", uid)
+                .get()
+                .await()
+
+            snapshot.documents.forEach { document ->
+                document.reference.delete().await()
+            }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

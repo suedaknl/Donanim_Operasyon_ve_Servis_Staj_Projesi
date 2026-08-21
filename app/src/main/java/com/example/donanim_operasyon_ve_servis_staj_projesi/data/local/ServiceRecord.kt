@@ -17,6 +17,7 @@ data class ServiceRecord(
     val status: String,
     val date: String,
     val assignedPersonnelId: Int? = null,
+    val assignedPersonnelName: String? = null,
     val contactPerson: String? = null,
     val contactPhone: String? = null,
     val address: String? = null,

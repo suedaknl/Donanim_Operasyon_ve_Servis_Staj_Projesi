@@ -20,16 +20,18 @@ class ServiceRepository @Inject constructor(
 ) {
 
     suspend fun insertRecord(record: ServiceRecord) {
-        val personnelUid = record.assignedPersonnelId?.let { personnelId ->
+        val assignedPersonnel = record.assignedPersonnelId?.let { personnelId ->
             try {
-                val personnel = personnelDao.getPersonnelById(personnelId)
-                personnel?.firebaseUid
+                personnelDao.getPersonnelById(personnelId)
             } catch (e: Exception) {
                 null
             }
         }
 
-        val recordWithPersonnel = record.copy(assignedPersonnelUid = personnelUid)
+        val recordWithPersonnel = record.copy(
+            assignedPersonnelUid = assignedPersonnel?.firebaseUid,
+            assignedPersonnelName = assignedPersonnel?.fullName
+        )
         serviceDao.insertRecord(recordWithPersonnel)
 
         withContext(Dispatchers.IO) {

@@ -238,7 +238,7 @@ fun AdminMainScreen(
                     }
                 )
 
-                44 -> AdminProfileContent(
+                4 -> AdminProfileContent(
                     email = adminEmail,
                     onLogOut = onLogOut
                 )

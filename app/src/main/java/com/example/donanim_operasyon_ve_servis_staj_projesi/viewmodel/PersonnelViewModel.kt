@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.PersonnelRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.personnel.DeletePersonnelUseCase
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -21,6 +22,7 @@ import javax.inject.Inject
 @HiltViewModel
 class PersonnelViewModel @Inject constructor(
     private val repository: PersonnelRepository,
+    private val deletePersonnelUseCase: DeletePersonnelUseCase,
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore
 ) : ViewModel() {
@@ -318,7 +320,9 @@ class PersonnelViewModel @Inject constructor(
     }
 
     fun deletePersonnel(personnel: Personnel) {
-        viewModelScope.launch { repository.deletePersonnel(personnel) }
+        viewModelScope.launch {
+            deletePersonnelUseCase(personnel)
+        }
     }
 
     fun updateSearchQuery(query: String) {

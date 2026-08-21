@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ServicePhoto::class,
         ServiceClosingSignature::class
     ],
-    version = 15, // Versiyon 14'ten 15'e çıkarıldı (Personel konum alanları eklendi)
+    version = 16,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -66,12 +66,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        // YENİ EKLENEN MİGRATİON (14 -> 15): personnel_table tablosuna personel konum ve güncelleme alanları ekleniyor
         val MIGRATION_14_15 = object : Migration(14, 15) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE personnel_table ADD COLUMN currentLatitude REAL DEFAULT NULL")
                 db.execSQL("ALTER TABLE personnel_table ADD COLUMN currentLongitude REAL DEFAULT NULL")
                 db.execSQL("ALTER TABLE personnel_table ADD COLUMN lastLocationUpdate INTEGER DEFAULT NULL")
+            }
+        }
+
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE service_records ADD COLUMN assignedPersonnelName TEXT DEFAULT NULL"
+                )
             }
         }
 
@@ -89,7 +96,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_11_12,
                         MIGRATION_12_13,
                         MIGRATION_13_14,
-                        MIGRATION_14_15 // YENİ MİGRATİON BURAYA EKLENDİ
+                        MIGRATION_14_15,
+                        AppDatabase.MIGRATION_15_16
                     )
                     .build()
                 INSTANCE = instance

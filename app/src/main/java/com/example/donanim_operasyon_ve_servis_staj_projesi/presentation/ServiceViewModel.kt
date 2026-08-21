@@ -15,12 +15,15 @@ import java.util.Locale
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.CompleteServiceUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.UpdateServiceStatusUseCase
 
 @HiltViewModel
 class ServiceViewModel @Inject constructor(
     private val repository: ServiceRepository,
-    private val completeServiceUseCase: CompleteServiceUseCase
+    private val completeServiceUseCase: CompleteServiceUseCase,
+    private val updateServiceStatusUseCase: UpdateServiceStatusUseCase
 ) : ViewModel() {
+
     // --- TEMEL STATE'LER ---
     private val _serviceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
     val serviceRecords: StateFlow<List<ServiceRecord>> = _serviceRecords.asStateFlow()
@@ -99,11 +102,24 @@ class ServiceViewModel @Inject constructor(
     var selectedDeviceTypesFilter = mutableStateOf(setOf<String>())
         private set
 
+    // UI'nin doğrudan okuduğu Compose state'leri
     var selectedPersonnelFilter by mutableStateOf<String?>("Tümü")
+        private set
     var selectedCompanyFilter by mutableStateOf<String?>("Tümü")
+        private set
     var selectedLocationFilter by mutableStateOf<String?>("Tümü")
+        private set
     var selectedAssignmentStatusFilter by mutableStateOf("Tümü")
+        private set
     var selectedSortOption by mutableStateOf("En yeni")
+        private set
+
+    // Filtreleme akışının reaktif olarak dinlediği Flow karşılıkları
+    private val _selectedPersonnelFilterFlow = MutableStateFlow<String?>("Tümü")
+    private val _selectedCompanyFilterFlow = MutableStateFlow<String?>("Tümü")
+    private val _selectedLocationFilterFlow = MutableStateFlow<String?>("Tümü")
+    private val _selectedAssignmentStatusFilterFlow = MutableStateFlow("Tümü")
+    private val _selectedSortOptionFlow = MutableStateFlow("En yeni")
 
     // --- PAGINATION STATE'LERİ ---
     private val _adminCurrentPage = MutableStateFlow(1)
@@ -164,19 +180,24 @@ class ServiceViewModel @Inject constructor(
     }.combine(
         combine(
             _selectedDeviceTypesFilter,
-            MutableStateFlow(selectedPersonnelFilter),
-            MutableStateFlow(selectedCompanyFilter),
-            MutableStateFlow(selectedLocationFilter),
-            MutableStateFlow(selectedAssignmentStatusFilter)
+            _selectedPersonnelFilterFlow,
+            _selectedCompanyFilterFlow,
+            _selectedLocationFilterFlow,
+            _selectedAssignmentStatusFilterFlow
         ) { types, personnel, company, location, assignment ->
             Triple(types, personnel, Triple(company, location, assignment))
+        }.combine(_selectedSortOptionFlow) { extraFilters, sort ->
+            extraFilters to sort
         }
-    ) { firstTriple, secondTriple ->
+    ) { firstTriple, secondWithSort ->
         val records = firstTriple.first
         val tab = firstTriple.second
         val query = firstTriple.third.first
         val statuses = firstTriple.third.second
         val priorities = firstTriple.third.third
+
+        val secondTriple = secondWithSort.first
+        val sort = secondWithSort.second
 
         val types = secondTriple.first
         val personnel = secondTriple.second
@@ -195,10 +216,14 @@ class ServiceViewModel @Inject constructor(
             company = company,
             location = location,
             assignment = assignment,
-            dateFilter = "Tümü",
-            sort = selectedSortOption
+            dateFilter = selectedDateFilter,
+            sort = sort
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
 
     // --- 2. ADMIN DİNAMİK PAGINATION FLOWS (1. Sayfa 3, Sonrakiler 5 Kayıt) ---
     val admintotalPages: StateFlow<Int> = filteredServiceRecords.map { list ->
@@ -345,8 +370,8 @@ class ServiceViewModel @Inject constructor(
             }
 
             val assignmentMatch = when (assignment) {
-                "Atanmış" -> record.assignedPersonnelId != null || !record.assignedPersonnelUid.isNullOrBlank()
-                "Atanmamış" -> record.assignedPersonnelId == null && record.assignedPersonnelUid.isNullOrBlank()
+                "Atanmış" -> record.assignedPersonnelId != null
+                "Atanmamış" -> record.assignedPersonnelId == null
                 else -> true
             }
 
@@ -439,6 +464,8 @@ class ServiceViewModel @Inject constructor(
         selectedDateFilter = dateFilter
         customStartDate = start
         customEndDate = end
+
+        // Compose/UI state'leri
         selectedStatusesFilter.value = statuses
         selectedPrioritiesFilter.value = priorities
         selectedDeviceTypesFilter.value = deviceTypes
@@ -448,9 +475,16 @@ class ServiceViewModel @Inject constructor(
         selectedAssignmentStatusFilter = assignment
         selectedSortOption = sort
 
+        // Reaktif filtre Flow'ları
         _selectedStatusesFilter.value = statuses
         _selectedPrioritiesFilter.value = priorities
         _selectedDeviceTypesFilter.value = deviceTypes
+        _selectedPersonnelFilterFlow.value = personnel
+        _selectedCompanyFilterFlow.value = company
+        _selectedLocationFilterFlow.value = location
+        _selectedAssignmentStatusFilterFlow.value = assignment
+        _selectedSortOptionFlow.value = sort
+
         _adminCurrentPage.value = 1
     }
 
@@ -458,6 +492,8 @@ class ServiceViewModel @Inject constructor(
         selectedDateFilter = "Tümü"
         customStartDate = null
         customEndDate = null
+
+        // Compose/UI state'lerini temizle
         selectedStatusesFilter.value = emptySet()
         selectedPrioritiesFilter.value = emptySet()
         selectedDeviceTypesFilter.value = emptySet()
@@ -468,11 +504,19 @@ class ServiceViewModel @Inject constructor(
         selectedSortOption = "En yeni"
         adminSearchQuery = ""
         adminSelectedStatusTab = "Tümü"
+
+        // Reaktif Flow state'lerini de aynı anda temizle
         _adminSearchQuery.value = ""
         _adminSelectedStatusTab.value = "Tümü"
         _selectedStatusesFilter.value = emptySet()
         _selectedPrioritiesFilter.value = emptySet()
         _selectedDeviceTypesFilter.value = emptySet()
+        _selectedPersonnelFilterFlow.value = "Tümü"
+        _selectedCompanyFilterFlow.value = "Tümü"
+        _selectedLocationFilterFlow.value = "Tümü"
+        _selectedAssignmentStatusFilterFlow.value = "Tümü"
+        _selectedSortOptionFlow.value = "En yeni"
+
         _adminCurrentPage.value = 1
     }
 
@@ -574,7 +618,7 @@ class ServiceViewModel @Inject constructor(
                 _errorMessage.value = "Tamamlanmış bir iş emrinin durumu değiştirilemez."
                 return@launch
             }
-            repository.updateStatus(recordId, newStatus)
+            updateServiceStatusUseCase(recordId, newStatus)
             loadRecords()
             _selectedRecord.value = _selectedRecord.value?.copy(status = newStatus)
         }
@@ -591,7 +635,7 @@ class ServiceViewModel @Inject constructor(
 
     fun acceptService(recordId: Int, personnelId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.updateStatus(recordId, ServiceStatus.YOLDA)
+            updateServiceStatusUseCase(recordId, ServiceStatus.YOLDA)
             loadRecords()
             loadRecordsForPersonnel(personnelId)
             _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.YOLDA)
@@ -602,7 +646,7 @@ class ServiceViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             val currentRecord = _serviceRecords.value.find { it.id == recordId } ?: return@launch
             if (currentRecord.status == ServiceStatus.YOLDA || currentRecord.status == ServiceStatus.BEKLIYOR) {
-                repository.updateStatus(recordId, ServiceStatus.ISLEME_BASLANDI)
+                updateServiceStatusUseCase(recordId, ServiceStatus.ISLEME_BASLANDI)
                 loadRecords()
                 loadRecordsForPersonnel(personnelId)
                 _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.ISLEME_BASLANDI)
@@ -612,7 +656,7 @@ class ServiceViewModel @Inject constructor(
 
     fun setParcaBekleniyor(recordId: Int, personnelId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.updateStatus(recordId, ServiceStatus.PARCA_BEKLENIYOR)
+            updateServiceStatusUseCase(recordId, ServiceStatus.PARCA_BEKLENIYOR)
             loadRecords()
             loadRecordsForPersonnel(personnelId)
             _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.PARCA_BEKLENIYOR)
