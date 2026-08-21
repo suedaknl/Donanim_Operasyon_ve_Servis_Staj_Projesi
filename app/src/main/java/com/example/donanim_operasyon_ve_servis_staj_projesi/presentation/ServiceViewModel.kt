@@ -18,6 +18,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.servi
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.UpdateServiceStatusUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.StartServiceWorkUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.UpdateServiceUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.DeleteServiceUseCase
 
 @HiltViewModel
 class ServiceViewModel @Inject constructor(
@@ -25,7 +26,8 @@ class ServiceViewModel @Inject constructor(
     private val completeServiceUseCase: CompleteServiceUseCase,
     private val updateServiceStatusUseCase: UpdateServiceStatusUseCase,
     private val startServiceWorkUseCase: StartServiceWorkUseCase,
-    private val updateServiceUseCase: UpdateServiceUseCase
+    private val updateServiceUseCase: UpdateServiceUseCase,
+    private val deleteServiceUseCase: DeleteServiceUseCase
 ) : ViewModel() {
 
     // --- TEMEL STATE'LER ---
@@ -598,11 +600,17 @@ class ServiceViewModel @Inject constructor(
 
     fun deleteRecord(record: ServiceRecord) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.deleteRecord(record)
-            loadRecords()
+            val result = deleteServiceUseCase(record)
+
+            if (result.isSuccess) {
+                loadRecords()
+            } else {
+                _errorMessage.value =
+                    result.exceptionOrNull()?.message
+                        ?: "İş emri silinirken bir hata oluştu."
+            }
         }
     }
-
     fun updateRecord(record: ServiceRecord) {
         viewModelScope.launch {
             val result = updateServiceUseCase(record)
