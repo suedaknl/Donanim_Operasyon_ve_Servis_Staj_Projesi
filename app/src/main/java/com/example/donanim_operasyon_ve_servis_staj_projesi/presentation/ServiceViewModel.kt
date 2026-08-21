@@ -16,12 +16,14 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.CompleteServiceUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.UpdateServiceStatusUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.StartServiceWorkUseCase
 
 @HiltViewModel
 class ServiceViewModel @Inject constructor(
     private val repository: ServiceRepository,
     private val completeServiceUseCase: CompleteServiceUseCase,
-    private val updateServiceStatusUseCase: UpdateServiceStatusUseCase
+    private val updateServiceStatusUseCase: UpdateServiceStatusUseCase,
+    private val startServiceWorkUseCase: StartServiceWorkUseCase
 ) : ViewModel() {
 
     // --- TEMEL STATE'LER ---
@@ -626,7 +628,7 @@ class ServiceViewModel @Inject constructor(
 
     fun verifyAndStartServiceWork(recordId: Int, personnelId: Int, distance: Float) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.verifyAndStartServiceWork(recordId, personnelId, distance)
+            startServiceWorkUseCase(recordId, personnelId, distance)
             loadRecords()
             loadRecordsForPersonnel(personnelId)
             _selectedRecord.value = _selectedRecord.value?.copy(status = ServiceStatus.ISLEME_BASLANDI)
