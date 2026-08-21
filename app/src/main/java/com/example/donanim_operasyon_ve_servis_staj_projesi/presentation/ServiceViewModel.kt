@@ -17,13 +17,15 @@ import javax.inject.Inject
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.CompleteServiceUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.UpdateServiceStatusUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.StartServiceWorkUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.UpdateServiceUseCase
 
 @HiltViewModel
 class ServiceViewModel @Inject constructor(
     private val repository: ServiceRepository,
     private val completeServiceUseCase: CompleteServiceUseCase,
     private val updateServiceStatusUseCase: UpdateServiceStatusUseCase,
-    private val startServiceWorkUseCase: StartServiceWorkUseCase
+    private val startServiceWorkUseCase: StartServiceWorkUseCase,
+    private val updateServiceUseCase: UpdateServiceUseCase
 ) : ViewModel() {
 
     // --- TEMEL STATE'LER ---
@@ -603,13 +605,15 @@ class ServiceViewModel @Inject constructor(
 
     fun updateRecord(record: ServiceRecord) {
         viewModelScope.launch {
-            val currentRecord = _serviceRecords.value.find { it.id == record.id }
-            if (currentRecord != null && currentRecord.status == ServiceStatus.TAMAMLANDI) {
-                _errorMessage.value = "Tamamlanmış bir iş emrinin detayları değiştirilemez."
-                return@launch
+            val result = updateServiceUseCase(record)
+
+            if (result.isSuccess) {
+                loadRecords()
+            } else {
+                _errorMessage.value =
+                    result.exceptionOrNull()?.message
+                        ?: "İş emri güncellenirken bir hata oluştu."
             }
-            repository.updateService(record)
-            loadRecords()
         }
     }
 
