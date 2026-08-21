@@ -23,12 +23,12 @@ data class ServiceRecord(
     val address: String? = null,
     val plannedDate: String? = null,
     val rejectionReason: String? = null,
-
-    // YENİ EKLENEN SENKRONİZASYON ALANLARI BURADA OLMALI
+    val isArchived: Boolean = false,
+    val archivedAt: Long? = null,
     val firestoreId: String? = null,
     val assignedPersonnelUid: String? = null,
-    val latitude: Double? = null,   // YENİ EKLENDİ
-    val longitude: Double? = null   // YENİ EKLENDİ
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 
 object ServiceStatus {

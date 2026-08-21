@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ServicePhoto::class,
         ServiceClosingSignature::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -82,6 +82,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE service_records ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE service_records ADD COLUMN archivedAt INTEGER DEFAULT NULL")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -97,7 +104,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_12_13,
                         MIGRATION_13_14,
                         MIGRATION_14_15,
-                        AppDatabase.MIGRATION_15_16
+                        AppDatabase.MIGRATION_15_16,
+                        AppDatabase.MIGRATION_16_17
                     )
                     .build()
                 INSTANCE = instance

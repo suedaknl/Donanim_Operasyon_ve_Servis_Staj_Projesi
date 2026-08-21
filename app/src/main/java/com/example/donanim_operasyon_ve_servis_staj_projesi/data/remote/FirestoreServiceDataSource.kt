@@ -147,7 +147,9 @@ class FirestoreServiceDataSource @Inject constructor(
                 "firestoreId" to record.firestoreId,
                 "rejectionReason" to record.rejectionReason,
                 "latitude" to record.latitude,
-                "longitude" to record.longitude
+                "longitude" to record.longitude,
+                "isArchived" to record.isArchived,
+                "archivedAt" to record.archivedAt
             )
 
             if (!record.firestoreId.isNullOrEmpty()) {
@@ -189,8 +191,10 @@ class FirestoreServiceDataSource @Inject constructor(
                     firestoreId = document.id,
                     assignedPersonnelUid = document.getString("assignedPersonnelUid"),
                     rejectionReason = document.getString("rejectionReason"),
-                    latitude = document.getDouble("latitude"),   // YENİ EKLENDİ
-                    longitude = document.getDouble("longitude")  // YENİ EKLENDİ
+                    latitude = document.getDouble("latitude"),
+                    longitude = document.getDouble("longitude"),
+                    isArchived = document.getBoolean("isArchived") ?: false,
+                    archivedAt = document.getLong("archivedAt")
                 )
                 servicesList.add(service)
             }
@@ -221,8 +225,10 @@ class FirestoreServiceDataSource @Inject constructor(
                 "assignedPersonnelUid" to record.assignedPersonnelUid,
                 "firestoreId" to firestoreId,
                 "rejectionReason" to record.rejectionReason,
-                "latitude" to record.latitude,   // YENİ EKLENDİ
-                "longitude" to record.longitude  // YENİ EKLENDİ
+                "latitude" to record.latitude,
+                "longitude" to record.longitude,
+                "isArchived" to record.isArchived,
+                "archivedAt" to record.archivedAt
             )
 
             collection.document(firestoreId).set(serviceMap).await()
@@ -368,8 +374,10 @@ class FirestoreServiceDataSource @Inject constructor(
                     firestoreId = document.id,
                     assignedPersonnelUid = document.getString("assignedPersonnelUid"),
                     rejectionReason = document.getString("rejectionReason"),
-                    latitude = document.getDouble("latitude"),   // YENİ EKLENDİ
-                    longitude = document.getDouble("longitude")  // YENİ EKLENDİ
+                    latitude = document.getDouble("latitude"),
+                    longitude = document.getDouble("longitude"),
+                    isArchived = document.getBoolean("isArchived") ?: false,
+                    archivedAt = document.getLong("archivedAt")
                 )
                 servicesList.add(service)
             }

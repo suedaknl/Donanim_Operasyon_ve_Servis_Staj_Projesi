@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
@@ -36,6 +37,7 @@ fun AdminServiceListScreen(
     serviceViewModel: ServiceViewModel,
     onNavigateToAddService: () -> Unit,
     onServiceClick: (ServiceRecord) -> Unit,
+    onOpenArchive: () -> Unit,
     onLogOut: () -> Unit = {}
 ) {
     val tabs = listOf("Tümü", "Bekleyen", "Yolda", "İşlemde", "Tamamlanan", "Reddedilen")
@@ -60,6 +62,18 @@ fun AdminServiceListScreen(
         topBar = {
             TopAppBar(
                 title = { Text("İş Emirleri Yönetimi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
+                actions = {
+                    FilledTonalButton(
+                        onClick = onOpenArchive,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(end = 8.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Arşiv", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 windowInsets = WindowInsets(top = 0.dp, bottom = 0.dp)
             )

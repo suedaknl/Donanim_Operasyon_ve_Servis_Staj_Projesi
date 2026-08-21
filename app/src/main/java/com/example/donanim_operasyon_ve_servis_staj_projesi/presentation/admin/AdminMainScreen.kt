@@ -32,6 +32,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.s
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.list.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.AdminMapScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.archive.AdminArchiveScreen
 import kotlin.math.roundToInt
 
 @Composable
@@ -47,6 +48,7 @@ fun AdminMainScreen(
     onLogOut: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var serviceSubScreen by rememberSaveable { mutableStateOf("list") }
     val context = LocalContext.current
 
     // Sürüklenebilir FAB State'leri
@@ -74,38 +76,53 @@ fun AdminMainScreen(
             ) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
+                    onClick = {
+                        selectedTab = 0
+                        serviceSubScreen = "list"
+                    },
                     icon = { Icon(if (selectedTab == 0) Icons.Filled.Dashboard else Icons.Outlined.Dashboard, contentDescription = "Ana Sayfa") },
                     label = { Text("Ana Sayfa") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
+                    onClick = {
+                        selectedTab = 1
+                        serviceSubScreen = "list"
+                    },
                     icon = { Icon(if (selectedTab == 1) Icons.Filled.ListAlt else Icons.Outlined.ListAlt, contentDescription = "İş Emirleri") },
                     label = { Text("İş Emirleri") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
+                    onClick = {
+                        selectedTab = 2
+                        serviceSubScreen = "list"
+                    },
                     icon = { Icon(if (selectedTab == 2) Icons.Filled.People else Icons.Outlined.PeopleOutline, contentDescription = "Personeller") },
                     label = { Text("Personeller") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
+                    onClick = {
+                        selectedTab = 3
+                        serviceSubScreen = "list"
+                    },
                     icon = { Icon(if (selectedTab == 3) Icons.Filled.LocationOn else Icons.Outlined.LocationOn, contentDescription = "Konum") },
                     label = { Text("Konum") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 4,
-                    onClick = { selectedTab = 4 },
+                    onClick = {
+                        selectedTab = 4
+                        serviceSubScreen = "list"
+                    },
                     icon = { Icon(if (selectedTab == 4) Icons.Filled.AdminPanelSettings else Icons.Outlined.AdminPanelSettings, contentDescription = "Profil") },
                     label = { Text("Profil") }
                 )
             }
         },
         floatingActionButton = {
-            if (selectedTab == 0 || selectedTab == 1) {
+            if ((selectedTab == 0 || selectedTab == 1) && serviceSubScreen == "list") {
                 Box(
                     contentAlignment = Alignment.BottomEnd,
                     modifier = Modifier
@@ -194,25 +211,37 @@ fun AdminMainScreen(
                     onCardClick = { statusTab ->
                         serviceViewModel.updateAdminSelectedStatusTab(statusTab)
                         selectedTab = 1
+                        serviceSubScreen = "list"
                     },
                     onPersonnelCardClick = {
                         selectedTab = 2
+                        serviceSubScreen = "list"
                     }
                 )
 
                 1 -> {
-                    AdminServiceListScreen(
-                        serviceList = filteredServices,
-                        personnelList = personnelList,
-                        selectedTab = serviceViewModel.adminSelectedStatusTab,
-                        onTabSelected = { tab -> serviceViewModel.updateAdminSelectedStatusTab(tab) },
-                        searchQuery = serviceViewModel.adminSearchQuery,
-                        onSearchQueryChange = { query -> serviceViewModel.updateAdminSearchQuery(query) },
-                        serviceViewModel = serviceViewModel,
-                        onNavigateToAddService = onNavigateToAddService,
-                        onServiceClick = onServiceClick,
-                        onLogOut = onLogOut
-                    )
+                    if (serviceSubScreen == "list") {
+                        AdminServiceListScreen(
+                            serviceList = filteredServices,
+                            personnelList = personnelList,
+                            selectedTab = serviceViewModel.adminSelectedStatusTab,
+                            onTabSelected = { tab -> serviceViewModel.updateAdminSelectedStatusTab(tab) },
+                            searchQuery = serviceViewModel.adminSearchQuery,
+                            onSearchQueryChange = { query -> serviceViewModel.updateAdminSearchQuery(query) },
+                            serviceViewModel = serviceViewModel,
+                            onNavigateToAddService = onNavigateToAddService,
+                            onServiceClick = onServiceClick,
+                            onOpenArchive = { serviceSubScreen = "archive" },
+                            onLogOut = onLogOut
+                        )
+                    } else if (serviceSubScreen == "archive") {
+                        AdminArchiveScreen(
+                            serviceViewModel = serviceViewModel,
+                            personnelList = personnelList,
+                            onServiceClick = onServiceClick,
+                            onBackClick = { serviceSubScreen = "list" }
+                        )
+                    }
                 }
 
                 2 -> {

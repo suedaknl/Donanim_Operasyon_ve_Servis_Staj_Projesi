@@ -19,6 +19,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.servi
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.StartServiceWorkUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.UpdateServiceUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.DeleteServiceUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.ArchiveServiceUseCase
 
 @HiltViewModel
 class ServiceViewModel @Inject constructor(
@@ -27,7 +28,8 @@ class ServiceViewModel @Inject constructor(
     private val updateServiceStatusUseCase: UpdateServiceStatusUseCase,
     private val startServiceWorkUseCase: StartServiceWorkUseCase,
     private val updateServiceUseCase: UpdateServiceUseCase,
-    private val deleteServiceUseCase: DeleteServiceUseCase
+    private val deleteServiceUseCase: DeleteServiceUseCase,
+    private val archiveServiceUseCase: ArchiveServiceUseCase
 ) : ViewModel() {
 
     // --- TEMEL STATE'LER ---
@@ -332,6 +334,8 @@ class ServiceViewModel @Inject constructor(
         val lowerQuery = query.trim().lowercase(Locale.ROOT)
 
         val filtered = records.filter { record ->
+            val notArchived = !record.isArchived
+
             val tabMatch = when (tab) {
                 "Tümü" -> true
                 "Bekleyen" -> record.status == ServiceStatus.BEKLIYOR
@@ -381,7 +385,7 @@ class ServiceViewModel @Inject constructor(
                 else -> true
             }
 
-            tabMatch && queryMatch && statusMatch && priorityMatch && deviceMatch && personnelMatch && companyMatch && locationMatch && assignmentMatch
+            notArchived && tabMatch && queryMatch && statusMatch && priorityMatch && deviceMatch && personnelMatch && companyMatch && locationMatch && assignmentMatch
         }
 
         return filtered.sortedWith(
@@ -713,6 +717,28 @@ class ServiceViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             repository.clearAssignedPersonnel(personnelId)
             loadRecords()
+        }
+    }
+
+    fun archiveService(recordId: Int) {
+        viewModelScope.launch {
+            val result = archiveServiceUseCase(recordId)
+
+            if (result.isSuccess) {
+                loadRecords()
+
+                if (_selectedRecord.value?.id == recordId) {
+                    _selectedRecord.value =
+                        _selectedRecord.value?.copy(
+                            isArchived = true,
+                            archivedAt = System.currentTimeMillis()
+                        )
+                }
+            } else {
+                _errorMessage.value =
+                    result.exceptionOrNull()?.message
+                        ?: "İş emri arşivlenirken bir hata oluştu."
+            }
         }
     }
 
