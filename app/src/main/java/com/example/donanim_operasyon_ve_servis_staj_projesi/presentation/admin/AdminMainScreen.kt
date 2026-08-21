@@ -32,7 +32,6 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.s
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.list.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.AdminMapScreen
-import com.google.firebase.auth.FirebaseAuth
 import kotlin.math.roundToInt
 
 @Composable
@@ -44,6 +43,7 @@ fun AdminMainScreen(
     onNavigateToAddPersonnel: () -> Unit,
     onNavigateToEditPersonnel: (Int) -> Unit,
     onNavigateToPersonnelDetail: (Int) -> Unit,
+    adminEmail: String,
     onLogOut: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -238,7 +238,10 @@ fun AdminMainScreen(
                     }
                 )
 
-                4 -> AdminProfileContent(onLogOut = onLogOut)
+                44 -> AdminProfileContent(
+                    email = adminEmail,
+                    onLogOut = onLogOut
+                )
             }
         }
     }
@@ -372,9 +375,10 @@ fun AdminSummaryCard(
 }
 
 @Composable
-fun AdminProfileContent(onLogOut: () -> Unit) {
-    val currentUser = FirebaseAuth.getInstance().currentUser
-    val email = currentUser?.email ?: "Sistem Yöneticisi"
+fun AdminProfileContent(
+    email: String,
+    onLogOut: () -> Unit
+) {
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),

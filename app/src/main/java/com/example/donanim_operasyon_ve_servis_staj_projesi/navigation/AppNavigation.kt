@@ -12,7 +12,6 @@ import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.AppDatabase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePhoto
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.AdminLoginScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.PersonnelLoginScreen
@@ -21,7 +20,6 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceDetailScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceHistoryScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.AddPersonnelScreen
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.list.PersonnelListScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelWelcomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelMainScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.splash.SplashScreen
@@ -50,7 +48,6 @@ fun AppNavigation(
     val navController = rememberNavController()
 
     val context = LocalContext.current
-    val database = remember { AppDatabase.getDatabase(context) }
 
     val sharedServiceViewModel: ServiceViewModel = hiltViewModel()
     val sessionManager = remember { SessionManager(context) }
@@ -151,17 +148,24 @@ fun AppNavigation(
             AdminMainScreen(
                 serviceViewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
-                onNavigateToAddService = { navController.navigate("add_service") },
+                adminEmail = authRepository.getCurrentUser()?.email ?: "Sistem Yöneticisi",
+                onNavigateToAddService = { navController.navigate(route = "add_service") },
                 onServiceClick = { clickedService ->
-                    navController.navigate("service_detail/${clickedService.id}")
+                    navController.navigate(route = "service_detail/${clickedService.id}")
                 },
-                onNavigateToAddPersonnel = { navController.navigate("add_personnel") },
-                onNavigateToEditPersonnel = { id -> navController.navigate("add_personnel?personnelId=$id") },
-                onNavigateToPersonnelDetail = { id -> navController.navigate("personnel_detail/$id") },
+                onNavigateToAddPersonnel = { navController.navigate(route = "add_personnel") },
+                onNavigateToEditPersonnel = { id ->
+                    navController.navigate(route = "add_personnel?personnelId=$id")
+                },
+                onNavigateToPersonnelDetail = { id ->
+                    navController.navigate(route = "personnel_detail/$id")
+                },
                 onLogOut = {
                     authRepository.signOut()
                     sessionManager.clearSession()
-                    navController.navigate("welcome") { popUpTo(0) }
+                    navController.navigate(route = "welcome") {
+                        popUpTo(0)
+                    }
                 }
             )
         }
