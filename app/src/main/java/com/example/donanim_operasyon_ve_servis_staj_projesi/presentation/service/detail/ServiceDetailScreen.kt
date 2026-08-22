@@ -468,6 +468,7 @@ fun ServiceDetailScreen(
                                     onNavigateToEdit = onNavigateToEdit,
                                     onArchiveClick = { showArchiveDialog = true },
                                     onDeleteClick = { showDeleteDialog = true },
+                                    signatureData = closingSignature?.signatureData,
                                     onImageClick = { uri -> selectedImageUri = uri }
                                 )
                             }

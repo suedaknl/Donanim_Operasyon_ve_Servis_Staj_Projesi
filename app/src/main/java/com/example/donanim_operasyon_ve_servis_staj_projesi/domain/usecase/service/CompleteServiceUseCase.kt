@@ -15,7 +15,8 @@ class CompleteServiceUseCase @Inject constructor(
         serviceId: Int,
         personnelId: Int,
         closingNoteText: String,
-        signatureUri: String,
+        signatureData: String,
+        signatureUri: String? = null,
         afterPhotoUri: String
     ): Result<Unit> {
 
@@ -23,7 +24,7 @@ class CompleteServiceUseCase @Inject constructor(
             return Result.failure(Exception("Kapanış notu eksik."))
         }
 
-        if (signatureUri.isBlank()) {
+        if (signatureData.isBlank()) {
             return Result.failure(Exception("Dijital imza eksik."))
         }
 
@@ -57,6 +58,7 @@ class CompleteServiceUseCase @Inject constructor(
             serviceRecord = completedRecord,
             personnelId = personnelId,
             closingNoteText = closingNoteText,
+            signatureData = signatureData,
             signatureUri = signatureUri
         )
     }

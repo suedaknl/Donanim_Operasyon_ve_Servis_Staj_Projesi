@@ -18,9 +18,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.common.SignaturePad
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.common.rememberSignatureController
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.common.saveSignatureToInternalStorage
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.signature.SignaturePad
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.signature.rememberSignatureController
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.converter.SignatureConverter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -200,32 +200,40 @@ fun ClosingFormScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // İŞİ KAPAT BUTONU VE DOĞRU VALIDASYON (İmzanın Controller VEYA ViewModel URI'sinde var olması kontrol edilir)
-            val hasSignature = !signatureController.isEmpty || closingSignatureUri != null
-            val isFormValid = closingNote.isNotBlank() && hasSignature && closingAfterPhotoUri != null
+            val hasSignature = !signatureController.isEmpty
+
+            val isFormValid =
+                closingNote.isNotBlank() &&
+                        hasSignature &&
+                        closingAfterPhotoUri != null
             val isLoading = closingState is ServiceViewModel.ClosingState.Loading
 
             Button(
                 onClick = {
-                    // Eğer imza henüz dahili depolamaya kaydedilmediyse controller'dan alıp kaydedelim
-                    if (closingSignatureUri == null) {
-                        val bitmap = signatureController.getSignatureBitmap()
-                        if (bitmap != null) {
-                            val uri = saveSignatureToInternalStorage(context, bitmap)
-                            if (uri != null) {
-                                viewModel.updateClosingSignatureUri(uri)
-                            }
-                        }
-                    }
+                    val signatureData = SignatureConverter.toJson(
+                        signatureController.strokes
+                    )
 
-                    // Formu gönder
-                    viewModel.submitClosingForm(serviceId, personnelId)
+                    viewModel.updateClosingSignatureData(signatureData)
+
+                    viewModel.submitClosingForm(
+                        serviceId = serviceId,
+                        personnelId = personnelId
+                    )
                 },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
                 enabled = isFormValid && !isLoading,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
             ) {
                 if (isLoading) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
                 } else {
                     Text("İşi Kapat (Tamamlandı)")
                 }

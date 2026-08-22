@@ -83,6 +83,7 @@ fun ServiceReportSection(
                             notes = combinedNotes,
                             photos = combinedPhotos,
                             signaturePath = effectiveSignaturePath,
+                            signatureData = null,
                             history = serviceHistory
                         )
                         if (pdfFile != null && pdfFile.exists()) {
@@ -112,6 +113,7 @@ fun ServiceReportSection(
                             notes = combinedNotes,
                             photos = combinedPhotos,
                             signaturePath = effectiveSignaturePath,
+                            signatureData = null,
                             history = serviceHistory
                         )
                         if (pdfFile != null && pdfFile.exists()) {

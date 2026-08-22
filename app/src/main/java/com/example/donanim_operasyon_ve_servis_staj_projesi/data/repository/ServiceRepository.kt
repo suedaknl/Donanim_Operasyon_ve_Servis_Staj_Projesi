@@ -302,7 +302,8 @@ class ServiceRepository @Inject constructor(
         serviceRecord: ServiceRecord,
         personnelId: Int,
         closingNoteText: String,
-        signatureUri: String
+        signatureData: String,
+        signatureUri: String? = null
     ): Result<Unit> {
         return try {
             val freshRecord = serviceDao.getServiceById(serviceRecord.id)
@@ -313,15 +314,24 @@ class ServiceRepository @Inject constructor(
             }
 
             val currentStatus = freshRecord.status.trim()
-            val isValidForClosing = currentStatus.equals(ServiceStatus.ISLEME_BASLANDI, ignoreCase = true) ||
-                    currentStatus.equals(ServiceStatus.PARCA_BEKLENIYOR, ignoreCase = true)
+
+            val isValidForClosing =
+                currentStatus.equals(ServiceStatus.ISLEME_BASLANDI, ignoreCase = true) ||
+                        currentStatus.equals(ServiceStatus.PARCA_BEKLENIYOR, ignoreCase = true)
 
             if (!isValidForClosing) {
-                return Result.failure(Exception("Hata: İş emri kapatılabilmesi için 'İşleme Başlandı' durumunda olmalıdır."))
+                return Result.failure(
+                    Exception(
+                        "Hata: İş emri kapatılabilmesi için 'İşleme Başlandı' veya " +
+                                "'Parça Bekleniyor' durumunda olmalıdır."
+                    )
+                )
             }
 
-            if (closingNoteText.isBlank() || signatureUri.isBlank()) {
-                return Result.failure(Exception("Hata: Kapanış notu ve imza zorunludur."))
+            if (closingNoteText.isBlank() || signatureData.isBlank()) {
+                return Result.failure(
+                    Exception("Hata: Kapanış notu ve imza zorunludur.")
+                )
             }
 
             val closingNote = ServiceNote(
@@ -335,34 +345,44 @@ class ServiceRepository @Inject constructor(
             val signature = ServiceClosingSignature(
                 serviceRecordId = freshRecord.id,
                 personnelId = personnelId,
-                signatureLocalUri = signatureUri,
+                signatureData = signatureData,
+                signatureLocalUri = signatureUri ?: "",
                 createdAt = System.currentTimeMillis()
             )
 
-            val updatedRecord = freshRecord.copy(status = ServiceStatus.TAMAMLANDI)
+            val updatedRecord = freshRecord.copy(
+                status = ServiceStatus.TAMAMLANDI
+            )
 
-            serviceDao.completeServiceTransaction(updatedRecord, closingNote, signature)
+            serviceDao.completeServiceTransaction(
+                updatedRecord,
+                closingNote,
+                signature
+            )
 
             withContext(Dispatchers.IO) {
                 try {
                     val firestoreId = updatedRecord.firestoreId
+
                     if (!firestoreId.isNullOrEmpty()) {
                         firestoreDataSource.completeServiceInFirestore(
                             firestoreId = firestoreId,
                             status = ServiceStatus.TAMAMLANDI
                         )
 
-                        firestoreDataSource.uploadSignatureToFirebase(
-                            localUriString = signatureUri,
-                            firestoreId = firestoreId
-                        )
+                        // Eski PNG sistemi için geçici uyumluluk.
+                        if (!signatureUri.isNullOrBlank()) {
+                            firestoreDataSource.uploadSignatureToFirebase(
+                                localUriString = signatureUri,
+                                firestoreId = firestoreId
+                            )
+                        }
 
                         firestoreDataSource.uploadNoteToFirebase(
                             note = closingNote,
                             firestoreId = firestoreId
                         )
 
-                        // --- İŞLEM GEÇMİŞİ: İMZA VE TAMAMLANMA ---
                         recordHistory(
                             firestoreId = firestoreId,
                             eventType = "SIGNATURE_ADDED",
@@ -386,6 +406,7 @@ class ServiceRepository @Inject constructor(
             }
 
             Result.success(Unit)
+
         } catch (e: Exception) {
             Result.failure(e)
         }

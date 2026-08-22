@@ -54,8 +54,15 @@ class ServiceViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage = _errorMessage.asStateFlow()
 
+    private val _closingSignatureData = MutableStateFlow<String?>(null)
+    val closingSignatureData: StateFlow<String?> = _closingSignatureData
+
     fun clearErrorMessage() {
         _errorMessage.value = null
+    }
+
+    fun updateClosingSignatureData(data: String?) {
+        _closingSignatureData.value = data
     }
 
     // --- PERSONEL AKIŞ STATE'LERİ ---
@@ -810,7 +817,8 @@ class ServiceViewModel @Inject constructor(
             _closingState.value = ClosingState.Loading
 
             val note = _closingNote.value
-            val signature = _closingSignatureUri.value
+            val signatureData = _closingSignatureData.value
+            val signatureUri = _closingSignatureUri.value
             val afterPhoto = _closingAfterPhotoUri.value
 
             if (note.isBlank()) {
@@ -818,7 +826,7 @@ class ServiceViewModel @Inject constructor(
                 return@launch
             }
 
-            if (signature.isNullOrBlank()) {
+            if (signatureData.isNullOrBlank()) {
                 _closingState.value = ClosingState.Error("Dijital imza eksik.")
                 return@launch
             }
@@ -832,7 +840,8 @@ class ServiceViewModel @Inject constructor(
                 serviceId = serviceId,
                 personnelId = personnelId,
                 closingNoteText = note,
-                signatureUri = signature,
+                signatureData = signatureData,
+                signatureUri = signatureUri,
                 afterPhotoUri = afterPhoto
             )
 
@@ -842,7 +851,8 @@ class ServiceViewModel @Inject constructor(
                 loadRecordsForPersonnel(personnelId)
             } else {
                 _closingState.value = ClosingState.Error(
-                    result.exceptionOrNull()?.message ?: "İşlem sırasında bilinmeyen bir hata oluştu."
+                    result.exceptionOrNull()?.message
+                        ?: "İşlem sırasında bilinmeyen bir hata oluştu."
                 )
             }
         }
