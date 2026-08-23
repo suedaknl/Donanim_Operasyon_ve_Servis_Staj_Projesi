@@ -1,8 +1,6 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.components
 
-import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -38,9 +36,6 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceSt
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.converter.SignatureConverter
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.signature.SignatureRenderer
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.ServiceReportPdfGenerator
-import java.io.File
-import java.io.FileOutputStream
-
 @Composable
 fun ServiceApprovalSection(
     service: ServiceRecord,
@@ -177,13 +172,6 @@ fun ServiceApprovalSection(
                         Button(
                             onClick = {
 
-                                val signaturePathForPdf =
-                                    createSignaturePathForPdf(
-                                        context = context,
-                                        signatureData = signatureData,
-                                        fallbackPath = effectiveSignaturePath
-                                    )
-
                                 val pdfFile = ServiceReportPdfGenerator.generatePdf(
                                     context = context,
                                     record = service,
@@ -266,13 +254,6 @@ fun ServiceApprovalSection(
 
                         OutlinedButton(
                             onClick = {
-
-                                val signaturePathForPdf =
-                                    createSignaturePathForPdf(
-                                        context = context,
-                                        signatureData = signatureData,
-                                        fallbackPath = effectiveSignaturePath
-                                    )
 
                                 val pdfFile = ServiceReportPdfGenerator.generatePdf(
                                     context = context,
@@ -744,64 +725,5 @@ fun ServiceApprovalSection(
                 }
             }
         }
-    }
-}
-
-// =====================================================================
-// X-Y-P İMZAYI PDF GENERATOR'IN BEKLEDİĞİ PNG PATH'E DÖNÜŞTÜR
-// =====================================================================
-
-private fun createSignaturePathForPdf(
-    context: Context,
-    signatureData: String?,
-    fallbackPath: String?
-): String? {
-
-    // Yeni X-Y-P veri yoksa eski PNG sistemini kullan.
-    if (signatureData.isNullOrBlank()) {
-        return fallbackPath
-    }
-
-    val strokes =
-        SignatureConverter.fromJson(
-            signatureData
-        )
-
-    if (strokes.isEmpty()) {
-        return fallbackPath
-    }
-
-    val bitmap =
-        SignatureRenderer.renderBitmapFromStrokes(
-            strokes = strokes,
-            width = 800,
-            height = 300,
-            strokeWidth = 8f
-        ) ?: return fallbackPath
-
-    return try {
-
-        val file =
-            File(
-                context.cacheDir,
-                "pdf_signature_${System.currentTimeMillis()}.png"
-            )
-
-        FileOutputStream(file).use { output ->
-
-            bitmap.compress(
-                Bitmap.CompressFormat.PNG,
-                100,
-                output
-            )
-        }
-
-        file.absolutePath
-
-    } catch (e: Exception) {
-
-        e.printStackTrace()
-
-        fallbackPath
     }
 }
