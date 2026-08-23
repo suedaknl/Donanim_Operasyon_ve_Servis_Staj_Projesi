@@ -32,14 +32,18 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.Auth
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.AdminMainScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.detail.PersonnelDetailScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.LocationPickerScreen
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Alignment
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
-import androidx.compose.ui.Modifier
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.profile.EditProfileScreen
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.leave.AdminLeaveScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.leave.PersonnelLeaveScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.shift.AdminShiftScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.LeaveViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.OvertimeViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.ShiftViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.shift.PersonnelShiftScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.overtime.AdminOvertimeScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.management.AdminManagementScreen
+
 
 @Composable
 fun AppNavigation(
@@ -160,6 +164,18 @@ fun AppNavigation(
                 onNavigateToPersonnelDetail = { id ->
                     navController.navigate(route = "personnel_detail/$id")
                 },
+                onNavigateToPersonnel = {
+                    // Drawer üzerinden Personel Yönetimi tıklandığında (İsteğe bağlı olarak tab index değişimi veya ilgili yönlendirme)
+                },
+                onNavigateToShift = {
+                    navController.navigate("admin_shift")
+                },
+                onNavigateToLeave = {
+                    navController.navigate("admin_leave")
+                },
+                onNavigateToOvertime = {
+                    navController.navigate("admin_overtime")
+                },
                 onLogOut = {
                     authRepository.signOut()
                     sessionManager.clearSession()
@@ -167,6 +183,18 @@ fun AppNavigation(
                         popUpTo(0)
                     }
                 }
+            )
+        }
+        // --- Yönetim Paneli Rotası ---
+        composable("admin_management") {
+            AdminManagementScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToPersonnel = {
+                    navController.popBackStack()
+                },
+                onNavigateToShift = { navController.navigate("admin_shift") },
+                onNavigateToLeave = { navController.navigate("admin_leave") },
+                onNavigateToOvertime = { navController.navigate("admin_overtime") }
             )
         }
 
@@ -273,8 +301,14 @@ fun AppNavigation(
                 initialLat = lat,
                 initialLon = lon,
                 onLocationSelected = { latitude, longitude ->
-                    navController.previousBackStackEntry?.savedStateHandle?.set("selected_lat", latitude)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("selected_lon", longitude)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                        "selected_lat",
+                        latitude
+                    )
+                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                        "selected_lon",
+                        longitude
+                    )
                 },
                 onNavigateBack = { navController.popBackStack() }
             )
@@ -325,10 +359,12 @@ fun AppNavigation(
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
-            // Edit ekranından dönüldüğünde profil tab'ının (index 3) seçili kalmasını sağlar
             val initialTab = backStackEntry.savedStateHandle.get<Int>("selected_tab") ?: 0
 
-            val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>("photo_uri", null).collectAsState()
+            val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>(
+                "photo_uri",
+                null
+            ).collectAsState()
             val photoServiceId = backStackEntry.savedStateHandle.get<Int>("photo_service_id")
 
             LaunchedEffect(returnedPhotoUri) {
@@ -346,7 +382,8 @@ fun AppNavigation(
                             timestamp = System.currentTimeMillis()
                         )
                     )
-                    Toast.makeText(context, "Fotoğraf başarıyla eklendi.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Fotoğraf başarıyla eklendi.", Toast.LENGTH_SHORT)
+                        .show()
 
                     backStackEntry.savedStateHandle.remove<String>("photo_uri")
                     backStackEntry.savedStateHandle.remove<Int>("photo_service_id")
@@ -355,20 +392,34 @@ fun AppNavigation(
 
             PersonnelMainScreen(
                 personnelId = personnelId,
-                initialTab = initialTab, // <--- Eklendi
+                initialTab = initialTab,
                 serviceViewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
+
                 onNavigateToServiceDetail = { serviceId ->
                     navController.navigate("personnel_service_detail/$serviceId/$personnelId")
                 },
+
                 onNavigateToEditPersonnel = { id ->
                     navController.navigate("edit_profile/$id")
                 },
+
+                onNavigateToShift = {
+                    navController.navigate("personnel_shift/$personnelId")
+                },
+
+                onNavigateToLeave = {
+                    navController.navigate("personnel_leave/$personnelId")
+                },
+
                 onLogOut = {
                     authRepository.signOut()
                     sessionManager.clearSession()
-                    navController.navigate("welcome") { popUpTo(0) }
+                    navController.navigate("welcome") {
+                        popUpTo(0)
+                    }
                 },
+
                 onNavigateToCameraForService = { serviceId, _ ->
                     backStackEntry.savedStateHandle["photo_service_id"] = serviceId
                     navController.navigate("camera")
@@ -392,8 +443,12 @@ fun AppNavigation(
         }
 
         composable("service_detail/{serviceId}") { backStackEntry ->
-            val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
-            val returnedPhotoUri = backStackEntry.savedStateHandle.get<String>("photo_uri")
+            val serviceId =
+                backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
+
+            val returnedPhotoUri =
+                backStackEntry.savedStateHandle.get<String>("photo_uri")
+
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
             ServiceDetailScreen(
@@ -401,11 +456,18 @@ fun AppNavigation(
                 personnelViewModel = personnelViewModel,
                 serviceId = serviceId,
                 personnelId = null,
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToEdit = { id -> navController.navigate("add_service?serviceId=$id") },
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToEdit = { id ->
+                    navController.navigate("add_service?serviceId=$id")
+                },
                 onNavigateToHistory = { firestoreId, sId, companyName ->
                     val encodedCompany = android.net.Uri.encode(companyName)
-                    navController.navigate("service_history/$firestoreId/$sId/$encodedCompany")
+
+                    navController.navigate(
+                        "service_history/$firestoreId/$sId/$encodedCompany"
+                    )
                 },
                 returnedPhotoUri = returnedPhotoUri,
                 onPhotoSaved = {
@@ -419,17 +481,108 @@ fun AppNavigation(
             )
         }
 
-        composable("service_history/{firestoreId}/{serviceId}/{companyName}") { backStackEntry ->
-            val firestoreId = backStackEntry.arguments?.getString("firestoreId") ?: ""
-            val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
-            val companyName = backStackEntry.arguments?.getString("companyName") ?: ""
+        composable("admin_shift") {
+            val shiftViewModel: ShiftViewModel = hiltViewModel()
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
+
+            AdminShiftScreen(
+                shiftViewModel = shiftViewModel,
+                personnelViewModel = personnelViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = "personnel_shift/{personnelId}",
+            arguments = listOf(
+                navArgument("personnelId") {
+                    type = NavType.IntType
+                }
+            )
+        ) { backStackEntry ->
+
+            val personnelId =
+                backStackEntry.arguments?.getInt("personnelId") ?: 0
+
+            val shiftViewModel: ShiftViewModel = hiltViewModel()
+
+            PersonnelShiftScreen(
+                personnelId = personnelId,
+                shiftViewModel = shiftViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable("admin_leave") {
+            val leaveViewModel: LeaveViewModel = hiltViewModel()
+
+            AdminLeaveScreen(
+                leaveViewModel = leaveViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = "personnel_leave/{personnelId}",
+            arguments = listOf(
+                navArgument("personnelId") {
+                    type = NavType.IntType
+                }
+            )
+        ) { backStackEntry ->
+
+            val personnelId =
+                backStackEntry.arguments?.getInt("personnelId") ?: 0
+
+            val leaveViewModel: LeaveViewModel = hiltViewModel()
+
+            PersonnelLeaveScreen(
+                personnelId = personnelId,
+                leaveViewModel = leaveViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable("admin_overtime") {
+            val overtimeViewModel: OvertimeViewModel = hiltViewModel()
+
+            AdminOvertimeScreen(
+                overtimeViewModel = overtimeViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            "service_history/{firestoreId}/{serviceId}/{companyName}"
+        ) { backStackEntry ->
+
+            val firestoreId =
+                backStackEntry.arguments?.getString("firestoreId") ?: ""
+
+            val serviceId =
+                backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
+
+            val companyName =
+                backStackEntry.arguments?.getString("companyName") ?: ""
 
             ServiceHistoryScreen(
                 viewModel = sharedServiceViewModel,
                 firestoreId = firestoreId,
                 serviceId = serviceId,
                 companyName = companyName,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
             )
         }
     }

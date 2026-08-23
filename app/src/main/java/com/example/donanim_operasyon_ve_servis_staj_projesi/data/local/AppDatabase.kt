@@ -13,9 +13,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Personnel::class,
         ServiceNote::class,
         ServicePhoto::class,
-        ServiceClosingSignature::class
+        ServiceClosingSignature::class,
+        ShiftEntity::class,
+        LeaveRequestEntity::class,
+        OvertimeEntity::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -23,6 +26,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun serviceDao(): ServiceDao
     abstract fun personnelDao(): PersonnelDao
     abstract fun closingSignatureDao(): ClosingSignatureDao
+    abstract fun shiftDao(): ShiftDao
+    abstract fun leaveRequestDao(): LeaveRequestDao
+    abstract fun overtimeDao(): OvertimeDao
 
     companion object {
         @Volatile
@@ -92,8 +98,51 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_17_18 = object : Migration(17, 18) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
-                "ALTER TABLE service_closing_signatures ADD COLUMN signatureData TEXT"
-            )
+                    "ALTER TABLE service_closing_signatures ADD COLUMN signatureData TEXT"
+                )
+            }
+        }
+
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS shifts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        personnelId INTEGER NOT NULL,
+                        shiftDate TEXT NOT NULL,
+                        startTime TEXT NOT NULL,
+                        endTime TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                """)
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS leave_requests (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        personnelId INTEGER NOT NULL,
+                        startDate TEXT NOT NULL,
+                        endDate TEXT NOT NULL,
+                        leaveType TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        adminNote TEXT,
+                        createdAt INTEGER NOT NULL,
+                        reviewedAt INTEGER
+                    )
+                """)
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS overtimes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        personnelId INTEGER NOT NULL,
+                        serviceRecordId INTEGER,
+                        startTime INTEGER NOT NULL,
+                        endTime INTEGER NOT NULL,
+                        durationMinutes INTEGER NOT NULL,
+                        description TEXT,
+                        status TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                """)
             }
         }
 
@@ -114,7 +163,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_14_15,
                         AppDatabase.MIGRATION_15_16,
                         AppDatabase.MIGRATION_16_17,
-                        AppDatabase.MIGRATION_17_18
+                        AppDatabase.MIGRATION_17_18,
+                        AppDatabase.MIGRATION_18_19
                     )
                     .build()
                 INSTANCE = instance

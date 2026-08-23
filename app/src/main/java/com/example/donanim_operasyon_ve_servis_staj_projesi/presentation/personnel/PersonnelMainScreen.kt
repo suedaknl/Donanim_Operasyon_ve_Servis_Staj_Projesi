@@ -43,6 +43,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.LocationHelper
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.google.android.gms.location.*
 import kotlin.math.roundToInt
+import androidx.compose.runtime.saveable.rememberSaveable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,9 +55,13 @@ fun PersonnelMainScreen(
     onNavigateToServiceDetail: (Int) -> Unit,
     onNavigateToEditPersonnel: (Int) -> Unit,
     onLogOut: () -> Unit,
+    onNavigateToShift: () -> Unit,
+    onNavigateToLeave: () -> Unit,
     onNavigateToCameraForService: (Int, String) -> Unit = { _, _ -> }
 ) {
-    var selectedTab by remember { mutableIntStateOf(initialTab) }
+    var selectedTab by rememberSaveable {
+        mutableIntStateOf(initialTab)
+    }
     val context = LocalContext.current
 
     var fabOffsetX by remember { mutableStateOf(0f) }
@@ -328,6 +333,8 @@ fun PersonnelMainScreen(
                     locationStatus = locationStatus,
                     viewModel = personnelViewModel,
                     onEditProfile = { id -> onNavigateToEditPersonnel(id) },
+                    onNavigateToShift = onNavigateToShift,
+                    onNavigateToLeave = onNavigateToLeave,
                     onLogOut = onLogOut
                 )
             }

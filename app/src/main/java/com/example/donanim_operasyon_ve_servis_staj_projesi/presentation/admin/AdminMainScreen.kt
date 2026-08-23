@@ -34,7 +34,9 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelV
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.AdminMapScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.archive.AdminArchiveScreen
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminMainScreen(
     serviceViewModel: ServiceViewModel,
@@ -45,22 +47,26 @@ fun AdminMainScreen(
     onNavigateToEditPersonnel: (Int) -> Unit,
     onNavigateToPersonnelDetail: (Int) -> Unit,
     adminEmail: String,
+    onNavigateToPersonnel: () -> Unit,
+    onNavigateToShift: () -> Unit,
+    onNavigateToLeave: () -> Unit,
+    onNavigateToOvertime: () -> Unit,
     onLogOut: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var serviceSubScreen by rememberSaveable { mutableStateOf("list") }
     val context = LocalContext.current
 
-    // Sürüklenebilir FAB State'leri
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val coroutineScope = rememberCoroutineScope()
+
     var fabOffsetX by remember { mutableStateOf(0f) }
     var fabOffsetY by remember { mutableStateOf(0f) }
     var showFabMenu by remember { mutableStateOf(false) }
 
-    // Ekran sınırlarını hesaplamak için (FAB'ın üst ve alt barlara taşmasını engeller)
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
 
-    // FAB'ın hareket edebileceği maksimum limitler
     val minX = with(density) { -(configuration.screenWidthDp.dp - 80.dp).toPx() }
     val maxX = 0f
     val minY = with(density) { -(configuration.screenHeightDp.dp - 180.dp).toPx() }
@@ -69,208 +75,262 @@ fun AdminMainScreen(
     val filteredServices by serviceViewModel.filteredServiceRecords.collectAsState()
     val personnelList by personnelViewModel.personnelList.collectAsState()
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier.width(280.dp)
             ) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = {
-                        selectedTab = 0
-                        serviceSubScreen = "list"
-                    },
-                    icon = { Icon(if (selectedTab == 0) Icons.Filled.Dashboard else Icons.Outlined.Dashboard, contentDescription = "Ana Sayfa") },
-                    label = { Text("Ana Sayfa") }
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "Yönetici Menüsü",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.primary
                 )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = {
-                        selectedTab = 1
-                        serviceSubScreen = "list"
-                    },
-                    icon = { Icon(if (selectedTab == 1) Icons.Filled.ListAlt else Icons.Outlined.ListAlt, contentDescription = "İş Emirleri") },
-                    label = { Text("İş Emirleri") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = {
-                        selectedTab = 2
-                        serviceSubScreen = "list"
-                    },
-                    icon = { Icon(if (selectedTab == 2) Icons.Filled.People else Icons.Outlined.PeopleOutline, contentDescription = "Personeller") },
-                    label = { Text("Personeller") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = {
-                        selectedTab = 3
-                        serviceSubScreen = "list"
-                    },
-                    icon = { Icon(if (selectedTab == 3) Icons.Filled.LocationOn else Icons.Outlined.LocationOn, contentDescription = "Konum") },
-                    label = { Text("Konum") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 4,
-                    onClick = {
-                        selectedTab = 4
-                        serviceSubScreen = "list"
-                    },
-                    icon = { Icon(if (selectedTab == 4) Icons.Filled.AdminPanelSettings else Icons.Outlined.AdminPanelSettings, contentDescription = "Profil") },
-                    label = { Text("Profil") }
-                )
-            }
-        },
-        floatingActionButton = {
-            if ((selectedTab == 0 || selectedTab == 1) && serviceSubScreen == "list") {
-                Box(
-                    contentAlignment = Alignment.BottomEnd,
-                    modifier = Modifier
-                        .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
-                        .pointerInput(Unit) {
-                            detectDragGestures { change, dragAmount ->
-                                change.consume()
-                                fabOffsetX = (fabOffsetX + dragAmount.x).coerceIn(minX, maxX)
-                                fabOffsetY = (fabOffsetY + dragAmount.y).coerceIn(minY, maxY)
-                            }
-                        }
-                ) {
-                    if (selectedTab == 0) {
-                        // Sadece Ana Sayfa (Tab 0) için açılır menülü FAB
-                        DropdownMenu(
-                            expanded = showFabMenu,
-                            onDismissRequest = { showFabMenu = false },
-                            modifier = Modifier.width(220.dp)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Yeni İş Emri Ekle", fontWeight = FontWeight.Medium) },
-                                leadingIcon = { Icon(Icons.Default.AddCircle, null, tint = MaterialTheme.colorScheme.primary) },
-                                onClick = {
-                                    showFabMenu = false
-                                    onNavigateToAddService()
-                                }
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text("Personel Ekle", fontWeight = FontWeight.Medium) },
-                                leadingIcon = { Icon(Icons.Default.PersonAdd, null, tint = MaterialTheme.colorScheme.primary) },
-                                onClick = {
-                                    showFabMenu = false
-                                    onNavigateToAddPersonnel()
-                                }
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text("AI Asistan (Yakında)", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.secondary) },
-                                leadingIcon = { Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.secondary) },
-                                onClick = {
-                                    showFabMenu = false
-                                    Toast.makeText(context, "Yapay zeka asistanı yakında hizmetinizde olacak.", Toast.LENGTH_SHORT).show()
-                                }
-                            )
-                        }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                        FloatingActionButton(
-                            onClick = { showFabMenu = !showFabMenu },
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            shape = RoundedCornerShape(16.dp),
-                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
-                                contentDescription = "Hızlı İşlem Menüsü",
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    } else if (selectedTab == 1) {
-                        // İş Emirleri (Tab 1) için menüsüz, doğrudan yeni iş emri ekleyen düz FAB
-                        FloatingActionButton(
-                            onClick = { onNavigateToAddService() },
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            shape = RoundedCornerShape(16.dp),
-                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Yeni İş Emri Ekle",
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-                }
+                NavigationDrawerItem(
+                    label = { Text("Personel Yönetimi", fontWeight = FontWeight.Medium) },
+                    selected = false,
+                    icon = { Icon(Icons.Default.People, contentDescription = null) },
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        onNavigateToPersonnel()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+                NavigationDrawerItem(
+                    label = { Text("Vardiya Yönetimi", fontWeight = FontWeight.Medium) },
+                    selected = false,
+                    icon = { Icon(Icons.Default.Schedule, contentDescription = null) },
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        onNavigateToShift()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+                NavigationDrawerItem(
+                    label = { Text("İzin Talepleri", fontWeight = FontWeight.Medium) },
+                    selected = false,
+                    icon = { Icon(Icons.Default.EventBusy, contentDescription = null) },
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        onNavigateToLeave()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+                NavigationDrawerItem(
+                    label = { Text("Fazla Mesai", fontWeight = FontWeight.Medium) },
+                    selected = false,
+                    icon = { Icon(Icons.Default.MoreTime, contentDescription = null) },
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        onNavigateToOvertime()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
             }
         }
-    ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
-            when (selectedTab) {
-                0 -> AdminDashboardContent(
-                    serviceViewModel = serviceViewModel,
-                    personnelViewModel = personnelViewModel,
-                    onCardClick = { statusTab ->
-                        serviceViewModel.updateAdminSelectedStatusTab(statusTab)
-                        selectedTab = 1
-                        serviceSubScreen = "list"
-                    },
-                    onPersonnelCardClick = {
-                        selectedTab = 2
-                        serviceSubScreen = "list"
-                    }
-                )
-
-                1 -> {
-                    if (serviceSubScreen == "list") {
-                        AdminServiceListScreen(
-                            serviceList = filteredServices,
-                            personnelList = personnelList,
-                            selectedTab = serviceViewModel.adminSelectedStatusTab,
-                            onTabSelected = { tab -> serviceViewModel.updateAdminSelectedStatusTab(tab) },
-                            searchQuery = serviceViewModel.adminSearchQuery,
-                            onSearchQueryChange = { query -> serviceViewModel.updateAdminSearchQuery(query) },
-                            serviceViewModel = serviceViewModel,
-                            onNavigateToAddService = onNavigateToAddService,
-                            onServiceClick = onServiceClick,
-                            onOpenArchive = { serviceSubScreen = "archive" },
-                            onLogOut = onLogOut
-                        )
-                    } else if (serviceSubScreen == "archive") {
-                        AdminArchiveScreen(
-                            serviceViewModel = serviceViewModel,
-                            personnelList = personnelList,
-                            onServiceClick = onServiceClick,
-                            onBackClick = { serviceSubScreen = "list" }
-                        )
-                    }
-                }
-
-                2 -> {
-                    PersonnelListScreen(
-                        viewModel = personnelViewModel,
-                        onNavigateToAddPersonnel = onNavigateToAddPersonnel,
-                        onNavigateToEditPersonnel = onNavigateToEditPersonnel,
-                        onNavigateBack = { selectedTab = 0 },
-                        onPersonnelClick = { personnelId ->
-                            onNavigateToPersonnelDetail(personnelId)
-                        }
+    ) {
+        Scaffold(
+            bottomBar = {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    NavigationBarItem(
+                        selected = selectedTab == 0,
+                        onClick = {
+                            selectedTab = 0
+                            serviceSubScreen = "list"
+                        },
+                        icon = { Icon(if (selectedTab == 0) Icons.Filled.Dashboard else Icons.Outlined.Dashboard, contentDescription = "Ana Sayfa") },
+                        label = { Text("Ana Sayfa") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 1,
+                        onClick = {
+                            selectedTab = 1
+                            serviceSubScreen = "list"
+                        },
+                        icon = { Icon(if (selectedTab == 1) Icons.Filled.ListAlt else Icons.Outlined.ListAlt, contentDescription = "İş Emirleri") },
+                        label = { Text("İş Emirleri") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 2,
+                        onClick = {
+                            selectedTab = 2
+                            serviceSubScreen = "list"
+                        },
+                        icon = { Icon(if (selectedTab == 2) Icons.Filled.People else Icons.Outlined.PeopleOutline, contentDescription = "Personeller") },
+                        label = { Text("Personeller") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 3,
+                        onClick = {
+                            selectedTab = 3
+                            serviceSubScreen = "list"
+                        },
+                        icon = { Icon(if (selectedTab == 3) Icons.Filled.LocationOn else Icons.Outlined.LocationOn, contentDescription = "Konum") },
+                        label = { Text("Konum") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 4,
+                        onClick = {
+                            selectedTab = 4
+                            serviceSubScreen = "list"
+                        },
+                        icon = { Icon(if (selectedTab == 4) Icons.Filled.AdminPanelSettings else Icons.Outlined.AdminPanelSettings, contentDescription = "Profil") },
+                        label = { Text("Profil") }
                     )
                 }
+            },
+            floatingActionButton = {
+                if ((selectedTab == 0 || selectedTab == 1) && serviceSubScreen == "list") {
+                    Box(
+                        contentAlignment = Alignment.BottomEnd,
+                        modifier = Modifier
+                            .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    fabOffsetX = (fabOffsetX + dragAmount.x).coerceIn(minX, maxX)
+                                    fabOffsetY = (fabOffsetY + dragAmount.y).coerceIn(minY, maxY)
+                                }
+                            }
+                    ) {
+                        if (selectedTab == 0) {
+                            DropdownMenu(
+                                expanded = showFabMenu,
+                                onDismissRequest = { showFabMenu = false },
+                                modifier = Modifier.width(220.dp)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Yeni İş Emri Ekle", fontWeight = FontWeight.Medium) },
+                                    leadingIcon = { Icon(Icons.Default.AddCircle, null, tint = MaterialTheme.colorScheme.primary) },
+                                    onClick = {
+                                        showFabMenu = false
+                                        onNavigateToAddService()
+                                    }
+                                )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Personel Ekle", fontWeight = FontWeight.Medium) },
+                                    leadingIcon = { Icon(Icons.Default.PersonAdd, null, tint = MaterialTheme.colorScheme.primary) },
+                                    onClick = {
+                                        showFabMenu = false
+                                        onNavigateToAddPersonnel()
+                                    }
+                                )
+                            }
 
-                3 -> AdminMapScreen(
-                    serviceViewModel = serviceViewModel,
-                    personnelViewModel = personnelViewModel,
-                    onNavigateToServiceDetail = { serviceId ->
-                        val targetService = serviceViewModel.serviceRecords.value.find { it.id == serviceId }
-                        if (targetService != null) {
-                            onServiceClick(targetService)
+                            FloatingActionButton(
+                                onClick = { showFabMenu = !showFabMenu },
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
+                                    contentDescription = "Hızlı İşlem Menüsü",
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        } else if (selectedTab == 1) {
+                            FloatingActionButton(
+                                onClick = { onNavigateToAddService() },
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Yeni İş Emri Ekle",
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
                         }
                     }
-                )
+                }
+            }
+        ) { paddingValues ->
+            Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
+                when (selectedTab) {
+                    0 -> AdminDashboardContent(
+                        serviceViewModel = serviceViewModel,
+                        personnelViewModel = personnelViewModel,
+                        onOpenDrawer = {
+                            coroutineScope.launch { drawerState.open() }
+                        },
+                        onCardClick = { statusTab ->
+                            serviceViewModel.updateAdminSelectedStatusTab(statusTab)
+                            selectedTab = 1
+                            serviceSubScreen = "list"
+                        },
+                        onPersonnelCardClick = {
+                            selectedTab = 2
+                            serviceSubScreen = "list"
+                        }
+                    )
 
-                4 -> AdminProfileContent(
-                    email = adminEmail,
-                    onLogOut = onLogOut
-                )
+                    1 -> {
+                        if (serviceSubScreen == "list") {
+                            AdminServiceListScreen(
+                                serviceList = filteredServices,
+                                personnelList = personnelList,
+                                selectedTab = serviceViewModel.adminSelectedStatusTab,
+                                onTabSelected = { tab -> serviceViewModel.updateAdminSelectedStatusTab(tab) },
+                                searchQuery = serviceViewModel.adminSearchQuery,
+                                onSearchQueryChange = { query -> serviceViewModel.updateAdminSearchQuery(query) },
+                                serviceViewModel = serviceViewModel,
+                                onNavigateToAddService = onNavigateToAddService,
+                                onServiceClick = onServiceClick,
+                                onOpenArchive = { serviceSubScreen = "archive" },
+                                onLogOut = onLogOut
+                            )
+                        } else if (serviceSubScreen == "archive") {
+                            AdminArchiveScreen(
+                                serviceViewModel = serviceViewModel,
+                                personnelList = personnelList,
+                                onServiceClick = onServiceClick,
+                                onBackClick = { serviceSubScreen = "list" }
+                            )
+                        }
+                    }
+
+                    2 -> {
+                        PersonnelListScreen(
+                            viewModel = personnelViewModel,
+                            onNavigateToAddPersonnel = onNavigateToAddPersonnel,
+                            onNavigateToEditPersonnel = { id ->
+                                onNavigateToEditPersonnel(id)
+                            },
+                            onNavigateBack = { selectedTab = 0 },
+                            onPersonnelClick = { personnelId ->
+                                onNavigateToPersonnelDetail(personnelId)
+                            }
+                        )
+                    }
+
+                    3 -> AdminMapScreen(
+                        serviceViewModel = serviceViewModel,
+                        personnelViewModel = personnelViewModel,
+                        onNavigateToServiceDetail = { serviceId ->
+                            val targetService = serviceViewModel.serviceRecords.value.find { it.id == serviceId }
+                            if (targetService != null) {
+                                onServiceClick(targetService)
+                            }
+                        }
+                    )
+
+                    4 -> AdminProfileContent(
+                        email = adminEmail,
+                        onLogOut = onLogOut
+                    )
+                }
             }
         }
     }
@@ -280,6 +340,7 @@ fun AdminMainScreen(
 fun AdminDashboardContent(
     serviceViewModel: ServiceViewModel,
     personnelViewModel: PersonnelViewModel,
+    onOpenDrawer: () -> Unit,
     onCardClick: (String) -> Unit,
     onPersonnelCardClick: () -> Unit
 ) {
@@ -302,12 +363,25 @@ fun AdminDashboardContent(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Text(
-                text = "Yönetici Özeti",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                IconButton(onClick = onOpenDrawer) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Menüyü Aç",
+                        tint = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+                Text(
+                    text = "Yönetici Özeti",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
         }
 
@@ -408,7 +482,6 @@ fun AdminProfileContent(
     email: String,
     onLogOut: () -> Unit
 ) {
-
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally

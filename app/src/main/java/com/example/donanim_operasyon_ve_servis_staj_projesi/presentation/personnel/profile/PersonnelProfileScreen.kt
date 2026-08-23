@@ -23,6 +23,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.EventAvailable
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 
 @Composable
 fun PersonnelProfileScreen(
@@ -30,6 +33,8 @@ fun PersonnelProfileScreen(
     locationStatus: String,
     viewModel: com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel,
     onEditProfile: (Int) -> Unit,
+    onNavigateToShift: () -> Unit,
+    onNavigateToLeave: () -> Unit,
     onLogOut: () -> Unit
 ) {
     val context = LocalContext.current
@@ -206,6 +211,66 @@ fun PersonnelProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            HorizontalDivider()
+
+            ListItem(
+                headlineContent = {
+                    Text(
+                        "Vardiyam",
+                        fontWeight = FontWeight.Medium
+                    )
+                },
+                supportingContent = {
+                    Text("Vardiya saatlerinizi görüntüleyin")
+                },
+                leadingContent = {
+                    Icon(
+                        Icons.Default.Schedule,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                trailingContent = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null
+                    )
+                },
+                modifier = Modifier.clickable {
+                    onNavigateToShift()
+                }
+            )
+
+            HorizontalDivider()
+
+            ListItem(
+                headlineContent = {
+                    Text(
+                        "İzinlerim",
+                        fontWeight = FontWeight.Medium
+                    )
+                },
+                supportingContent = {
+                    Text("İzin talebi oluşturun ve taleplerinizi takip edin")
+                },
+                leadingContent = {
+                    Icon(
+                        Icons.Default.EventAvailable,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                trailingContent = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null
+                    )
+                },
+                modifier = Modifier.clickable {
+                    onNavigateToLeave()
+                }
+            )
+
             // Çıkış Yap Butonu
             Button(
                 onClick = onLogOut,
@@ -313,6 +378,35 @@ fun PersonnelProfileScreen(
                 }
             }
         )
+        ListItem(
+            headlineContent = { Text("Vardiyam") },
+            supportingContent = { Text("Vardiya saatlerini görüntüle") },
+            leadingContent = {
+                Icon(
+                    Icons.Default.Schedule,
+                    contentDescription = null
+                )
+            },
+            modifier = Modifier.clickable {
+                onNavigateToShift()
+            }
+        )
+
+        HorizontalDivider()
+
+        ListItem(
+            headlineContent = { Text("İzinlerim") },
+            supportingContent = { Text("İzin talebi oluştur ve taleplerini görüntüle") },
+            leadingContent = {
+                Icon(
+                    Icons.Default.EventAvailable,
+                    contentDescription = null
+                )
+            },
+            modifier = Modifier.clickable {
+                onNavigateToLeave()
+            }
+        )
     }
 
     // Destek Dialog
@@ -348,6 +442,7 @@ fun PersonnelProfileScreen(
         )
     }
 }
+
 
 @Composable
 fun ProfileInfoRow(

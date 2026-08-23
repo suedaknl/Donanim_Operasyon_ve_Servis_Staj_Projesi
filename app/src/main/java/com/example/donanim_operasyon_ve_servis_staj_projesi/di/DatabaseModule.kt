@@ -1,9 +1,7 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.di
 
 import android.content.Context
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.AppDatabase
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.PersonnelDao
-import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceDao
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.*
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -35,5 +33,26 @@ object DatabaseModule {
         database: AppDatabase
     ): PersonnelDao {
         return database.personnelDao()
+    }
+
+    @Provides
+    fun provideShiftDao(
+        database: AppDatabase
+    ): ShiftDao {
+        return database.shiftDao()
+    }
+
+    @Provides
+    fun provideLeaveRequestDao(
+        database: AppDatabase
+    ): LeaveRequestDao {
+        return database.leaveRequestDao()
+    }
+
+    @Provides
+    fun provideOvertimeDao(
+        database: AppDatabase
+    ): OvertimeDao {
+        return database.overtimeDao()
     }
 }

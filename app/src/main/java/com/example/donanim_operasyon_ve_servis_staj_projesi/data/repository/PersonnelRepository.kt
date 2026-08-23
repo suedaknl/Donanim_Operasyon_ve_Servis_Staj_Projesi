@@ -96,6 +96,10 @@ class PersonnelRepository @Inject constructor(
         }
     }
 
+    suspend fun getAllPersonnelList(): List<Personnel> {
+        return personnelDao.getAllPersonnelList()
+    }
+
     // --- FAZ 3: FİREBASE'DEKİ PERSONELLERİ ROOM'A SENKRONİZE ETME ---
     suspend fun syncAllPersonnel() {
         val result = firestoreDataSource.getAllPersonnel()
