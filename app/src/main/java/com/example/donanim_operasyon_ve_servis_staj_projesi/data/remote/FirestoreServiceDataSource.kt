@@ -46,31 +46,80 @@ class FirestoreServiceDataSource @Inject constructor(
         }
     }
 
-    suspend fun uploadSignatureToFirebase(localUriString: String, firestoreId: String): Result<String> {
+    suspend fun uploadSignatureToFirebase(
+        localUriString: String?,
+        firestoreId: String,
+        signatureData: String?
+    ): Result<Unit> {
         return try {
-            if (firestoreId.isBlank()) return Result.failure(IllegalArgumentException("Firestore ID boş."))
-
-            val cleanPath = localUriString.replace("file://", "").replace("file:", "")
-            val uri = if (localUriString.startsWith("content://")) {
-                android.net.Uri.parse(localUriString)
-            } else {
-                android.net.Uri.fromFile(java.io.File(cleanPath))
+            if (firestoreId.isBlank()) {
+                return Result.failure(
+                    IllegalArgumentException("Firestore ID boş.")
+                )
             }
 
             val timestamp = System.currentTimeMillis()
-            val fileName = "signature_$timestamp.png"
 
-            val storageRef = storage.reference.child("services/$firestoreId/signatures/$fileName")
-            storageRef.putFile(uri).await()
-            val downloadUrl = storageRef.downloadUrl.await().toString()
+            var downloadUrl: String? = null
 
-            val signatureData = hashMapOf(
-                "downloadUrl" to downloadUrl,
+            // Eski PNG sistemi / fallback
+            if (!localUriString.isNullOrBlank()) {
+                try {
+                    val cleanPath = localUriString
+                        .replace("file://", "")
+                        .replace("file:", "")
+
+                    val uri = if (localUriString.startsWith("content://")) {
+                        Uri.parse(localUriString)
+                    } else {
+                        Uri.fromFile(java.io.File(cleanPath))
+                    }
+
+                    val fileName = "signature_$timestamp.png"
+
+                    val storageRef = storage.reference.child(
+                        "services/$firestoreId/signatures/$fileName"
+                    )
+
+                    storageRef.putFile(uri).await()
+
+                    downloadUrl = storageRef
+                        .downloadUrl
+                        .await()
+                        .toString()
+
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            // Yeni X-Y-P sistemi
+            val signatureMap = hashMapOf<String, Any>(
                 "timestamp" to timestamp
             )
-            collection.document(firestoreId).collection("signatures").add(signatureData).await()
 
-            Result.success(downloadUrl)
+            if (!signatureData.isNullOrBlank()) {
+                signatureMap["signatureData"] = signatureData
+            }
+
+            if (!downloadUrl.isNullOrBlank()) {
+                signatureMap["downloadUrl"] = downloadUrl
+            }
+
+            if (signatureData.isNullOrBlank() && downloadUrl.isNullOrBlank()) {
+                return Result.failure(
+                    IllegalArgumentException("Kaydedilecek imza verisi bulunamadı.")
+                )
+            }
+
+            collection
+                .document(firestoreId)
+                .collection("signatures")
+                .add(signatureMap)
+                .await()
+
+            Result.success(Unit)
+
         } catch (e: Exception) {
             Result.failure(e)
         }

@@ -374,7 +374,8 @@ class ServiceRepository @Inject constructor(
                         if (!signatureUri.isNullOrBlank()) {
                             firestoreDataSource.uploadSignatureToFirebase(
                                 localUriString = signatureUri,
-                                firestoreId = firestoreId
+                                firestoreId = firestoreId,
+                                signatureData = signatureData
                             )
                         }
 
