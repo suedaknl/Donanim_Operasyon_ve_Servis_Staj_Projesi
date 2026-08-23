@@ -56,17 +56,17 @@ class OvertimeViewModel @Inject constructor(
         }
     }
 
-    fun createOvertime(personnelId: Int, serviceRecordId: Int?, startTime: Long, endTime: Long, description: String?, onComplete: (Boolean) -> Unit) {
+    fun approveOvertime(overtime: OvertimeEntity) {
         viewModelScope.launch {
-            _isLoading.value = true
-            val result = manageOvertimeUseCase.createOvertime(personnelId, serviceRecordId, startTime, endTime, description)
-            _isLoading.value = false
-            result.onSuccess {
-                onComplete(true)
-            }.onFailure { e ->
-                _errorMessage.value = e.localizedMessage
-                onComplete(false)
-            }
+            manageOvertimeUseCase.updateOvertimeStatus(overtime, "APPROVED")
+            loadAllOvertimes()
+        }
+    }
+
+    fun rejectOvertime(overtime: OvertimeEntity) {
+        viewModelScope.launch {
+            manageOvertimeUseCase.updateOvertimeStatus(overtime, "REJECTED")
+            loadAllOvertimes()
         }
     }
 

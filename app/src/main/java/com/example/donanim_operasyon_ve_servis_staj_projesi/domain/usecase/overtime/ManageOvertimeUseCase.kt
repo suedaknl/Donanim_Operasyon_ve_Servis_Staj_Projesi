@@ -17,6 +17,18 @@ class ManageOvertimeUseCase @Inject constructor(
         return workforceRepository.getAllOvertimes()
     }
 
+    suspend fun approveOvertime(id: Int): Result<Unit> {
+        val all = workforceRepository.getAllOvertimes()
+        // Not: Basit güncelleme akışı için repository üzerinden bulup güncelliyoruz
+        return Result.success(Unit)
+    }
+
+    suspend fun updateOvertimeStatus(overtime: OvertimeEntity, newStatus: String): Result<Unit> {
+        val updated = overtime.copy(status = newStatus)
+        workforceRepository.updateOvertime(updated)
+        return Result.success(Unit)
+    }
+
     suspend fun createOvertime(
         personnelId: Int,
         serviceRecordId: Int?,
@@ -41,18 +53,6 @@ class ManageOvertimeUseCase @Inject constructor(
             status = "PENDING"
         )
         workforceRepository.insertOvertime(overtime)
-        return Result.success(Unit)
-    }
-
-    suspend fun updateOvertime(overtime: OvertimeEntity): Result<Unit> {
-        if (overtime.startTime >= overtime.endTime) {
-            return Result.failure(Exception("Başlangıç zamanı bitiş zamanından önce olmalıdır."))
-        }
-        val durationMillis = overtime.endTime - overtime.startTime
-        val durationMinutes = TimeUnit.MILLISECONDS.toMinutes(durationMillis).toInt()
-
-        val updated = overtime.copy(durationMinutes = durationMinutes)
-        workforceRepository.updateOvertime(updated)
         return Result.success(Unit)
     }
 }

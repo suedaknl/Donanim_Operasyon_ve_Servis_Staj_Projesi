@@ -42,6 +42,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.LocationHelper
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.google.android.gms.location.*
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import androidx.compose.runtime.saveable.rememberSaveable
 
@@ -57,12 +58,13 @@ fun PersonnelMainScreen(
     onLogOut: () -> Unit,
     onNavigateToShift: () -> Unit,
     onNavigateToLeave: () -> Unit,
+    onNavigateToOvertime: () -> Unit,
     onNavigateToCameraForService: (Int, String) -> Unit = { _, _ -> }
 ) {
-    var selectedTab by rememberSaveable {
-        mutableIntStateOf(initialTab)
-    }
+    var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
     val context = LocalContext.current
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
 
     var fabOffsetX by remember { mutableStateOf(0f) }
     var fabOffsetY by remember { mutableStateOf(0f) }
@@ -159,184 +161,261 @@ fun PersonnelMainScreen(
         serviceViewModel.loadRecordsForPersonnel(personnelId)
     }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "Saha Operasyon",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = locationStatus,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (locationStatus.contains("Aktif")) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier.width(300.dp)
+            ) {
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "Personel Menüsü",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.primary
                 )
-            )
-        },
-        bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
-                NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(if (selectedTab == 0) Icons.Filled.Home else Icons.Outlined.Home, null) }, label = { Text("Ana Sayfa") })
-                NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(if (selectedTab == 1) Icons.Filled.Assignment else Icons.Outlined.Assignment, null) }, label = { Text("İş Emirleri") })
-                NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2 }, icon = { Icon(if (selectedTab == 2) Icons.Filled.Map else Icons.Outlined.Map, null) }, label = { Text("Harita") })
-                NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3 }, icon = { Icon(if (selectedTab == 3) Icons.Filled.Person else Icons.Outlined.Person, null) }, label = { Text("Profil") })
-            }
-        },
-        floatingActionButton = {
-            if (selectedTab == 0 || selectedTab == 1) {
-                var showFabMenu by remember { mutableStateOf(false) }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                Box(
-                    contentAlignment = Alignment.BottomEnd,
-                    modifier = Modifier
-                        .offset {
-                            IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt())
+                NavigationDrawerItem(
+                    label = { Text("Vardiyam") },
+                    selected = false,
+                    icon = { Icon(Icons.Default.Schedule, contentDescription = null) },
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onNavigateToShift()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
+                NavigationDrawerItem(
+                    label = { Text("İzinlerim") },
+                    selected = false,
+                    icon = { Icon(Icons.Default.EventAvailable, contentDescription = null) },
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onNavigateToLeave()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
+                NavigationDrawerItem(
+                    label = { Text("Fazla Mesailerim") },
+                    selected = false,
+                    icon = { Icon(Icons.Default.MoreTime, contentDescription = null) },
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onNavigateToOvertime()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                NavigationDrawerItem(
+                    label = { Text("Destek ve Yardım") },
+                    selected = false,
+                    icon = { Icon(Icons.Default.HelpOutline, contentDescription = null) },
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        Toast.makeText(context, "Destek ekibine yönlendiriliyorsunuz.", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
+                NavigationDrawerItem(
+                    label = { Text("Çıkış Yap") },
+                    selected = false,
+                    icon = { Icon(Icons.Default.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onLogOut()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+            }
+        }
+    ) {
+        Scaffold(
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Saha Operasyon",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = locationStatus,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (locationStatus.contains("Aktif")) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+                            )
                         }
-                        .pointerInput(Unit) {
-                            detectDragGestures(
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    fabOffsetX += dragAmount.x
-                                    fabOffsetY += dragAmount.y
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(Icons.Default.Menu, contentDescription = "Menü")
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                )
+            },
+            bottomBar = {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
+                    NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(if (selectedTab == 0) Icons.Filled.Home else Icons.Outlined.Home, null) }, label = { Text("Ana Sayfa") })
+                    NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(if (selectedTab == 1) Icons.Filled.Assignment else Icons.Outlined.Assignment, null) }, label = { Text("İş Emirleri") })
+                    NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2 }, icon = { Icon(if (selectedTab == 2) Icons.Filled.Map else Icons.Outlined.Map, null) }, label = { Text("Harita") })
+                    NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3 }, icon = { Icon(if (selectedTab == 3) Icons.Filled.Person else Icons.Outlined.Person, null) }, label = { Text("Profil") })
+                }
+            },
+            floatingActionButton = {
+                if (selectedTab == 0 || selectedTab == 1) {
+                    var showFabMenu by remember { mutableStateOf(false) }
+
+                    Box(
+                        contentAlignment = Alignment.BottomEnd,
+                        modifier = Modifier
+                            .offset {
+                                IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt())
+                            }
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        fabOffsetX += dragAmount.x
+                                        fabOffsetY += dragAmount.y
+                                    },
+                                    onDragEnd = {
+                                        if (fabOffsetX > 0f) fabOffsetX = 0f
+                                        if (fabOffsetY > 0f) fabOffsetY = 0f
+                                    }
+                                )
+                            }
+                    ) {
+                        DropdownMenu(
+                            expanded = showFabMenu,
+                            onDismissRequest = { showFabMenu = false },
+                            modifier = Modifier.width(260.dp)
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text("Hızlı Not Ekle", fontWeight = FontWeight.Medium, color = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified)
+                                        if (activeServicesForFab.isEmpty()) {
+                                            Text("İşleme başladıktan sonra kullanılabilir", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
                                 },
-                                onDragEnd = {
-                                    if (fabOffsetX > 0f) fabOffsetX = 0f
-                                    if (fabOffsetY > 0f) fabOffsetY = 0f
+                                leadingIcon = { Icon(Icons.Default.EditNote, null, tint = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    showFabMenu = false
+                                    if (activeServicesForFab.isEmpty()) {
+                                        Toast.makeText(context, "Not eklemek için önce bir iş emrinde işleme başlamalısınız.", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        showNoteDialog = true
+                                    }
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text("Fotoğraf Çek", fontWeight = FontWeight.Medium, color = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified)
+                                        if (activeServicesForFab.isEmpty()) {
+                                            Text("İşleme başladıktan sonra kullanılabilir", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                },
+                                leadingIcon = { Icon(Icons.Default.PhotoCamera, null, tint = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary) },
+                                onClick = {
+                                    showFabMenu = false
+                                    if (activeServicesForFab.isEmpty()) {
+                                        Toast.makeText(context, "Fotoğraf eklemek için önce bir iş emrinde işleme başlamalısınız.", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        showPhotoDialog = true
+                                    }
                                 }
                             )
                         }
-                ) {
-                    DropdownMenu(
-                        expanded = showFabMenu,
-                        onDismissRequest = { showFabMenu = false },
-                        modifier = Modifier.width(260.dp)
-                    ) {
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text("Hızlı Not Ekle", fontWeight = FontWeight.Medium, color = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified)
-                                    if (activeServicesForFab.isEmpty()) {
-                                        Text("İşleme başladıktan sonra kullanılabilir", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                                    }
-                                }
-                            },
-                            leadingIcon = { Icon(Icons.Default.EditNote, null, tint = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary) },
-                            onClick = {
-                                showFabMenu = false
-                                if (activeServicesForFab.isEmpty()) {
-                                    Toast.makeText(context, "Not eklemek için önce bir iş emrinde işleme başlamalısınız.", Toast.LENGTH_LONG).show()
-                                } else {
-                                    showNoteDialog = true
-                                }
-                            }
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text("Fotoğraf Çek", fontWeight = FontWeight.Medium, color = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified)
-                                    if (activeServicesForFab.isEmpty()) {
-                                        Text("İşleme başladıktan sonra kullanılabilir", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                                    }
-                                }
-                            },
-                            leadingIcon = { Icon(Icons.Default.PhotoCamera, null, tint = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary) },
-                            onClick = {
-                                showFabMenu = false
-                                if (activeServicesForFab.isEmpty()) {
-                                    Toast.makeText(context, "Fotoğraf eklemek için önce bir iş emrinde işleme başlamalısınız.", Toast.LENGTH_LONG).show()
-                                } else {
-                                    showPhotoDialog = true
-                                }
-                            }
-                        )
-                    }
 
-                    FloatingActionButton(
-                        onClick = { showFabMenu = !showFabMenu },
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
-                            contentDescription = "Hızlı İşlem Menüsü",
-                            modifier = Modifier.size(28.dp)
-                        )
+                        FloatingActionButton(
+                            onClick = { showFabMenu = !showFabMenu },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            shape = RoundedCornerShape(16.dp),
+                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
+                                contentDescription = "Hızlı İşlem Menüsü",
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
                 }
             }
-        }
-    ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
-            when (selectedTab) {
-                0 -> PersonnelHomeContent(
-                    personnel = currentPersonnel,
-                    rawServices = allPersonnelRawServices,
-                    myServices = filteredPersonnelServices,
-                    onNavigateToServiceDetail = onNavigateToServiceDetail,
-                    onGoToAssignments = { filter ->
-                        serviceViewModel.updateSearchQuery("")
-                        serviceViewModel.updateSelectedFilter("Hepsi")
-                        serviceViewModel.updateSelectedPriorityFilter("Hepsi")
+        ) { paddingValues ->
+            Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
+                when (selectedTab) {
+                    0 -> PersonnelHomeContent(
+                        personnel = currentPersonnel,
+                        rawServices = allPersonnelRawServices,
+                        myServices = filteredPersonnelServices,
+                        onNavigateToServiceDetail = onNavigateToServiceDetail,
+                        onGoToAssignments = { filter ->
+                            serviceViewModel.updateSearchQuery("")
+                            serviceViewModel.updateSelectedFilter("Hepsi")
+                            serviceViewModel.updateSelectedPriorityFilter("Hepsi")
 
-                        when (filter) {
-                            "Atanan" -> serviceViewModel.updateSelectedTab("Atanan")
-                            "Yolda" -> serviceViewModel.updateSelectedTab("Yolda")
-                            "İşlemde" -> serviceViewModel.updateSelectedTab("İşlemde")
-                            "Tamamlanan" -> serviceViewModel.updateSelectedTab("Tamamlanan")
-                            else -> serviceViewModel.updateSelectedTab("Tümü")
+                            when (filter) {
+                                "Atanan" -> serviceViewModel.updateSelectedTab("Atanan")
+                                "Yolda" -> serviceViewModel.updateSelectedTab("Yolda")
+                                "İşlemde" -> serviceViewModel.updateSelectedTab("İşlemde")
+                                "Tamamlanan" -> serviceViewModel.updateSelectedTab("Tamamlanan")
+                                else -> serviceViewModel.updateSelectedTab("Tümü")
+                            }
+                            selectedTab = 1
                         }
-                        selectedTab = 1
+                    )
+                    1 -> {
+                        Box(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+                            StandaloneUserFormScreen(
+                                serviceList = filteredPersonnelServices,
+                                personnelList = personnelList,
+                                selectedTab = serviceViewModel.selectedTab,
+                                onTabSelected = { serviceViewModel.updateSelectedTab(it) },
+                                searchQuery = serviceViewModel.searchQuery,
+                                onSearchQueryChange = { serviceViewModel.updateSearchQuery(it) },
+                                selectedFilter = serviceViewModel.selectedFilter,
+                                onFilterSelected = { serviceViewModel.updateSelectedFilter(it) },
+                                selectedPriority = serviceViewModel.selectedPriorityFilter,
+                                onPrioritySelected = { serviceViewModel.updateSelectedPriorityFilter(it) },
+                                onClearFilters = {
+                                    serviceViewModel.updateSearchQuery("")
+                                    serviceViewModel.updateSelectedFilter("Hepsi")
+                                    serviceViewModel.updateSelectedPriorityFilter("Hepsi")
+                                    serviceViewModel.updateSelectedTab("Tümü")
+                                },
+                                onNavigateToPersonnel = { },
+                                onNavigateToAddService = { },
+                                onServiceClick = { service -> onNavigateToServiceDetail(service.id) },
+                                onLogOut = onLogOut,
+                                serviceViewModel = serviceViewModel,
+                                firebaseUid = currentPersonnelUid,
+                                localPersonnelId = personnelId
+                            )
+                        }
                     }
-                )
-                1 -> {
-                    Box(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
-                        StandaloneUserFormScreen(
-                            serviceList = filteredPersonnelServices,
-                            personnelList = personnelList,
-                            selectedTab = serviceViewModel.selectedTab,
-                            onTabSelected = { serviceViewModel.updateSelectedTab(it) },
-                            searchQuery = serviceViewModel.searchQuery,
-                            onSearchQueryChange = { serviceViewModel.updateSearchQuery(it) },
-                            selectedFilter = serviceViewModel.selectedFilter,
-                            onFilterSelected = { serviceViewModel.updateSelectedFilter(it) },
-                            selectedPriority = serviceViewModel.selectedPriorityFilter,
-                            onPrioritySelected = { serviceViewModel.updateSelectedPriorityFilter(it) },
-                            onClearFilters = {
-                                serviceViewModel.updateSearchQuery("")
-                                serviceViewModel.updateSelectedFilter("Hepsi")
-                                serviceViewModel.updateSelectedPriorityFilter("Hepsi")
-                                serviceViewModel.updateSelectedTab("Tümü")
-                            },
-                            onNavigateToPersonnel = { },
-                            onNavigateToAddService = { },
-                            onServiceClick = { service -> onNavigateToServiceDetail(service.id) },
-                            onLogOut = onLogOut,
-                            serviceViewModel = serviceViewModel,
-                            firebaseUid = currentPersonnelUid,
-                            localPersonnelId = personnelId
-                        )
-                    }
+                    2 -> PersonnelMapScreen(viewModel = serviceViewModel)
+                    3 -> PersonnelProfileScreen(
+                        personnel = currentPersonnel,
+                        onEditProfile = { id -> onNavigateToEditPersonnel(id) },
+                        onLogOut = onLogOut
+                    )
                 }
-                2 -> PersonnelMapScreen(viewModel = serviceViewModel)
-                3 -> PersonnelProfileScreen(
-                    personnel = currentPersonnel,
-                    locationStatus = locationStatus,
-                    viewModel = personnelViewModel,
-                    onEditProfile = { id -> onNavigateToEditPersonnel(id) },
-                    onNavigateToShift = onNavigateToShift,
-                    onNavigateToLeave = onNavigateToLeave,
-                    onLogOut = onLogOut
-                )
             }
         }
     }
@@ -457,7 +536,6 @@ fun PersonnelHomeContent(
     onNavigateToServiceDetail: (Int) -> Unit,
     onGoToAssignments: (String) -> Unit
 ) {
-    // Sayaçlar ham (tüm) personel işleri üzerinden hesaplanır, böylece filtre değişiminden etkilenmez
     val assignedCount = rawServices.count { it.status == ServiceStatus.BEKLIYOR }
     val acceptedCount = rawServices.count { it.status == ServiceStatus.YOLDA }
     val inProgressCount = rawServices.count { it.status == ServiceStatus.ISLEME_BASLANDI || it.status == ServiceStatus.PARCA_BEKLENIYOR }

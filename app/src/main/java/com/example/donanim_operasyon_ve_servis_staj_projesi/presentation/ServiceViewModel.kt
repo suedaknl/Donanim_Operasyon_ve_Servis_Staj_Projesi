@@ -20,6 +20,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.servi
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.UpdateServiceUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.DeleteServiceUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.ArchiveServiceUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.overtime.DetectOvertimeUseCase
 
 @HiltViewModel
 class ServiceViewModel @Inject constructor(
@@ -29,7 +30,8 @@ class ServiceViewModel @Inject constructor(
     private val startServiceWorkUseCase: StartServiceWorkUseCase,
     private val updateServiceUseCase: UpdateServiceUseCase,
     private val deleteServiceUseCase: DeleteServiceUseCase,
-    private val archiveServiceUseCase: ArchiveServiceUseCase
+    private val archiveServiceUseCase: ArchiveServiceUseCase,
+    private val detectOvertimeUseCase: DetectOvertimeUseCase
 ) : ViewModel() {
 
     // --- TEMEL STATE'LER ---
@@ -849,6 +851,18 @@ class ServiceViewModel @Inject constructor(
                 _closingState.value = ClosingState.Success
                 loadRecords()
                 loadRecordsForPersonnel(personnelId)
+
+                // --- FAZLA MESAİ OTOMATİK TESPİTİ (Ana akışı bozmayacak şekilde güvenli sarmal) ---
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        val completedRecord = repository.getAllRecords().find { it.id == serviceId }
+                        if (completedRecord != null) {
+                            detectOvertimeUseCase.detectAndCreateOvertime(completedRecord)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
             } else {
                 _closingState.value = ClosingState.Error(
                     result.exceptionOrNull()?.message

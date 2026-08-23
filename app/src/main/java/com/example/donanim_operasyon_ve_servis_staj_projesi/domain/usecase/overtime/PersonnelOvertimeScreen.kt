@@ -13,28 +13,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.OvertimeViewModel
-import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AdminOvertimeScreen(
+fun PersonnelOvertimeScreen(
+    personnelId: Int,
     overtimeViewModel: OvertimeViewModel,
-    personnelViewModel: PersonnelViewModel,
     onNavigateBack: () -> Unit
 ) {
-    val overtimes by overtimeViewModel.allOvertimes.collectAsState()
-    val personnelList by personnelViewModel.personnelList.collectAsState()
+    val overtimes by overtimeViewModel.personnelOvertimes.collectAsState()
 
-    LaunchedEffect(Unit) {
-        overtimeViewModel.loadAllOvertimes()
+    LaunchedEffect(personnelId) {
+        overtimeViewModel.loadPersonnelOvertimes(personnelId)
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Fazla Mesai Takibi", fontWeight = FontWeight.Bold) },
+                title = { Text("Fazla Mesailerim", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
@@ -51,7 +49,7 @@ fun AdminOvertimeScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Tüm Fazla Mesai Kayıtları", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text("Geçmiş Fazla Mesai Kayıtları", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
             if (overtimes.isEmpty()) {
                 Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
@@ -63,9 +61,6 @@ fun AdminOvertimeScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(overtimes) { item ->
-                        val personnel = personnelList.find { it.id == item.personnelId }
-                        val personnelName = personnel?.fullName ?: "Personel #${item.personnelId}"
-
                         val startStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(item.startTime))
                         val endStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(item.endTime))
 
@@ -88,7 +83,7 @@ fun AdminOvertimeScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(text = personnelName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    Text(text = "${item.durationMinutes} Dakika", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
                                         color = statusColor
@@ -102,7 +97,6 @@ fun AdminOvertimeScreen(
                                     }
                                 }
 
-                                Text(text = "Süre: ${item.durationMinutes} dakika", fontWeight = FontWeight.SemiBold)
                                 if (item.serviceRecordId != null) {
                                     Text(text = "İş Emri ID: #${item.serviceRecordId}", style = MaterialTheme.typography.bodySmall)
                                 }
@@ -111,30 +105,6 @@ fun AdminOvertimeScreen(
 
                                 if (!item.description.isNullOrBlank()) {
                                     Text(text = "Açıklama: ${item.description}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-
-                                if (item.status == "PENDING") {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Button(
-                                            onClick = { overtimeViewModel.approveOvertime(item) },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Text("Onayla")
-                                        }
-                                        Button(
-                                            onClick = { overtimeViewModel.rejectOvertime(item) },
-                                            modifier = Modifier.weight(1f),
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Text("Reddet")
-                                        }
-                                    }
                                 }
                             }
                         }

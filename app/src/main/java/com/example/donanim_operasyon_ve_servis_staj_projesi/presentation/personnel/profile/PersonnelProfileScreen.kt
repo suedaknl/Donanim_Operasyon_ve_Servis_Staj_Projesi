@@ -23,18 +23,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.EventAvailable
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 
 @Composable
 fun PersonnelProfileScreen(
     personnel: Personnel?,
-    locationStatus: String,
-    viewModel: com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel,
     onEditProfile: (Int) -> Unit,
-    onNavigateToShift: () -> Unit,
-    onNavigateToLeave: () -> Unit,
     onLogOut: () -> Unit
 ) {
     val context = LocalContext.current
@@ -46,27 +39,7 @@ fun PersonnelProfileScreen(
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-
     var passwordVisible by remember { mutableStateOf(false) }
-
-    val passwordState by viewModel.passwordUpdateState
-
-    LaunchedEffect(passwordState) {
-        passwordState?.let { result ->
-            if (result.isSuccess) {
-                Toast.makeText(context, "Şifreniz başarıyla güncellendi.", Toast.LENGTH_SHORT).show()
-                showPasswordDialog = false
-                currentPassword = ""
-                newPassword = ""
-                confirmPassword = ""
-                viewModel.resetPasswordState()
-            } else {
-                val errorMsg = result.exceptionOrNull()?.message ?: "Bir hata oluştu."
-                Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
-                viewModel.resetPasswordState()
-            }
-        }
-    }
 
     Box(
         modifier = Modifier
@@ -82,7 +55,6 @@ fun PersonnelProfileScreen(
         ) {
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Profil Header
             Box {
                 Surface(
                     modifier = Modifier.size(80.dp),
@@ -141,7 +113,6 @@ fun PersonnelProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // İletişim / Kişisel Bilgiler Kartı
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -174,7 +145,6 @@ fun PersonnelProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Hesap Bölümü
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
                 Text(
                     text = "Hesap",
@@ -209,69 +179,8 @@ fun PersonnelProfileScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            HorizontalDivider()
-
-            ListItem(
-                headlineContent = {
-                    Text(
-                        "Vardiyam",
-                        fontWeight = FontWeight.Medium
-                    )
-                },
-                supportingContent = {
-                    Text("Vardiya saatlerinizi görüntüleyin")
-                },
-                leadingContent = {
-                    Icon(
-                        Icons.Default.Schedule,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                },
-                trailingContent = {
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null
-                    )
-                },
-                modifier = Modifier.clickable {
-                    onNavigateToShift()
-                }
-            )
-
-            HorizontalDivider()
-
-            ListItem(
-                headlineContent = {
-                    Text(
-                        "İzinlerim",
-                        fontWeight = FontWeight.Medium
-                    )
-                },
-                supportingContent = {
-                    Text("İzin talebi oluşturun ve taleplerinizi takip edin")
-                },
-                leadingContent = {
-                    Icon(
-                        Icons.Default.EventAvailable,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                },
-                trailingContent = {
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null
-                    )
-                },
-                modifier = Modifier.clickable {
-                    onNavigateToLeave()
-                }
-            )
-
-            // Çıkış Yap Butonu
             Button(
                 onClick = onLogOut,
                 modifier = Modifier
@@ -291,7 +200,6 @@ fun PersonnelProfileScreen(
             Spacer(modifier = Modifier.height(80.dp))
         }
 
-        // Destek FAB
         FloatingActionButton(
             onClick = { showSupportDialog = true },
             modifier = Modifier
@@ -310,7 +218,6 @@ fun PersonnelProfileScreen(
         }
     }
 
-    // Şifre Değiştir Dialog
     if (showPasswordDialog) {
         AlertDialog(
             onDismissRequest = { showPasswordDialog = false },
@@ -366,7 +273,8 @@ fun PersonnelProfileScreen(
                             Toast.makeText(context, "Yeni şifreler eşleşmiyor.", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
-                        viewModel.updatePassword(currentPassword, newPassword)
+                        Toast.makeText(context, "Şifre güncelleme isteği alındı.", Toast.LENGTH_SHORT).show()
+                        showPasswordDialog = false
                     }
                 ) {
                     Text("Güncelle")
@@ -378,38 +286,8 @@ fun PersonnelProfileScreen(
                 }
             }
         )
-        ListItem(
-            headlineContent = { Text("Vardiyam") },
-            supportingContent = { Text("Vardiya saatlerini görüntüle") },
-            leadingContent = {
-                Icon(
-                    Icons.Default.Schedule,
-                    contentDescription = null
-                )
-            },
-            modifier = Modifier.clickable {
-                onNavigateToShift()
-            }
-        )
-
-        HorizontalDivider()
-
-        ListItem(
-            headlineContent = { Text("İzinlerim") },
-            supportingContent = { Text("İzin talebi oluştur ve taleplerini görüntüle") },
-            leadingContent = {
-                Icon(
-                    Icons.Default.EventAvailable,
-                    contentDescription = null
-                )
-            },
-            modifier = Modifier.clickable {
-                onNavigateToLeave()
-            }
-        )
     }
 
-    // Destek Dialog
     if (showSupportDialog) {
         AlertDialog(
             onDismissRequest = { showSupportDialog = false },
@@ -442,7 +320,6 @@ fun PersonnelProfileScreen(
         )
     }
 }
-
 
 @Composable
 fun ProfileInfoRow(

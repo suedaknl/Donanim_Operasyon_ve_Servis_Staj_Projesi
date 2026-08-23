@@ -41,16 +41,14 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.LeaveViewM
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.OvertimeViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.ShiftViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.shift.PersonnelShiftScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.overtime.PersonnelOvertimeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.overtime.AdminOvertimeScreen
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.management.AdminManagementScreen
-
 
 @Composable
 fun AppNavigation(
     authRepository: AuthRepository
 ) {
     val navController = rememberNavController()
-
     val context = LocalContext.current
 
     val sharedServiceViewModel: ServiceViewModel = hiltViewModel()
@@ -148,7 +146,6 @@ fun AppNavigation(
 
         composable("home") {
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
-
             AdminMainScreen(
                 serviceViewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
@@ -164,9 +161,7 @@ fun AppNavigation(
                 onNavigateToPersonnelDetail = { id ->
                     navController.navigate(route = "personnel_detail/$id")
                 },
-                onNavigateToPersonnel = {
-                    // Drawer üzerinden Personel Yönetimi tıklandığında (İsteğe bağlı olarak tab index değişimi veya ilgili yönlendirme)
-                },
+                onNavigateToPersonnel = {},
                 onNavigateToShift = {
                     navController.navigate("admin_shift")
                 },
@@ -185,16 +180,17 @@ fun AppNavigation(
                 }
             )
         }
-        // --- Yönetim Paneli Rotası ---
-        composable("admin_management") {
-            AdminManagementScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToPersonnel = {
+
+        composable(route = "admin_overtime") {
+            val overtimeViewModel: OvertimeViewModel = hiltViewModel()
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
+
+            AdminOvertimeScreen(
+                overtimeViewModel = overtimeViewModel,
+                personnelViewModel = personnelViewModel,
+                onNavigateBack = {
                     navController.popBackStack()
-                },
-                onNavigateToShift = { navController.navigate("admin_shift") },
-                onNavigateToLeave = { navController.navigate("admin_leave") },
-                onNavigateToOvertime = { navController.navigate("admin_overtime") }
+                }
             )
         }
 
@@ -412,6 +408,10 @@ fun AppNavigation(
                     navController.navigate("personnel_leave/$personnelId")
                 },
 
+                onNavigateToOvertime = {
+                    navController.navigate("personnel_overtime/$personnelId")
+                },
+
                 onLogOut = {
                     authRepository.signOut()
                     sessionManager.clearSession()
@@ -551,14 +551,17 @@ fun AppNavigation(
             )
         }
 
-        composable("admin_overtime") {
+        composable(
+            route = "personnel_overtime/{personnelId}",
+            arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val overtimeViewModel: OvertimeViewModel = hiltViewModel()
 
-            AdminOvertimeScreen(
+            PersonnelOvertimeScreen(
+                personnelId = personnelId,
                 overtimeViewModel = overtimeViewModel,
-                onNavigateBack = {
-                    navController.popBackStack()
-                }
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
