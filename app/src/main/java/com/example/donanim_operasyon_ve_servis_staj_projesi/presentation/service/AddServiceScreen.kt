@@ -34,6 +34,7 @@ import java.util.Locale
 fun AddServiceScreen(
     viewModel: ServiceViewModel,
     serviceId: Int? = null,
+    sourceServiceId: Int? = null,
     returnedLatitude: Double? = null,
     returnedLongitude: Double? = null,
     onNavigateBack: () -> Unit,
@@ -42,7 +43,7 @@ fun AddServiceScreen(
 ) {
     val context = LocalContext.current
 
-    // Tüm form state'leri rememberSaveable ile korundu (Haritaya gidip gelince silinmez)
+    // Tüm form state'leri rememberSaveable ile korundu
     var companyName by rememberSaveable { mutableStateOf("") }
     var deviceType by rememberSaveable { mutableStateOf("") }
     var deviceModel by rememberSaveable { mutableStateOf("") }
@@ -51,7 +52,7 @@ fun AddServiceScreen(
     var issueDescription by rememberSaveable { mutableStateOf("") }
     var selectedPriority by rememberSaveable { mutableStateOf("Orta") }
 
-    // İletişim, Adres ve Koordinat State'leri de rememberSaveable yapıldı
+    // İletişim, Adres ve Koordinat State'leri
     var contactPerson by rememberSaveable { mutableStateOf("") }
     var contactPhone by rememberSaveable { mutableStateOf("") }
     var address by rememberSaveable { mutableStateOf("") }
@@ -75,23 +76,21 @@ fun AddServiceScreen(
     var showError by remember { mutableStateOf(false) }
     var showLocationWarningDialog by remember { mutableStateOf(false) }
 
-    // Kritik Düzeltme: Haritadan dönüldüğünde DB'den eski (boş) verilerin tekrar çekilip
-    // kullanıcı seçimlerinin ezilmesini engellemek için kontrol flag'i
     var isInitialized by rememberSaveable { mutableStateOf(false) }
 
     val priorities = listOf("Düşük", "Orta", "Yüksek")
 
-    // Çoğaltma (Duplicate) kontrolü: serviceId negatif gönderildiyse bu bir çoğaltma işlemidir
+    // Mod Ayrımları
+    val isExtraJob = sourceServiceId != null && sourceServiceId > 0
     val isDuplicating = serviceId != null && serviceId < 0
     val actualServiceId = if (isDuplicating && serviceId != null) -serviceId else serviceId
 
-    // Haritadan dönen koordinatları yakalama ve Reverse Geocoding ile Adresi Otomatik Doldurma
+    // Haritadan dönen koordinatları yakalama ve Reverse Geocoding
     LaunchedEffect(returnedLatitude, returnedLongitude) {
         if (returnedLatitude != null && returnedLongitude != null) {
             latitude = returnedLatitude
             longitude = returnedLongitude
 
-            // Android Geocoder Main Thread'i kilitlememesi için IO thread'ine alındı
             launch(Dispatchers.IO) {
                 try {
                     val geocoder = Geocoder(context, Locale("tr", "TR"))
@@ -122,11 +121,31 @@ fun AddServiceScreen(
         }
     }
 
-    // SADECE İLK AÇILIŞTA (isInitialized == false) DB'den verileri çeker
-    // Böylece haritadan dönünce koordinatlar sıfırlanmaz.
-    LaunchedEffect(actualServiceId) {
+    // SADECE İLK AÇILIŞTA Veri Yükleme (Extra Job vs Edit/Duplicate)
+    LaunchedEffect(actualServiceId, sourceServiceId) {
         if (!isInitialized) {
-            if (actualServiceId != null && actualServiceId != 0) {
+            if (isExtraJob) {
+                // EXTRA JOB MODU: Sadece firma, adres, iletişim, lokasyon ve personel bilgileri taşınır
+                val sourceRecord = viewModel.getServiceById(sourceServiceId!!)
+                if (sourceRecord != null) {
+                    companyName = sourceRecord.companyName
+                    location = sourceRecord.location
+                    address = sourceRecord.address ?: ""
+                    contactPerson = sourceRecord.contactPerson ?: ""
+                    contactPhone = sourceRecord.contactPhone ?: ""
+                    latitude = sourceRecord.latitude
+                    longitude = sourceRecord.longitude
+
+                    // Planlanan tarih/saat şimdiki zamanla otomatik doldurulur
+                    plannedDate = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale("tr", "TR")).format(Date())
+
+                    // Cihaz ve arıza alanları bilinçli olarak boş bırakılır
+                    deviceType = ""
+                    deviceModel = ""
+                    serialNumber = ""
+                    issueDescription = ""
+                }
+            } else if (actualServiceId != null && actualServiceId != 0) {
                 val record = viewModel.getServiceById(actualServiceId)
                 if (record != null) {
                     companyName = record.companyName
@@ -142,7 +161,6 @@ fun AddServiceScreen(
                     address = record.address ?: ""
                     plannedDate = record.plannedDate ?: ""
 
-                    // Eğer çoğaltma değilse koordinatları da getir (Çoğaltmaysa yeni konum gerekebilir)
                     latitude = record.latitude
                     longitude = record.longitude
                 }
@@ -152,12 +170,12 @@ fun AddServiceScreen(
     }
 
     val screenTitle = when {
+        isExtraJob -> "Aynı Lokasyona Ek İş Oluştur"
         isDuplicating -> "İş Emrini Çoğalt"
         serviceId == null || serviceId == 0 -> "Yeni İş Emri Oluştur"
         else -> "İş Emri Düzenle"
     }
 
-    // Kaydetme işlemini gerçekleştiren ortak fonksiyon
     val performSave: () -> Unit = {
         val finalCompany = companyName.trim()
         val finalDevice = deviceType.trim()
@@ -170,8 +188,7 @@ fun AddServiceScreen(
         val finalAddress = address.trim().takeIf { it.isNotBlank() }
         val finalPlannedDate = plannedDate.trim().takeIf { it.isNotBlank() }
 
-        // Düzenleme modunda veritabanından güncel kaydı bularak güvenli güncelleme yaparız
-        if (actualServiceId != null && actualServiceId != 0 && !isDuplicating) {
+        if (actualServiceId != null && actualServiceId != 0 && !isDuplicating && !isExtraJob) {
             val existing = viewModel.getServiceById(actualServiceId)
             if (existing != null) {
                 val updatedRecord = existing.copy(
@@ -193,6 +210,13 @@ fun AddServiceScreen(
             }
         } else {
             val currentDate = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())
+
+            val descriptionFinal = if (isExtraJob) {
+                "$finalIssue\n(Kaynak İş Emri: #$sourceServiceId)".trim()
+            } else {
+                finalIssue
+            }
+
             val newRecord = ServiceRecord(
                 companyName = finalCompany,
                 deviceType = finalDevice,
@@ -200,7 +224,7 @@ fun AddServiceScreen(
                 serialNumber = finalSerial,
                 location = finalLocation,
                 priority = selectedPriority,
-                issueDescription = finalIssue,
+                issueDescription = descriptionFinal,
                 status = ServiceStatus.BEKLIYOR,
                 date = currentDate,
                 contactPerson = finalContactPerson,
@@ -236,6 +260,29 @@ fun AddServiceScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // EXTRA JOB BİLGİ KARTI
+            if (isExtraJob) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Aynı lokasyona ek iş oluşturuluyor.",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "Firma, lokasyon ve iletişim bilgileri mevcut iş emrinden alındı. Yeni cihaz ve arıza bilgilerini girin.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = companyName,
                 onValueChange = { companyName = it; showError = false },
@@ -310,38 +357,58 @@ fun AddServiceScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            // EXTRA JOB MODUNDA HARİTA SEÇİCİ GİZLENİR, SABİT BİLGİ GÖSTERİLİR
+            if (isExtraJob) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("İş Konumu (Harita)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.height(2.dp))
-                            if (latitude != null && longitude != null) {
-                                Text("📍 Konum seçildi", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFF4CAF50))
-                                Text(String.format(Locale.US, "%.4f, %.4f", latitude, longitude), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            } else {
-                                Text("Henüz harita konumu seçilmedi.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                            }
+                        Text("Konum Bilgisi", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Text("📍 Konum mevcut iş emrinden alındı.", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFF4CAF50))
+                        if (location.isNotBlank() || address.isNotBlank()) {
+                            Text("$location • $address", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-
-                        Button(
-                            onClick = { onNavigateToLocationPicker(latitude, longitude) },
-                            shape = RoundedCornerShape(8.dp)
+                    }
+                }
+            } else {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(if (latitude != null) "Konumu Değiştir" else "Haritadan Seç")
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("İş Konumu (Harita)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                if (latitude != null && longitude != null) {
+                                    Text("📍 Konum seçildi", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFF4CAF50))
+                                    Text(String.format(Locale.US, "%.4f, %.4f", latitude, longitude), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } else {
+                                    Text("Henüz harita konumu seçilmedi.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+
+                            Button(
+                                onClick = { onNavigateToLocationPicker(latitude, longitude) },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (latitude != null) "Konumu Değiştir" else "Haritadan Seç")
+                            }
                         }
                     }
                 }
@@ -357,7 +424,6 @@ fun AddServiceScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            // Planlanan Ziyaret Tarihi / Saati (Tıklanabilir, klavye girişi kapalı, görünüm aktif)
             Box(
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -457,12 +523,11 @@ fun AddServiceScreen(
             ) {
                 Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(if (isDuplicating) "Yeni İş Emri Oluştur" else "Kaydet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(if (isDuplicating || isExtraJob) "Yeni İş Emri Oluştur" else "Kaydet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
         }
     }
 
-    // Material 3 DatePickerDialog
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -489,7 +554,6 @@ fun AddServiceScreen(
         }
     }
 
-    // Material 3 TimePickerDialog
     if (showTimePicker) {
         AlertDialog(
             onDismissRequest = { showTimePicker = false },

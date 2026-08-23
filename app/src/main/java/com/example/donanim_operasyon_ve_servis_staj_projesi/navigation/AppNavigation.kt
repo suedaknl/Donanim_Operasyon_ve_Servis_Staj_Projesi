@@ -210,6 +210,7 @@ fun AppNavigation(
                 personnelId = pId,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToEdit = { id -> navController.navigate("add_service?serviceId=$id") },
+                onCreateExtraJob = { sourceId -> navController.navigate("add_service?sourceServiceId=$sourceId") },
                 onNavigateToHistory = { firestoreId, sId, companyName ->
                     val encodedCompany = android.net.Uri.encode(companyName)
                     navController.navigate("service_history/$firestoreId/$sId/$encodedCompany")
@@ -247,9 +248,14 @@ fun AppNavigation(
         }
 
         composable(
-            route = "add_service?serviceId={serviceId}",
+            route = "add_service?serviceId={serviceId}&sourceServiceId={sourceServiceId}",
             arguments = listOf(
                 navArgument("serviceId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("sourceServiceId") {
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
@@ -259,12 +265,16 @@ fun AppNavigation(
             val serviceIdStr = backStackEntry.arguments?.getString("serviceId")
             val actualServiceId = serviceIdStr?.toIntOrNull()
 
+            val sourceServiceIdStr = backStackEntry.arguments?.getString("sourceServiceId")
+            val actualSourceServiceId = sourceServiceIdStr?.toIntOrNull()
+
             val selectedLat = backStackEntry.savedStateHandle.get<Double>("selected_lat")
             val selectedLon = backStackEntry.savedStateHandle.get<Double>("selected_lon")
 
             AddServiceScreen(
                 viewModel = sharedServiceViewModel,
                 serviceId = actualServiceId,
+                sourceServiceId = actualSourceServiceId,
                 returnedLatitude = selectedLat,
                 returnedLongitude = selectedLon,
                 onNavigateBack = { navController.popBackStack() },
@@ -461,6 +471,9 @@ fun AppNavigation(
                 },
                 onNavigateToEdit = { id ->
                     navController.navigate("add_service?serviceId=$id")
+                },
+                onCreateExtraJob = { sourceId ->
+                    navController.navigate("add_service?sourceServiceId=$sourceId")
                 },
                 onNavigateToHistory = { firestoreId, sId, companyName ->
                     val encodedCompany = android.net.Uri.encode(companyName)

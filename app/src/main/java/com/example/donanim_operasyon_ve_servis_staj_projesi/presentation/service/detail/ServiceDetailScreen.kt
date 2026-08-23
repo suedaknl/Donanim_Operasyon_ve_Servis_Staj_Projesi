@@ -61,6 +61,7 @@ fun ServiceDetailScreen(
     onNavigateToHistory: (String, Int, String) -> Unit,
     returnedPhotoUri: String? = null,
     onPhotoSaved: () -> Unit = {},
+    onCreateExtraJob: (Int) -> Unit,
     onNavigateToCamera: () -> Unit = {},
     onNavigateToClosingForm: (Int, Int) -> Unit = { _, _ -> }
 ) {
@@ -385,26 +386,48 @@ fun ServiceDetailScreen(
 
                                 if (!isCompleted) {
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Button(
-                                            onClick = { showAssignDialog = true },
-                                            modifier = Modifier.weight(1f),
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(if (service.assignedPersonnelId != null) "Yeniden Ata" else "Personel Ata")
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Button(
+                                                onClick = { showAssignDialog = true },
+                                                modifier = Modifier.weight(1f),
+                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(if (service.assignedPersonnelId != null) "Yeniden Ata" else "Personel Ata")
+                                            }
+                                            Button(
+                                                onClick = { showStatusDialog = true },
+                                                modifier = Modifier.weight(1f),
+                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Durum Güncelle")
+                                            }
                                         }
+
                                         Button(
-                                            onClick = { showStatusDialog = true },
-                                            modifier = Modifier.weight(1f),
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                                            shape = RoundedCornerShape(12.dp)
+                                            onClick = { onCreateExtraJob(service.id) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primary
+                                            )
                                         ) {
-                                            Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.PostAdd,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp)
+                                            )
                                             Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Durum Güncelle")
+                                            Text("Aynı Lokasyona Ek İş Oluştur")
                                         }
                                     }
                                 }
@@ -466,6 +489,7 @@ fun ServiceDetailScreen(
                                     serviceHistory = serviceHistory,
                                     effectiveSignaturePath = effectiveSignaturePath,
                                     onNavigateToEdit = onNavigateToEdit,
+                                    onCreateExtraJob = onCreateExtraJob,
                                     onArchiveClick = { showArchiveDialog = true },
                                     onDeleteClick = { showDeleteDialog = true },
                                     signatureData = closingSignature?.signatureData,

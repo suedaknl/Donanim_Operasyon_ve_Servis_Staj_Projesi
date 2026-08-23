@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,6 +37,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceSt
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.converter.SignatureConverter
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.signature.SignatureRenderer
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.ServiceReportPdfGenerator
+
 @Composable
 fun ServiceApprovalSection(
     service: ServiceRecord,
@@ -47,6 +49,7 @@ fun ServiceApprovalSection(
     effectiveSignaturePath: String?,
     signatureData: String?,
     onNavigateToEdit: (Int) -> Unit,
+    onCreateExtraJob: (Int) -> Unit,
     onArchiveClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onImageClick: (String) -> Unit
@@ -476,7 +479,7 @@ fun ServiceApprovalSection(
             }
 
             // -----------------------------------------------------
-            // MÜŞTERİ DİJİTAL İMZASI
+            // MÜŞTERİ DİJİTAL İmzasi
             // -----------------------------------------------------
 
             ExpandableSection(
@@ -601,27 +604,66 @@ fun ServiceApprovalSection(
                 }
             ) {
 
-                if (
-                    (
-                            service.status == ServiceStatus.TAMAMLANDI ||
-                                    service.status == ServiceStatus.IPTAL
-                            ) &&
-                    !service.isArchived
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (
+                        (
+                                service.status == ServiceStatus.TAMAMLANDI ||
+                                        service.status == ServiceStatus.IPTAL
+                                ) &&
+                        !service.isArchived
+                    ) {
 
+                        Button(
+                            onClick = onArchiveClick,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors =
+                                ButtonDefaults.buttonColors(
+                                    containerColor =
+                                        MaterialTheme.colorScheme.secondary
+                                ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+
+                            Icon(
+                                imageVector = Icons.Default.Archive,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+
+                            Spacer(
+                                modifier = Modifier.width(6.dp)
+                            )
+
+                            Text("Arşivle")
+                        }
+                    }
+
+                    // İş Emrini Çoğalt Butonu (Mevcut Mantık Korundu)
                     Button(
-                        onClick = onArchiveClick,
+                        onClick = {
+                            val targetId =
+                                if (service.id > 0) {
+                                    -service.id
+                                } else {
+                                    service.id
+                                }
+
+                            onNavigateToEdit(targetId)
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors =
                             ButtonDefaults.buttonColors(
                                 containerColor =
-                                    MaterialTheme.colorScheme.secondary
+                                    MaterialTheme.colorScheme.tertiary
                             ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
 
                         Icon(
-                            imageVector = Icons.Default.Archive,
+                            imageVector = Icons.Default.ContentCopy,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
@@ -630,97 +672,62 @@ fun ServiceApprovalSection(
                             modifier = Modifier.width(6.dp)
                         )
 
-                        Text("Arşivle")
+                        Text("İş Emrini Çoğalt")
                     }
-                }
 
-                Button(
-                    onClick = {
+                    // Düzenle ve Sil Butonları
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement =
+                            Arrangement.spacedBy(8.dp)
+                    ) {
 
-                        val targetId =
-                            if (service.id > 0) {
-                                -service.id
-                            } else {
-                                service.id
-                            }
+                        Button(
+                            onClick = {
+                                onNavigateToEdit(
+                                    service.id
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
 
-                        onNavigateToEdit(
-                            targetId
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor =
-                                MaterialTheme.colorScheme.tertiary
-                        ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-
-                    Spacer(
-                        modifier = Modifier.width(6.dp)
-                    )
-
-                    Text("İş Emrini Çoğalt")
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(8.dp)
-                ) {
-
-                    Button(
-                        onClick = {
-                            onNavigateToEdit(
-                                service.id
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
                             )
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
 
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
+                            Spacer(
+                                modifier = Modifier.width(6.dp)
+                            )
 
-                        Spacer(
-                            modifier = Modifier.width(6.dp)
-                        )
+                            Text("Düzenle")
+                        }
 
-                        Text("Düzenle")
-                    }
+                        Button(
+                            onClick = onDeleteClick,
+                            modifier = Modifier.weight(1f),
+                            colors =
+                                ButtonDefaults.buttonColors(
+                                    containerColor =
+                                        MaterialTheme.colorScheme.error
+                                ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
 
-                    Button(
-                        onClick = onDeleteClick,
-                        modifier = Modifier.weight(1f),
-                        colors =
-                            ButtonDefaults.buttonColors(
-                                containerColor =
-                                    MaterialTheme.colorScheme.error
-                            ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
 
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
+                            Spacer(
+                                modifier = Modifier.width(6.dp)
+                            )
 
-                        Spacer(
-                            modifier = Modifier.width(6.dp)
-                        )
-
-                        Text("Sil")
+                            Text("Sil")
+                        }
                     }
                 }
             }
