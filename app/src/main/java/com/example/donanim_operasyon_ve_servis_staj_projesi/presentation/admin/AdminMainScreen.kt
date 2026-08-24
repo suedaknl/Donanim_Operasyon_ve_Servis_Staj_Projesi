@@ -1,6 +1,7 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin
 
 import android.widget.Toast
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -17,7 +18,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -33,7 +39,10 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personn
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.AdminMapScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.archive.AdminArchiveScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.GetAdminWorkAnalysisUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.AnalysisPeriod
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.nativeCanvas
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,7 +108,7 @@ fun AdminMainScreen(
                     icon = { Icon(Icons.Default.People, contentDescription = null) },
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
-                        onNavigateToPersonnel() // Artık ayrı operasyonel yönetim ekranına (personnel_management) yönlendirir
+                        onNavigateToPersonnel()
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -370,9 +379,12 @@ fun AdminDashboardContent(
     val completedOrders = allServices.count { it.status == ServiceStatus.TAMAMLANDI }
     val totalPersonnel = allPersonnel.size
 
+    val analysisUseCase = remember { GetAdminWorkAnalysisUseCase() }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(16.dp),
+        // FAB ve alt menü çakışmasını önlemek için alt boşluk (bottom padding) artırıldı
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
@@ -453,6 +465,242 @@ fun AdminDashboardContent(
                 )
             }
         }
+
+        item {
+            AdminWorkAnalysisSection(
+                records = allServices,
+                analysisUseCase = analysisUseCase
+            )
+        }
+    }
+}
+
+@Composable
+fun AdminWorkAnalysisSection(
+    records: List<ServiceRecord>,
+    analysisUseCase: GetAdminWorkAnalysisUseCase
+) {
+    var selectedPeriod by remember { mutableStateOf(AnalysisPeriod.WEEKLY) }
+
+    val analysis = remember(records, selectedPeriod) {
+        analysisUseCase(records, selectedPeriod)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "İş Analizi",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = analysis.periodTitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Dönem Seçici
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AnalysisPeriod.entries.forEach { period ->
+                    val isSelected = selectedPeriod == period
+                    val buttonColors = if (isSelected) {
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Button(
+                        onClick = { selectedPeriod = period },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp),
+                        colors = buttonColors,
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(
+                            text = when (period) {
+                                AnalysisPeriod.DAILY -> "Günlük"
+                                AnalysisPeriod.WEEKLY -> "Haftalık"
+                                AnalysisPeriod.MONTHLY -> "Aylık"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            if (analysis.totalCreated == 0 && analysis.totalCompleted == 0) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = when (selectedPeriod) {
+                            AnalysisPeriod.DAILY -> "Bugün için iş emri bulunmuyor."
+                            AnalysisPeriod.WEEKLY -> "Son 7 günde iş emri bulunmuyor."
+                            AnalysisPeriod.MONTHLY -> "Son 30 günde iş emri bulunmuyor."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp)))
+                        Text("Oluşturulan", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(modifier = Modifier.size(8.dp).background(Color(0xFF16A34A), RoundedCornerShape(4.dp)))
+                        Text("Tamamlanan", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                val primaryColor = MaterialTheme.colorScheme.primary
+                val successColor = Color(0xFF16A34A)
+                val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                val textColorInt = android.graphics.Color.GRAY // Native Android text paint için
+
+                val maxVal = (analysis.createdCounts + analysis.completedCounts).maxOrNull()?.coerceAtLeast(4) ?: 4
+
+                // X Ekseni Etiketleri ile birlikte Canvas Çizimi
+                val textPaint = android.graphics.Paint().apply {
+                    textSize = 10.dp.value * LocalDensity.current.density
+                    color = android.graphics.Color.DKGRAY
+                    textAlign = android.graphics.Paint.Align.CENTER
+                }
+
+                Box(modifier = Modifier.fillMaxWidth().height(210.dp)) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .padding(vertical = 4.dp)
+                    ) {
+                        val width = size.width
+                        val height = size.height
+                        val paddingBottom = 20.dp.toPx()
+                        val paddingLeft = 24.dp.toPx()
+                        val chartWidth = width - paddingLeft
+                        val chartHeight = height - paddingBottom
+
+                        val stepX = if (analysis.labels.size > 1) chartWidth / (analysis.labels.size - 1) else chartWidth
+
+                        // Grid Çizgileri
+                        for (i in 0..4) {
+                            val y = chartHeight * (i / 4f)
+                            drawLine(
+                                color = gridColor,
+                                start = Offset(paddingLeft, y),
+                                end = Offset(width, y),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                        }
+
+                        val getX: (Int) -> Float = { index -> paddingLeft + (index * stepX) }
+                        val getY: (Int) -> Float = { value -> chartHeight - (value.toFloat() / maxVal * chartHeight) }
+
+                        val createdPath = Path().apply {
+                            analysis.createdCounts.forEachIndexed { index, value ->
+                                val x = getX(index)
+                                val y = getY(value)
+                                if (index == 0) moveTo(x, y) else lineTo(x, y)
+                            }
+                        }
+
+                        val completedPath = Path().apply {
+                            analysis.completedCounts.forEachIndexed { index, value ->
+                                val x = getX(index)
+                                val y = getY(value)
+                                if (index == 0) moveTo(x, y) else lineTo(x, y)
+                            }
+                        }
+
+                        drawPath(
+                            path = createdPath,
+                            color = primaryColor,
+                            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        )
+                        drawPath(
+                            path = completedPath,
+                            color = successColor,
+                            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        )
+
+                        analysis.createdCounts.forEachIndexed { index, value ->
+                            drawCircle(color = primaryColor, radius = 4.dp.toPx(), center = Offset(getX(index), getY(value)))
+                            drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(getX(index), getY(value)))
+                        }
+                        analysis.completedCounts.forEachIndexed { index, value ->
+                            drawCircle(color = successColor, radius = 4.dp.toPx(), center = Offset(getX(index), getY(value)))
+                            drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(getX(index), getY(value)))
+                        }
+
+                        // X Eksen Etiketleri (Native Canvas Text)
+                        analysis.labels.forEachIndexed { index, label ->
+                            val x = getX(index)
+                            drawContext.canvas.nativeCanvas.drawText(
+                                label,
+                                x,
+                                chartHeight + 16.dp.toPx(),
+                                textPaint
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    WorkStatItem("Toplam İş", "${analysis.totalCreated}")
+                    WorkStatItem("Tamamlanan", "${analysis.totalCompleted}")
+                    WorkStatItem("Tamamlama %", "%${analysis.completionRate}")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun WorkStatItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
