@@ -15,7 +15,7 @@ interface ServiceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecord(record: ServiceRecord)
 
-    // --- KAPANIŞ İŞLEMİ İÇİN EKSİK OLAN METOT EKLENDİ ---
+    // --- KAPANIŞ İŞLEMİ İÇİN EKSİK OLAN METOT ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSignature(signature: ServiceClosingSignature)
 
@@ -49,9 +49,30 @@ interface ServiceDao {
     @Query("UPDATE service_records SET assignedPersonnelId = NULL WHERE assignedPersonnelId = :personnelId")
     suspend fun clearAssignedPersonnel(personnelId: Int)
 
-    // --- AŞAMA 2.1 İÇİN EKLENEN DAO METODU ---
     @Query("SELECT * FROM service_records WHERE assignedPersonnelId = :personnelId")
     suspend fun getRecordsByPersonnelId(personnelId: Int): List<ServiceRecord>
+
+    // --- İŞ HAVUZU İÇİN EKLENEN METOTLAR ---
+
+    @Query("SELECT * FROM service_records WHERE assignmentType = 'POOL' AND assignedPersonnelId IS NULL AND isArchived = 0")
+    fun getPoolJobs(): Flow<List<ServiceRecord>>
+
+    @Query("""
+        UPDATE service_records 
+        SET assignedPersonnelId = :personnelId, 
+            assignedPersonnelName = :personnelName, 
+            assignedPersonnelUid = :personnelUid, 
+            assignmentType = 'DIRECT' 
+        WHERE id = :serviceId 
+          AND assignmentType = 'POOL' 
+          AND assignedPersonnelId IS NULL
+    """)
+    suspend fun claimPoolJob(
+        serviceId: Int,
+        personnelId: Int,
+        personnelName: String,
+        personnelUid: String
+    ): Int // Etkilenen satır sayısını döndürür (1 ise başarılı, 0 ise başkası aldı)
 
     // --- FAZ 2.3 İÇİN EKLENEN SERVİS NOTU METOTLARI ---
 

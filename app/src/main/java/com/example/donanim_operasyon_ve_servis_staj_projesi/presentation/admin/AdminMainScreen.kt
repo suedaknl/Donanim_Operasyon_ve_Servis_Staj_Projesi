@@ -51,6 +51,7 @@ fun AdminMainScreen(
     onNavigateToShift: () -> Unit,
     onNavigateToLeave: () -> Unit,
     onNavigateToOvertime: () -> Unit,
+    onNavigateToServiceRegistry: () -> Unit, // <--- Bağlantı sağlandı
     onLogOut: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -128,6 +129,17 @@ fun AdminMainScreen(
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
                         onNavigateToOvertime()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+                // --- SERVİS SİCİLİ MENÜ ÖĞESİ EKLENDİ ---
+                NavigationDrawerItem(
+                    label = { Text("Servis Sicili", fontWeight = FontWeight.Medium) },
+                    selected = false,
+                    icon = { Icon(Icons.Default.History, contentDescription = null) },
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        onNavigateToServiceRegistry()
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )

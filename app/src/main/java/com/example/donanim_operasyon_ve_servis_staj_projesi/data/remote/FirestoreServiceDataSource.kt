@@ -4,6 +4,9 @@ import android.net.Uri
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
@@ -12,6 +15,100 @@ class FirestoreServiceDataSource @Inject constructor(
     private val storage: FirebaseStorage
 ) {
     private val collection = firestore.collection("services")
+
+    // --- İŞ HAVUZU: REALTIME LISTENER (Esnek Filtreleme) ---
+    fun observePoolJobs(): Flow<List<ServiceRecord>> = callbackFlow {
+        val listener = collection
+            .whereEqualTo("assignmentType", "POOL")
+            .whereEqualTo("isArchived", false)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+
+                val records = snapshot?.documents?.mapNotNull { doc ->
+                    try {
+                        val assignedId = doc.getLong("assignedPersonnelId")
+                        val assignedUid = doc.getString("assignedPersonnelUid")
+
+                        // Atanmamış (assignedPersonnelId null/0 ve uid boş olanlar) havuz işleridir
+                        if (assignedId == null && assignedUid.isNullOrBlank()) {
+                            ServiceRecord(
+                                id = 0,
+                                companyName = doc.getString("companyName") ?: "",
+                                deviceType = doc.getString("deviceType") ?: "",
+                                deviceModel = doc.getString("deviceModel") ?: "",
+                                serialNumber = doc.getString("serialNumber") ?: "",
+                                location = doc.getString("location") ?: "",
+                                priority = doc.getString("priority") ?: "Normal",
+                                issueDescription = doc.getString("issueDescription") ?: "",
+                                status = doc.getString("status") ?: "Bekliyor",
+                                date = doc.getString("date") ?: "",
+                                assignedPersonnelId = null,
+                                assignedPersonnelName = null,
+                                assignedPersonnelUid = null,
+                                contactPerson = doc.getString("contactPerson"),
+                                contactPhone = doc.getString("contactPhone"),
+                                address = doc.getString("address"),
+                                plannedDate = doc.getString("plannedDate"),
+                                firestoreId = doc.id,
+                                rejectionReason = doc.getString("rejectionReason"),
+                                latitude = doc.getDouble("latitude"),
+                                longitude = doc.getDouble("longitude"),
+                                isArchived = doc.getBoolean("isArchived") ?: false,
+                                archivedAt = doc.getLong("archivedAt"),
+                                assignmentType = doc.getString("assignmentType") ?: "POOL"
+                            )
+                        } else {
+                            null
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
+                } ?: emptyList()
+
+                trySend(records)
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    // --- İŞ HAVUZU: ATOMİK CLAIM TRANSACTION ---
+    suspend fun claimPoolJob(
+        firestoreId: String,
+        personnelId: Int,
+        personnelName: String,
+        personnelUid: String
+    ): Result<Unit> {
+        return try {
+            firestore.runTransaction { transaction ->
+                val docRef = collection.document(firestoreId)
+                val snapshot = transaction.get(docRef)
+
+                val assignmentType = snapshot.getString("assignmentType")
+                val assignedId = snapshot.getLong("assignedPersonnelId")
+
+                if (assignmentType != "POOL" || assignedId != null) {
+                    throw Exception("Bu iş başka bir personel tarafından az önce üstlenildi.")
+                }
+
+                transaction.update(
+                    docRef,
+                    mapOf(
+                        "assignmentType" to "DIRECT",
+                        "assignedPersonnelId" to personnelId,
+                        "assignedPersonnelName" to personnelName,
+                        "assignedPersonnelUid" to personnelUid
+                    )
+                )
+            }.await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     // --- STORAGE VE SUBCOLLECTION FONKSİYONLARI ---
 
@@ -59,10 +156,8 @@ class FirestoreServiceDataSource @Inject constructor(
             }
 
             val timestamp = System.currentTimeMillis()
-
             var downloadUrl: String? = null
 
-            // Eski PNG sistemi / fallback
             if (!localUriString.isNullOrBlank()) {
                 try {
                     val cleanPath = localUriString
@@ -76,24 +171,17 @@ class FirestoreServiceDataSource @Inject constructor(
                     }
 
                     val fileName = "signature_$timestamp.png"
-
                     val storageRef = storage.reference.child(
                         "services/$firestoreId/signatures/$fileName"
                     )
 
                     storageRef.putFile(uri).await()
-
-                    downloadUrl = storageRef
-                        .downloadUrl
-                        .await()
-                        .toString()
-
+                    downloadUrl = storageRef.downloadUrl.await().toString()
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }
 
-            // Yeni X-Y-P sistemi
             val signatureMap = hashMapOf<String, Any>(
                 "timestamp" to timestamp
             )
@@ -191,6 +279,7 @@ class FirestoreServiceDataSource @Inject constructor(
                 "contactPhone" to record.contactPhone,
                 "address" to record.address,
                 "plannedDate" to record.plannedDate,
+                "assignedPersonnelId" to record.assignedPersonnelId,
                 "assignedPersonnelUid" to record.assignedPersonnelUid,
                 "assignedPersonnelName" to record.assignedPersonnelName,
                 "firestoreId" to record.firestoreId,
@@ -198,7 +287,8 @@ class FirestoreServiceDataSource @Inject constructor(
                 "latitude" to record.latitude,
                 "longitude" to record.longitude,
                 "isArchived" to record.isArchived,
-                "archivedAt" to record.archivedAt
+                "archivedAt" to record.archivedAt,
+                "assignmentType" to record.assignmentType
             )
 
             if (!record.firestoreId.isNullOrEmpty()) {
@@ -231,7 +321,7 @@ class FirestoreServiceDataSource @Inject constructor(
                     issueDescription = document.getString("issueDescription") ?: "",
                     status = document.getString("status") ?: "Bekliyor",
                     date = document.getString("date") ?: "",
-                    assignedPersonnelId = null,
+                    assignedPersonnelId = document.getLong("assignedPersonnelId")?.toInt(),
                     assignedPersonnelName = document.getString("assignedPersonnelName"),
                     contactPerson = document.getString("contactPerson"),
                     contactPhone = document.getString("contactPhone"),
@@ -243,7 +333,8 @@ class FirestoreServiceDataSource @Inject constructor(
                     latitude = document.getDouble("latitude"),
                     longitude = document.getDouble("longitude"),
                     isArchived = document.getBoolean("isArchived") ?: false,
-                    archivedAt = document.getLong("archivedAt")
+                    archivedAt = document.getLong("archivedAt"),
+                    assignmentType = document.getString("assignmentType") ?: "DIRECT"
                 )
                 servicesList.add(service)
             }
@@ -271,13 +362,16 @@ class FirestoreServiceDataSource @Inject constructor(
                 "contactPhone" to record.contactPhone,
                 "address" to record.address,
                 "plannedDate" to record.plannedDate,
+                "assignedPersonnelId" to record.assignedPersonnelId,
                 "assignedPersonnelUid" to record.assignedPersonnelUid,
+                "assignedPersonnelName" to record.assignedPersonnelName,
                 "firestoreId" to firestoreId,
                 "rejectionReason" to record.rejectionReason,
                 "latitude" to record.latitude,
                 "longitude" to record.longitude,
                 "isArchived" to record.isArchived,
-                "archivedAt" to record.archivedAt
+                "archivedAt" to record.archivedAt,
+                "assignmentType" to record.assignmentType
             )
 
             collection.document(firestoreId).set(serviceMap).await()
@@ -415,7 +509,8 @@ class FirestoreServiceDataSource @Inject constructor(
                     issueDescription = document.getString("issueDescription") ?: "",
                     status = document.getString("status") ?: "Bekliyor",
                     date = document.getString("date") ?: "",
-                    assignedPersonnelId = null,
+                    assignedPersonnelId = document.getLong("assignedPersonnelId")?.toInt(),
+                    assignedPersonnelName = document.getString("assignedPersonnelName"),
                     contactPerson = document.getString("contactPerson"),
                     contactPhone = document.getString("contactPhone"),
                     address = document.getString("address"),
@@ -426,7 +521,8 @@ class FirestoreServiceDataSource @Inject constructor(
                     latitude = document.getDouble("latitude"),
                     longitude = document.getDouble("longitude"),
                     isArchived = document.getBoolean("isArchived") ?: false,
-                    archivedAt = document.getLong("archivedAt")
+                    archivedAt = document.getLong("archivedAt"),
+                    assignmentType = document.getString("assignmentType") ?: "DIRECT"
                 )
                 servicesList.add(service)
             }

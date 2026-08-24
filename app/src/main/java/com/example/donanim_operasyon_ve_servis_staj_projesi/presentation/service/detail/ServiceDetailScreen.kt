@@ -59,6 +59,7 @@ fun ServiceDetailScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit,
     onNavigateToHistory: (String, Int, String) -> Unit,
+    onNavigateToServiceRegistry: (String?, String?) -> Unit = { _, _ -> }, // <--- Yeni Navigasyon Callback
     returnedPhotoUri: String? = null,
     onPhotoSaved: () -> Unit = {},
     onCreateExtraJob: (Int) -> Unit,
@@ -74,6 +75,21 @@ fun ServiceDetailScreen(
     val serviceRecords by viewModel.serviceRecords.collectAsState()
     val personnelRecords by viewModel.personnelServiceRecords.collectAsState()
     val service = serviceRecords.find { it.id == serviceId } ?: personnelRecords.find { it.id == serviceId }
+
+    // Servis kayıtlarından firma ve cihaz istatistiklerini hesapla
+    val companyRegistryCount = remember(serviceRecords, service) {
+        service?.companyName?.let { name -> serviceRecords.count { it.companyName.equals(name, ignoreCase = true) } } ?: 0
+    }
+    val deviceRegistryCount = remember(serviceRecords, service) {
+        service?.serialNumber?.let { sn -> serviceRecords.count { it.serialNumber.equals(sn, ignoreCase = true) } } ?: 0
+    }
+    val deviceLastSixMonthsCount = remember(serviceRecords, service) {
+        val sn = service?.serialNumber ?: return@remember 0
+        val sixMonthsAgo = System.currentTimeMillis() - (180L * 24 * 60 * 60 * 1000)
+        serviceRecords.filter { it.serialNumber.equals(sn, ignoreCase = true) }.count {
+            (it.archivedAt ?: 0L) >= sixMonthsAgo
+        }
+    }
 
     LaunchedEffect(service?.firestoreId) {
         service?.firestoreId?.let { firestoreId ->
@@ -359,6 +375,31 @@ fun ServiceDetailScreen(
                                         InfoRow(icon = Icons.Default.ReportProblem, label = "Arıza Nedeni", value = service.issueDescription)
                                         InfoRow(icon = Icons.Default.Badge, label = "Atanan Personel", value = assignedPersonnelName)
                                         InfoRow(icon = Icons.Default.Info, label = "Mevcut Durum", value = service.status)
+                                    }
+                                }
+
+                                // --- SERVİS SİCİLİ ÖZET BÖLÜMÜ ---
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Servis Sicili", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("• Bu firma ile toplam $companyRegistryCount servis kaydı mevcut.")
+                                        Text("• Bu seri numaralı cihaz $deviceRegistryCount kez servise gelmiş.")
+                                        Text("• Son Servis Tarihi: ${service.date}")
+                                        Text("• Son Arıza: ${service.issueDescription}")
+                                        if (deviceLastSixMonthsCount >= 2) {
+                                            Text("⚠️ Bu cihaz son 6 ayda $deviceLastSixMonthsCount kez servise gelmiş.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Button(
+                                            onClick = { onNavigateToServiceRegistry(service.companyName, service.serialNumber) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Geçmişi Gör")
+                                        }
                                     }
                                 }
                             }

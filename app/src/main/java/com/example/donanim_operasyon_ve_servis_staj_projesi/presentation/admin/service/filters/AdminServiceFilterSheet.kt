@@ -131,7 +131,7 @@ fun AdminServiceFilterSheet(
                     Text("Atama Durumu", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Tümü", "Atanmış", "Atanmamış").forEach { assignOpt ->
+                        listOf("Tümü", "Atanmış", "Atanmamış", "Havuzda").forEach { assignOpt ->
                             FilterChip(
                                 selected = tempAssignmentStatus == assignOpt,
                                 onClick = { tempAssignmentStatus = assignOpt },

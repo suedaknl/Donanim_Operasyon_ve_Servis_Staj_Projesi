@@ -20,7 +20,9 @@ class ServiceRepository @Inject constructor(
 ) {
 
     suspend fun insertRecord(record: ServiceRecord) {
-        val assignedPersonnel = record.assignedPersonnelId?.let { personnelId ->
+        val isPool = record.assignmentType == "POOL"
+
+        val assignedPersonnel = if (isPool) null else record.assignedPersonnelId?.let { personnelId ->
             try {
                 personnelDao.getPersonnelById(personnelId)
             } catch (e: Exception) {
@@ -29,9 +31,11 @@ class ServiceRepository @Inject constructor(
         }
 
         val recordWithPersonnel = record.copy(
-            assignedPersonnelUid = assignedPersonnel?.firebaseUid,
-            assignedPersonnelName = assignedPersonnel?.fullName
+            assignedPersonnelId = if (isPool) null else record.assignedPersonnelId,
+            assignedPersonnelUid = if (isPool) null else assignedPersonnel?.firebaseUid,
+            assignedPersonnelName = if (isPool) null else assignedPersonnel?.fullName
         )
+
         serviceDao.insertRecord(recordWithPersonnel)
 
         withContext(Dispatchers.IO) {
@@ -49,11 +53,10 @@ class ServiceRepository @Inject constructor(
                     val updatedRecord = savedRecord.copy(firestoreId = firestoreId)
                     serviceDao.updateService(updatedRecord)
 
-                    // --- İŞLEM GEÇMİŞİ: OLUŞTURULDU ---
                     recordHistory(
                         firestoreId = firestoreId,
-                        eventType = "SERVICE_CREATED",
-                        title = "İş Emri Oluşturuldu",
+                        eventType = if (isPool) "JOB_ADDED_TO_POOL" else "SERVICE_CREATED",
+                        title = if (isPool) "İş Havuzuna Gönderildi" else "İş Emri Oluşturuldu",
                         description = "Firma: ${savedRecord.companyName} (${savedRecord.deviceType})",
                         status = savedRecord.status,
                         performedByRole = "Admin"
@@ -63,6 +66,80 @@ class ServiceRepository @Inject constructor(
                 e.printStackTrace()
             }
         }
+    }
+
+    // --- İŞ HAVUZU: FIRESTORE SOURCE OF TRUTH (OBSERVE) ---
+    fun observePoolJobs(): Flow<List<ServiceRecord>> {
+        return firestoreDataSource.observePoolJobs()
+    }
+
+    // --- İŞ HAVUZU: GET POOL JOBS (Doğrudan Firestore Bağlantısı) ---
+    fun getPoolJobs(): Flow<List<ServiceRecord>> {
+        return firestoreDataSource.observePoolJobs()
+    }
+
+    // --- İŞ HAVUZU: FIRESTORE TRANSACTION TABANLI CLAIM ---
+    suspend fun claimPoolJob(
+        serviceId: Int,
+        firestoreId: String,
+        personnelId: Int,
+        personnelName: String,
+        personnelUid: String
+    ): Result<Unit> {
+        val result = firestoreDataSource.claimPoolJob(
+            firestoreId = firestoreId,
+            personnelId = personnelId,
+            personnelName = personnelName,
+            personnelUid = personnelUid
+        )
+
+        if (result.isSuccess) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val localRecord = serviceDao.getServiceByFirestoreId(firestoreId)
+                    if (localRecord != null) {
+                        val updatedLocal = localRecord.copy(
+                            assignmentType = "DIRECT",
+                            assignedPersonnelId = personnelId,
+                            assignedPersonnelName = personnelName,
+                            assignedPersonnelUid = personnelUid
+                        )
+                        serviceDao.updateService(updatedLocal)
+                    }
+
+                    recordHistory(
+                        firestoreId = firestoreId,
+                        eventType = "POOL_JOB_CLAIMED",
+                        title = "İş Havuzundan Üstlenildi",
+                        description = "Üstlenen Personel: $personnelName",
+                        status = ServiceStatus.BEKLIYOR,
+                        performedByUid = personnelUid,
+                        performedByName = personnelName,
+                        performedByRole = "Personel"
+                    )
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            return Result.success(Unit)
+        } else {
+            return Result.failure(result.exceptionOrNull() ?: Exception("İş üstlenilemedi."))
+        }
+    }
+
+    // --- ESKİ OVERLOAD (Uyumluluk İçin) ---
+    suspend fun claimPoolJob(
+        serviceId: Int,
+        personnelId: Int,
+        personnelName: String,
+        personnelUid: String
+    ): Boolean {
+        val record = serviceDao.getServiceById(serviceId)
+        if (record?.firestoreId != null) {
+            val res = claimPoolJob(serviceId, record.firestoreId!!, personnelId, personnelName, personnelUid)
+            return res.isSuccess
+        }
+        return false
     }
 
     suspend fun deleteRecord(record: ServiceRecord) {
@@ -91,7 +168,6 @@ class ServiceRepository @Inject constructor(
                 if (!firestoreId.isNullOrEmpty()) {
                     firestoreDataSource.updateServiceStatus(firestoreId, newStatus)
 
-                    // --- İŞLEM GEÇMİŞİ: DURUM DEĞİŞİKLİĞİ ---
                     val (eventType, title) = when (newStatus) {
                         ServiceStatus.YOLDA -> "SERVICE_ACCEPTED" to "İş Emri Kabul Edildi (Yolda)"
                         ServiceStatus.ISLEME_BASLANDI -> "SERVICE_STARTED" to "İşleme Başlandı"
@@ -173,7 +249,6 @@ class ServiceRepository @Inject constructor(
                 if (!firestoreId.isNullOrBlank()) {
                     firestoreDataSource.uploadNoteToFirebase(note, firestoreId)
 
-                    // --- İŞLEM GEÇMİŞİ: NOT EKLENDİ ---
                     if (note.noteType != "CLOSING") {
                         recordHistory(
                             firestoreId = firestoreId,
@@ -239,7 +314,6 @@ class ServiceRepository @Inject constructor(
                         photoType = photoType
                     )
 
-                    // --- İŞLEM GEÇMİŞİ: FOTOĞRAF EKLENDİ ---
                     recordHistory(
                         firestoreId = firestoreId,
                         eventType = "PHOTO_ADDED",
@@ -370,7 +444,6 @@ class ServiceRepository @Inject constructor(
                             status = ServiceStatus.TAMAMLANDI
                         )
 
-                        // Eski PNG sistemi için geçici uyumluluk.
                         if (!signatureUri.isNullOrBlank()) {
                             firestoreDataSource.uploadSignatureToFirebase(
                                 localUriString = signatureUri,
@@ -434,7 +507,7 @@ class ServiceRepository @Inject constructor(
                 if (!firestoreId.isNullOrEmpty()) {
                     val existingLocalService = serviceDao.getServiceByFirestoreId(firestoreId)
 
-                    val matchedPersonnelId: Int? = remoteService.assignedPersonnelUid?.let { uid ->
+                    val matchedPersonnelId: Int? = if (remoteService.assignmentType == "POOL") null else remoteService.assignedPersonnelUid?.let { uid ->
                         allPersonnel.find { it.firebaseUid == uid }?.id
                     }
 
@@ -483,7 +556,6 @@ class ServiceRepository @Inject constructor(
                     return Result.failure(firestoreResult.exceptionOrNull() ?: Exception("Firebase güncellemesi başarısız"))
                 }
 
-                // --- İŞLEM GEÇMİŞİ: REDDEDİLDİ ---
                 recordHistory(
                     firestoreId = updatedRecord.firestoreId,
                     eventType = "SERVICE_REJECTED",
@@ -498,28 +570,26 @@ class ServiceRepository @Inject constructor(
             Result.failure(e)
         }
     }
-    // ServiceRepository.kt içerisine eklenecek YENİ fonksiyon:
+
     suspend fun verifyAndStartServiceWork(recordId: Int, personnelId: Int, distance: Float) {
         val record = serviceDao.getServiceById(recordId) ?: return
 
-        // Sadece iş durumu YOLDA ise doğrulama yap (History'ye iki kez yazılmasını engeller)
-        if (record.status == com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus.YOLDA) {
+        if (record.status == ServiceStatus.YOLDA) {
             val firestoreId = record.firestoreId
             if (!firestoreId.isNullOrBlank()) {
-                // 1. History'ye "Konum Doğrulandı" logu at
                 recordHistory(
                     firestoreId = firestoreId,
                     eventType = "LOCATION_VERIFIED",
                     title = "İş Konumu Doğrulandı",
                     description = "Personel iş noktasına ${distance.toInt()} m uzaklıkta.",
-                    status = com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus.ISLEME_BASLANDI,
+                    status = ServiceStatus.ISLEME_BASLANDI,
                     performedByRole = "Personel"
                 )
             }
-            // 2. Normal "İşleme Başla" durumuna geçir
-            updateStatus(recordId, com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus.ISLEME_BASLANDI)
+            updateStatus(recordId, ServiceStatus.ISLEME_BASLANDI)
         }
     }
+
     suspend fun syncServicesFromFirestore(
         personnelUid: String,
         localPersonnelId: Int

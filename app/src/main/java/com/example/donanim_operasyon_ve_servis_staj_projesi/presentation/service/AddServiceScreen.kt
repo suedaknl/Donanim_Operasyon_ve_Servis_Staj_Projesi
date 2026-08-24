@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
@@ -33,17 +34,18 @@ import java.util.Locale
 @Composable
 fun AddServiceScreen(
     viewModel: ServiceViewModel,
+    personnelList: List<Personnel> = emptyList(),
     serviceId: Int? = null,
     sourceServiceId: Int? = null,
     returnedLatitude: Double? = null,
     returnedLongitude: Double? = null,
     onNavigateBack: () -> Unit,
     onNavigateToLocationPicker: (Double?, Double?) -> Unit = { _, _ -> },
-    onLocationConsumed: () -> Unit = {}
+    onLocationConsumed: () -> Unit = {},
+    onNavigateToServiceRegistry: (String?, String?) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
 
-    // Tüm form state'leri rememberSaveable ile korundu
     var companyName by rememberSaveable { mutableStateOf("") }
     var deviceType by rememberSaveable { mutableStateOf("") }
     var deviceModel by rememberSaveable { mutableStateOf("") }
@@ -52,13 +54,33 @@ fun AddServiceScreen(
     var issueDescription by rememberSaveable { mutableStateOf("") }
     var selectedPriority by rememberSaveable { mutableStateOf("Orta") }
 
-    // İletişim, Adres ve Koordinat State'leri
     var contactPerson by rememberSaveable { mutableStateOf("") }
     var contactPhone by rememberSaveable { mutableStateOf("") }
     var address by rememberSaveable { mutableStateOf("") }
     var plannedDate by rememberSaveable { mutableStateOf("") }
 
-    // DatePicker & TimePicker Dialog State'leri
+    val existingRecords by viewModel.serviceRecords.collectAsState(initial = emptyList())
+
+    // Firma Adı Eşleşmesi (Kısmi ve esnek arama)
+    val matchingCompanyCount = remember(companyName, existingRecords) {
+        val query = companyName.trim()
+        if (query.length >= 2) {
+            existingRecords.count { it.companyName.trim().contains(query, ignoreCase = true) }
+        } else 0
+    }
+
+    // Seri No Eşleşmesi (Kısmi ve esnek arama)
+    val matchingSerialCount = remember(serialNumber, existingRecords) {
+        val query = serialNumber.trim()
+        if (query.length >= 2) {
+            existingRecords.count { it.serialNumber.trim().contains(query, ignoreCase = true) }
+        } else 0
+    }
+
+    // --- İŞ HAVUZU ATAMA YÖNTEMİ STATE'İ ---
+    var assignmentMethod by rememberSaveable { mutableStateOf("DIRECT") }
+    var selectedPersonnelId by rememberSaveable { mutableStateOf<Int?>(null) }
+
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var tempSelectedDateMillis by remember { mutableStateOf<Long?>(null) }
@@ -80,12 +102,10 @@ fun AddServiceScreen(
 
     val priorities = listOf("Düşük", "Orta", "Yüksek")
 
-    // Mod Ayrımları
     val isExtraJob = sourceServiceId != null && sourceServiceId > 0
     val isDuplicating = serviceId != null && serviceId < 0
     val actualServiceId = if (isDuplicating && serviceId != null) -serviceId else serviceId
 
-    // Haritadan dönen koordinatları yakalama ve Reverse Geocoding
     LaunchedEffect(returnedLatitude, returnedLongitude) {
         if (returnedLatitude != null && returnedLongitude != null) {
             latitude = returnedLatitude
@@ -121,11 +141,9 @@ fun AddServiceScreen(
         }
     }
 
-    // SADECE İLK AÇILIŞTA Veri Yükleme (Extra Job vs Edit/Duplicate)
     LaunchedEffect(actualServiceId, sourceServiceId) {
         if (!isInitialized) {
             if (isExtraJob) {
-                // EXTRA JOB MODU: Sadece firma, adres, iletişim, lokasyon ve personel bilgileri taşınır
                 val sourceRecord = viewModel.getServiceById(sourceServiceId!!)
                 if (sourceRecord != null) {
                     companyName = sourceRecord.companyName
@@ -136,10 +154,8 @@ fun AddServiceScreen(
                     latitude = sourceRecord.latitude
                     longitude = sourceRecord.longitude
 
-                    // Planlanan tarih/saat şimdiki zamanla otomatik doldurulur
                     plannedDate = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale("tr", "TR")).format(Date())
 
-                    // Cihaz ve arıza alanları bilinçli olarak boş bırakılır
                     deviceType = ""
                     deviceModel = ""
                     serialNumber = ""
@@ -163,6 +179,8 @@ fun AddServiceScreen(
 
                     latitude = record.latitude
                     longitude = record.longitude
+                    selectedPersonnelId = record.assignedPersonnelId
+                    assignmentMethod = record.assignmentType
                 }
             }
             isInitialized = true
@@ -204,7 +222,9 @@ fun AddServiceScreen(
                     address = finalAddress,
                     plannedDate = finalPlannedDate,
                     latitude = latitude,
-                    longitude = longitude
+                    longitude = longitude,
+                    assignmentType = assignmentMethod,
+                    assignedPersonnelId = if (assignmentMethod == "POOL") null else selectedPersonnelId
                 )
                 viewModel.updateRecord(updatedRecord)
             }
@@ -232,7 +252,9 @@ fun AddServiceScreen(
                 address = finalAddress,
                 plannedDate = finalPlannedDate,
                 latitude = latitude,
-                longitude = longitude
+                longitude = longitude,
+                assignmentType = if (isExtraJob) "DIRECT" else assignmentMethod,
+                assignedPersonnelId = if (isExtraJob || assignmentMethod == "POOL") null else selectedPersonnelId
             )
             viewModel.insertRecord(newRecord)
         }
@@ -260,7 +282,6 @@ fun AddServiceScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // EXTRA JOB BİLGİ KARTI
             if (isExtraJob) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
@@ -283,6 +304,35 @@ fun AddServiceScreen(
                 }
             }
 
+            if (!isExtraJob) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Atama Yöntemi",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = assignmentMethod == "DIRECT",
+                            onClick = { assignmentMethod = "DIRECT" },
+                            label = { Text("Personele Ata") },
+                            leadingIcon = if (assignmentMethod == "DIRECT") {
+                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                            } else null
+                        )
+                        FilterChip(
+                            selected = assignmentMethod == "POOL",
+                            onClick = { assignmentMethod = "POOL"; selectedPersonnelId = null },
+                            label = { Text("İş Havuzuna Gönder") },
+                            leadingIcon = if (assignmentMethod == "POOL") {
+                                { Icon(Icons.Default.Pool, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                            } else null
+                        )
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = companyName,
                 onValueChange = { companyName = it; showError = false },
@@ -292,6 +342,32 @@ fun AddServiceScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
+
+            // --- FİRMA GEÇMİŞİ BİLGİ BANNERI ---
+            if (matchingCompanyCount > 0) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "\"${companyName.trim()}\" için $matchingCompanyCount geçmiş servis kaydı mevcut.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { onNavigateToServiceRegistry(companyName.trim(), null) }) {
+                            Text("Geçmişi Gör")
+                        }
+                    }
+                }
+            }
 
             OutlinedTextField(
                 value = contactPerson,
@@ -347,6 +423,34 @@ fun AddServiceScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
+            // --- CİHAZ / SERİ NO GEÇMİŞİ BİLGİ BANNERI ---
+            if (matchingSerialCount > 0) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Bu cihaz için $matchingSerialCount eski servis kaydı bulundu.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = {
+                            onNavigateToServiceRegistry(null, serialNumber.trim())
+                        }) {
+                            Text("Geçmişi Gör")
+                        }
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = location,
                 onValueChange = { location = it; showError = false },
@@ -357,7 +461,6 @@ fun AddServiceScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            // EXTRA JOB MODUNDA HARİTA SEÇİCİ GİZLENİR, SABİT BİLGİ GÖSTERİLİR
             if (isExtraJob) {
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),

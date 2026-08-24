@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LeaveRequestEntity::class,
         OvertimeEntity::class
     ],
-    version = 19,
+    version = 20, // <--- Versiyon 20'ye yükseltildi
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -146,6 +146,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // İŞ HAVUZU İÇİN YENİ MİGRASYON (19 -> 20)
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE service_records ADD COLUMN assignmentType TEXT NOT NULL DEFAULT 'DIRECT'")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -164,7 +171,8 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase.MIGRATION_15_16,
                         AppDatabase.MIGRATION_16_17,
                         AppDatabase.MIGRATION_17_18,
-                        AppDatabase.MIGRATION_18_19
+                        AppDatabase.MIGRATION_18_19,
+                        AppDatabase.MIGRATION_19_20 // <--- Migrasyon zincirine eklendi
                     )
                     .build()
                 INSTANCE = instance

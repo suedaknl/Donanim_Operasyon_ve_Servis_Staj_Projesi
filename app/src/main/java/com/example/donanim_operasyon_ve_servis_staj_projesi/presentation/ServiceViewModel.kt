@@ -20,6 +20,8 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.servi
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.UpdateServiceUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.DeleteServiceUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.ArchiveServiceUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.GetPoolJobsUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.ClaimPoolJobUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.overtime.DetectOvertimeUseCase
 
 @HiltViewModel
@@ -31,6 +33,8 @@ class ServiceViewModel @Inject constructor(
     private val updateServiceUseCase: UpdateServiceUseCase,
     private val deleteServiceUseCase: DeleteServiceUseCase,
     private val archiveServiceUseCase: ArchiveServiceUseCase,
+    private val getPoolJobsUseCase: GetPoolJobsUseCase,
+    private val claimPoolJobUseCase: ClaimPoolJobUseCase,
     private val detectOvertimeUseCase: DetectOvertimeUseCase
 ) : ViewModel() {
 
@@ -40,6 +44,10 @@ class ServiceViewModel @Inject constructor(
 
     private val _personnelServiceRecords = MutableStateFlow<List<ServiceRecord>>(emptyList())
     val personnelServiceRecords: StateFlow<List<ServiceRecord>> = _personnelServiceRecords.asStateFlow()
+
+    // --- İŞ HAVUZU STATE'İ ---
+    val poolJobs: StateFlow<List<ServiceRecord>> = getPoolJobsUseCase()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedRecord = MutableStateFlow<ServiceRecord?>(null)
     val selectedRecord: StateFlow<ServiceRecord?> = _selectedRecord.asStateFlow()
@@ -89,6 +97,37 @@ class ServiceViewModel @Inject constructor(
         _currentPersonnelUidFlow.value = uid
     }
 
+    // --- İŞİ ÜSTLEN (CLAIM POOL JOB) ---
+    fun claimPoolJob(
+        serviceId: Int,
+        firestoreId: String,
+        personnelId: Int,
+        personnelName: String,
+        personnelUid: String,
+        hasActiveJob: Boolean,
+        plannedDateStr: String?, // <--- Eklendi
+        isOnLeave: Boolean
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = claimPoolJobUseCase(
+                serviceId = serviceId,
+                firestoreId = firestoreId,
+                personnelId = personnelId,
+                personnelName = personnelName,
+                personnelUid = personnelUid,
+                hasActiveJob = hasActiveJob,
+                plannedDateStr = plannedDateStr, // <--- UseCase'e iletildi
+                isOnLeave = isOnLeave
+            )
+            // Sonuç yönetimi (başarı / hata durumu UI state veya event'e aktarılır)
+            if (result.isSuccess) {
+                // Başarılı işlem logu veya state güncellemesi
+            } else {
+                // Hata yönetimi (örn: "Bu iş başka bir personel tarafından az önce üstlenildi.")
+                val errorMsg = result.exceptionOrNull()?.message ?: "İş üstlenilemedi."
+            }
+        }
+    }
     // --- ADMIN AKIŞ VE FİLTRE STATE'LERİ ---
     private val _adminSelectedStatusTab = MutableStateFlow("Tümü")
     var adminSelectedStatusTab by mutableStateOf("Tümü")
@@ -119,7 +158,6 @@ class ServiceViewModel @Inject constructor(
     var selectedDeviceTypesFilter = mutableStateOf(setOf<String>())
         private set
 
-    // UI'nin doğrudan okuduğu Compose state'leri
     var selectedPersonnelFilter by mutableStateOf<String?>("Tümü")
         private set
     var selectedCompanyFilter by mutableStateOf<String?>("Tümü")
@@ -131,14 +169,12 @@ class ServiceViewModel @Inject constructor(
     var selectedSortOption by mutableStateOf("En yeni")
         private set
 
-    // Filtreleme akışının reaktif olarak dinlediği Flow karşılıkları
     private val _selectedPersonnelFilterFlow = MutableStateFlow<String?>("Tümü")
     private val _selectedCompanyFilterFlow = MutableStateFlow<String?>("Tümü")
     private val _selectedLocationFilterFlow = MutableStateFlow<String?>("Tümü")
     private val _selectedAssignmentStatusFilterFlow = MutableStateFlow("Tümü")
     private val _selectedSortOptionFlow = MutableStateFlow("En yeni")
 
-    // --- PAGINATION STATE'LERİ ---
     private val _adminCurrentPage = MutableStateFlow(1)
     val adminCurrentPage: StateFlow<Int> = _adminCurrentPage.asStateFlow()
 
@@ -146,7 +182,6 @@ class ServiceViewModel @Inject constructor(
     val currentPage: StateFlow<Int> = _currentPage.asStateFlow()
     val pageSize = 4
 
-    // --- KAPANIŞ VE MEDYA STATE'LERİ ---
     private val _closingNote = MutableStateFlow("")
     val closingNote = _closingNote.asStateFlow()
 
@@ -185,7 +220,6 @@ class ServiceViewModel @Inject constructor(
         const val SERVICE_START_RADIUS_METERS = 250f
     }
 
-    // --- 1. FILTERED SERVICE RECORDS (TÜM STATE'LERDEN SONRA) ---
     val filteredServiceRecords: StateFlow<List<ServiceRecord>> = combine(
         _serviceRecords,
         _adminSelectedStatusTab,
@@ -242,7 +276,6 @@ class ServiceViewModel @Inject constructor(
         emptyList()
     )
 
-    // --- 2. ADMIN DİNAMİK PAGINATION FLOWS (1. Sayfa 3, Sonrakiler 5 Kayıt) ---
     val admintotalPages: StateFlow<Int> = filteredServiceRecords.map { list ->
         if (list.isEmpty()) 1
         else if (list.size <= 3) 1
@@ -282,7 +315,6 @@ class ServiceViewModel @Inject constructor(
         }
     }
 
-    // --- 3. PERSONEL FILTERED & PAGINATION FLOWS ---
     val filteredPersonnelServiceRecords = combine(
         _personnelServiceRecords,
         _searchQueryFlow,
@@ -325,7 +357,6 @@ class ServiceViewModel @Inject constructor(
         }
     }
 
-    // --- FİLTRELEME FONKSİYONLARI ---
     private fun filterAdminRecords(
         records: List<ServiceRecord>,
         tab: String,
@@ -389,8 +420,9 @@ class ServiceViewModel @Inject constructor(
             }
 
             val assignmentMatch = when (assignment) {
-                "Atanmış" -> record.assignedPersonnelId != null
-                "Atanmamış" -> record.assignedPersonnelId == null
+                "Atanmış" -> record.assignedPersonnelId != null && record.assignmentType != "POOL"
+                "Atanmamış" -> record.assignedPersonnelId == null && record.assignmentType != "POOL"
+                "Havuzda" -> record.assignmentType == "POOL"
                 else -> true
             }
 
@@ -453,7 +485,6 @@ class ServiceViewModel @Inject constructor(
         }
     }
 
-    // --- STATE GÜNCELLEME VE SAYFA SIFIRLAMA METOTLARI ---
     fun updateAdminSelectedStatusTab(status: String) {
         adminSelectedStatusTab = status
         _adminSelectedStatusTab.value = status
@@ -484,7 +515,6 @@ class ServiceViewModel @Inject constructor(
         customStartDate = start
         customEndDate = end
 
-        // Compose/UI state'leri
         selectedStatusesFilter.value = statuses
         selectedPrioritiesFilter.value = priorities
         selectedDeviceTypesFilter.value = deviceTypes
@@ -494,7 +524,6 @@ class ServiceViewModel @Inject constructor(
         selectedAssignmentStatusFilter = assignment
         selectedSortOption = sort
 
-        // Reaktif filtre Flow'ları
         _selectedStatusesFilter.value = statuses
         _selectedPrioritiesFilter.value = priorities
         _selectedDeviceTypesFilter.value = deviceTypes
@@ -512,7 +541,6 @@ class ServiceViewModel @Inject constructor(
         customStartDate = null
         customEndDate = null
 
-        // Compose/UI state'lerini temizle
         selectedStatusesFilter.value = emptySet()
         selectedPrioritiesFilter.value = emptySet()
         selectedDeviceTypesFilter.value = emptySet()
@@ -524,7 +552,6 @@ class ServiceViewModel @Inject constructor(
         adminSearchQuery = ""
         adminSelectedStatusTab = "Tümü"
 
-        // Reaktif Flow state'lerini de aynı anda temizle
         _adminSearchQuery.value = ""
         _adminSelectedStatusTab.value = "Tümü"
         _selectedStatusesFilter.value = emptySet()
@@ -577,7 +604,6 @@ class ServiceViewModel @Inject constructor(
         _currentPage.value = 1
     }
 
-    // --- REPOSITORY VE VERİ YÖNETİMİ ---
     fun loadRecords() {
         viewModelScope.launch(Dispatchers.IO) {
             val records = repository.getAllRecords()
@@ -624,6 +650,7 @@ class ServiceViewModel @Inject constructor(
             }
         }
     }
+
     fun updateRecord(record: ServiceRecord) {
         viewModelScope.launch {
             val result = updateServiceUseCase(record)
@@ -751,7 +778,6 @@ class ServiceViewModel @Inject constructor(
         }
     }
 
-    // --- NOTLAR, FOTOĞRAFLAR VE KAPANIŞ İŞLEMLERİ ---
     fun loadServiceNotes(serviceRecordId: Int) {
         notesJob?.cancel()
         notesJob = viewModelScope.launch(Dispatchers.IO) {
@@ -852,7 +878,6 @@ class ServiceViewModel @Inject constructor(
                 loadRecords()
                 loadRecordsForPersonnel(personnelId)
 
-                // --- FAZLA MESAİ OTOMATİK TESPİTİ (Ana akışı bozmayacak şekilde güvenli sarmal) ---
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
                         val completedRecord = repository.getAllRecords().find { it.id == serviceId }

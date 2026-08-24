@@ -19,6 +19,8 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.auth.We
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.AddServiceScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceDetailScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.ServiceHistoryScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.registry.ServiceRegistryScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.registry.ServiceRegistryViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.AddPersonnelScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelWelcomeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.PersonnelMainScreen
@@ -171,6 +173,9 @@ fun AppNavigation(
                 onNavigateToOvertime = {
                     navController.navigate("admin_overtime")
                 },
+                onNavigateToServiceRegistry = {
+                    navController.navigate("service_registry")
+                },
                 onLogOut = {
                     authRepository.signOut()
                     sessionManager.clearSession()
@@ -190,6 +195,29 @@ fun AppNavigation(
                 personnelViewModel = personnelViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
+                }
+            )
+        }
+
+        // --- YENİ SERVİS SİCİLİ ROTA TANIMI ---
+        composable(
+            route = "service_registry?companyName={companyName}&serialNumber={serialNumber}",
+            arguments = listOf(
+                navArgument("companyName") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("serialNumber") { type = NavType.StringType; nullable = true; defaultValue = null }
+            )
+        ) { backStackEntry ->
+            val registryViewModel: ServiceRegistryViewModel = hiltViewModel()
+            val companyName = backStackEntry.arguments?.getString("companyName")
+            val serialNumber = backStackEntry.arguments?.getString("serialNumber")
+
+            ServiceRegistryScreen(
+                viewModel = registryViewModel,
+                initialQuery = companyName,
+                initialSerial = serialNumber,
+                onNavigateBack = { navController.popBackStack() },
+                onServiceClick = { clickedService ->
+                    navController.navigate(route = "service_detail/${clickedService.id}")
                 }
             )
         }
@@ -287,6 +315,11 @@ fun AppNavigation(
                 onLocationConsumed = {
                     backStackEntry.savedStateHandle.remove<Double>("selected_lat")
                     backStackEntry.savedStateHandle.remove<Double>("selected_lon")
+                },
+                onNavigateToServiceRegistry = { company, serial ->
+                    val encodedCompany = android.net.Uri.encode(company ?: "")
+                    val encodedSerial = android.net.Uri.encode(serial ?: "")
+                    navController.navigate("service_registry?companyName=$encodedCompany&serialNumber=$encodedSerial")
                 }
             )
         }
@@ -481,6 +514,11 @@ fun AppNavigation(
                     navController.navigate(
                         "service_history/$firestoreId/$sId/$encodedCompany"
                     )
+                },
+                onNavigateToServiceRegistry = { company, serial ->
+                    val encodedCompany = android.net.Uri.encode(company ?: "")
+                    val encodedSerial = android.net.Uri.encode(serial ?: "")
+                    navController.navigate("service_registry?companyName=$encodedCompany&serialNumber=$encodedSerial")
                 },
                 returnedPhotoUri = returnedPhotoUri,
                 onPhotoSaved = {

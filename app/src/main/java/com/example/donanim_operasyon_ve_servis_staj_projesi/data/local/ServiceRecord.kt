@@ -28,7 +28,8 @@ data class ServiceRecord(
     val firestoreId: String? = null,
     val assignedPersonnelUid: String? = null,
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    val assignmentType: String = "DIRECT" // <--- İş Havuzu için eklendi ("DIRECT" veya "POOL")
 )
 
 object ServiceStatus {
