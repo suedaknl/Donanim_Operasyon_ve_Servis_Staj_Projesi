@@ -176,6 +176,9 @@ fun AppNavigation(
                 onNavigateToServiceRegistry = {
                     navController.navigate("service_registry")
                 },
+                onEditServiceClick = { serviceId: Int ->
+                    navController.navigate("add_service?serviceId=$serviceId")
+                },
                 onLogOut = {
                     authRepository.signOut()
                     sessionManager.clearSession()
@@ -199,7 +202,7 @@ fun AppNavigation(
             )
         }
 
-        // --- YENİ SERVİS SİCİLİ ROTA TANIMI ---
+        // --- SERVİS SİCİLİ ROTA TANIMI ---
         composable(
             route = "service_registry?companyName={companyName}&serialNumber={serialNumber}",
             arguments = listOf(

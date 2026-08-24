@@ -38,11 +38,13 @@ fun AdminServiceListScreen(
     onNavigateToAddService: () -> Unit,
     onServiceClick: (ServiceRecord) -> Unit,
     onOpenArchive: () -> Unit,
+    onEditServiceClick: (Int) -> Unit = {},
     onLogOut: () -> Unit = {}
 ) {
     val tabs = listOf("Tümü", "Bekleyen", "Yolda", "İşlemde", "Tamamlanan", "Reddedilen")
 
     var showFilterSheet by remember { mutableStateOf(false) }
+    var recordToDelete by remember { mutableStateOf<ServiceRecord?>(null) }
 
     val pagedList = serviceViewModel.adminPagedServiceRecords.collectAsState().value
     val currentPage = serviceViewModel.adminCurrentPage.collectAsState().value
@@ -195,7 +197,11 @@ fun AdminServiceListScreen(
                         AdminServiceCard(
                             record = record,
                             personnelList = personnelList,
-                            onClick = { onServiceClick(record) }
+                            onClick = { onServiceClick(record) },
+                            onEditClick = { onEditServiceClick(record.id) },
+                            onDuplicateClick = { onEditServiceClick(-record.id) },
+                            onArchiveClick = { serviceViewModel.archiveService(record.id) },
+                            onDeleteClick = { recordToDelete = record }
                         )
                     }
                 }
@@ -293,6 +299,30 @@ fun AdminServiceListScreen(
             dynamicCompanies = dynamicCompanies,
             dynamicLocations = dynamicLocations,
             onDismiss = { showFilterSheet = false }
+        )
+    }
+
+    recordToDelete?.let { record ->
+        AlertDialog(
+            onDismissRequest = { recordToDelete = null },
+            title = { Text("İş Emrini Sil") },
+            text = { Text("Bu iş emrini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        serviceViewModel.deleteRecord(record)
+                        recordToDelete = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Sil", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { recordToDelete = null }) {
+                    Text("İptal")
+                }
+            }
         )
     }
 }

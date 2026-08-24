@@ -37,7 +37,7 @@ class ServiceViewModel @Inject constructor(
     private val getPoolJobsUseCase: GetPoolJobsUseCase,
     private val claimPoolJobUseCase: ClaimPoolJobUseCase,
     private val detectOvertimeUseCase: DetectOvertimeUseCase,
-    private val sortServiceRecordsUseCase: SortServiceRecordsUseCase // <--- Eklendi
+    private val sortServiceRecordsUseCase: SortServiceRecordsUseCase
 ) : ViewModel() {
 
     // --- TEMEL STATE'LER ---
@@ -49,7 +49,7 @@ class ServiceViewModel @Inject constructor(
 
     // --- İŞ HAVUZU STATE'İ ---
     val poolJobs: StateFlow<List<ServiceRecord>> = getPoolJobsUseCase()
-        .map { records -> sortServiceRecordsUseCase(records) } // Havuz listesinde akıllı sıralama
+        .map { records -> sortServiceRecordsUseCase(records) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedRecord = MutableStateFlow<ServiceRecord?>(null)
@@ -168,7 +168,7 @@ class ServiceViewModel @Inject constructor(
         private set
     var selectedAssignmentStatusFilter by mutableStateOf("Tümü")
         private set
-    var selectedSortOption by mutableStateOf("Öncelik + Saat") // <--- Varsayılan operasyonel sıralama
+    var selectedSortOption by mutableStateOf("Öncelik + Saat")
 
     private val _selectedPersonnelFilterFlow = MutableStateFlow<String?>("Tümü")
     private val _selectedCompanyFilterFlow = MutableStateFlow<String?>("Tümü")
@@ -277,10 +277,11 @@ class ServiceViewModel @Inject constructor(
         emptyList()
     )
 
+    // Admin pagination page size 2 olarak güncellendi
     val admintotalPages: StateFlow<Int> = filteredServiceRecords.map { list ->
         if (list.isEmpty()) 1
-        else if (list.size <= 3) 1
-        else 1 + (list.size - 3 + 4) / 5
+        else if (list.size <= 2) 1
+        else 1 + (list.size - 2 + 1) / 2
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1)
 
     val adminPagedServiceRecords: StateFlow<List<ServiceRecord>> = combine(
@@ -288,7 +289,7 @@ class ServiceViewModel @Inject constructor(
         _adminCurrentPage
     ) { list, page ->
         if (list.isEmpty()) return@combine emptyList()
-        val maxPage = if (list.size <= 3) 1 else 1 + (list.size - 3 + 4) / 5
+        val maxPage = if (list.size <= 2) 1 else 1 + (list.size - 2 + 1) / 2
         val safePage = page.coerceIn(1, maxPage)
 
         val startIndex: Int
@@ -296,10 +297,10 @@ class ServiceViewModel @Inject constructor(
 
         if (safePage == 1) {
             startIndex = 0
-            endIndex = minOf(3, list.size)
+            endIndex = minOf(2, list.size)
         } else {
-            startIndex = 3 + (safePage - 2) * 5
-            endIndex = minOf(startIndex + 5, list.size)
+            startIndex = 2 + (safePage - 2) * 2
+            endIndex = minOf(startIndex + 2, list.size)
         }
 
         if (startIndex < list.size && startIndex < endIndex) {
@@ -324,7 +325,6 @@ class ServiceViewModel @Inject constructor(
         _currentPersonnelUidFlow
     ) { records, query, priority, tab, currentUid ->
         val filtered = filterPersonnelRecords(records, query, priority, tab, currentUid)
-        // Personel Bana Atananlar listesinde de akıllı sıralamayı uyguluyoruz
         sortServiceRecordsUseCase(filtered)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -432,7 +432,6 @@ class ServiceViewModel @Inject constructor(
             notArchived && tabMatch && queryMatch && statusMatch && priorityMatch && deviceMatch && personnelMatch && companyMatch && locationMatch && assignmentMatch
         }
 
-        // Sıralama Mantığı (SortServiceRecordsUseCase entegre edildi)
         return when (sort) {
             "Öncelik + Saat", "Operasyon Önceliği" -> sortServiceRecordsUseCase(filtered)
             "En eski" -> filtered.sortedBy { it.id }

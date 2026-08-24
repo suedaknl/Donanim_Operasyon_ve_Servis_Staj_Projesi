@@ -51,7 +51,8 @@ fun AdminMainScreen(
     onNavigateToShift: () -> Unit,
     onNavigateToLeave: () -> Unit,
     onNavigateToOvertime: () -> Unit,
-    onNavigateToServiceRegistry: () -> Unit, // <--- Bağlantı sağlandı
+    onNavigateToServiceRegistry: () -> Unit,
+    onEditServiceClick: (Int) -> Unit, // <--- Eklendi
     onLogOut: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -132,7 +133,6 @@ fun AdminMainScreen(
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
-                // --- SERVİS SİCİLİ MENÜ ÖĞESİ EKLENDİ ---
                 NavigationDrawerItem(
                     label = { Text("Servis Sicili", fontWeight = FontWeight.Medium) },
                     selected = false,
@@ -301,6 +301,7 @@ fun AdminMainScreen(
                                 onNavigateToAddService = onNavigateToAddService,
                                 onServiceClick = onServiceClick,
                                 onOpenArchive = { serviceSubScreen = "archive" },
+                                onEditServiceClick = onEditServiceClick, // <--- Bağlandı
                                 onLogOut = onLogOut
                             )
                         } else if (serviceSubScreen == "archive") {

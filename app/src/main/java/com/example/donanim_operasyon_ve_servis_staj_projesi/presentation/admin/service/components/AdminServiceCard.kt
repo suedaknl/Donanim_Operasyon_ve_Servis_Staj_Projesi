@@ -5,8 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -19,8 +20,14 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceSt
 fun AdminServiceCard(
     record: ServiceRecord,
     personnelList: List<Personnel>,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onEditClick: () -> Unit = {},
+    onDuplicateClick: () -> Unit = {},
+    onArchiveClick: () -> Unit = {},
+    onDeleteClick: () -> Unit = {}
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     val assignedPersonnelName =
         record.assignedPersonnelName
             ?: personnelList.find {
@@ -28,6 +35,8 @@ fun AdminServiceCard(
                         it.firebaseUid == record.assignedPersonnelUid
             }?.fullName
             ?: "Atanmadı"
+
+    val isEditableOrActionable = record.status != ServiceStatus.TAMAMLANDI && !record.isArchived
 
     ElevatedCard(
         modifier = Modifier
@@ -41,10 +50,79 @@ fun AdminServiceCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = record.companyName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = record.companyName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Hızlı İşlemler")
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Detayı Gör") },
+                            onClick = {
+                                showMenu = false
+                                onClick()
+                            }
+                        )
+
+                        if (isEditableOrActionable) {
+                            DropdownMenuItem(
+                                text = { Text("Düzenle") },
+                                onClick = {
+                                    showMenu = false
+                                    onEditClick()
+                                }
+                            )
+                        }
+
+                        DropdownMenuItem(
+                            text = { Text("İş Emrini Çoğalt") },
+                            onClick = {
+                                showMenu = false
+                                onDuplicateClick()
+                            }
+                        )
+
+                        HorizontalDivider()
+
+                        if (!record.isArchived) {
+                            DropdownMenuItem(
+                                text = { Text("Arşivle") },
+                                onClick = {
+                                    showMenu = false
+                                    onArchiveClick()
+                                }
+                            )
+                        }
+
+                        DropdownMenuItem(
+                            text = { Text("Sil", color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showMenu = false
+                                onDeleteClick()
+                            }
+                        )
+                    }
+                }
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
