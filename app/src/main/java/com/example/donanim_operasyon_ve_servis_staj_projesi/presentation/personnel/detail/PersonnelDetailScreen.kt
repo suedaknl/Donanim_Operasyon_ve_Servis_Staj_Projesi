@@ -26,18 +26,55 @@ fun PersonnelDetailScreen(
     personnel: Personnel,
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit,
+    onToggleStatus: (Personnel) -> Unit,
     onDeletePersonnel: (Personnel) -> Unit
 ) {
     val context = LocalContext.current
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Personel Detayı", fontWeight = FontWeight.Bold) },
+                title = { Text("Personel Bilgileri", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showMenu = !showMenu }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Seçenekler")
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Düzenle") },
+                            onClick = {
+                                showMenu = false
+                                onNavigateToEdit(personnel.id)
+                            },
+                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (personnel.isActive) "Pasif Yap" else "Aktif Yap") },
+                            onClick = {
+                                showMenu = false
+                                onToggleStatus(personnel)
+                            },
+                            leadingIcon = { Icon(Icons.Default.Sync, contentDescription = null) }
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Sil", color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showMenu = false
+                                showDeleteDialog = true
+                            },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -163,46 +200,13 @@ fun PersonnelDetailScreen(
                 DetailInfoRow(icon = Icons.Default.Email, label = "E-posta", value = personnel.email.ifBlank { "Belirtilmemiş" })
             }
 
-            // Personel Bilgileri
-            DetailSection(title = "Personel Bilgileri") {
+            // Hesap / Personel Bilgileri
+            DetailSection(title = "Hesap ve Personel Bilgileri") {
                 DetailInfoRow(icon = Icons.Default.AccountCircle, label = "Kullanıcı Adı", value = personnel.username)
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                 DetailInfoRow(icon = Icons.Default.Badge, label = "Rol / Görev", value = personnel.role)
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                 DetailInfoRow(icon = Icons.Default.Info, label = "Durum", value = if (personnel.isActive) "Aktif" else "Pasif")
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Düzenle ve Sil Butonları Eşit Genişlikte
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(
-                    onClick = { onNavigateToEdit(personnel.id) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Düzenle", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-
-                Button(
-                    onClick = { showDeleteDialog = true },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sil", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
             }
         }
     }

@@ -52,7 +52,7 @@ fun AdminMainScreen(
     onNavigateToLeave: () -> Unit,
     onNavigateToOvertime: () -> Unit,
     onNavigateToServiceRegistry: () -> Unit,
-    onEditServiceClick: (Int) -> Unit, // <--- Eklendi
+    onEditServiceClick: (Int) -> Unit,
     onLogOut: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -99,7 +99,7 @@ fun AdminMainScreen(
                     icon = { Icon(Icons.Default.People, contentDescription = null) },
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
-                        onNavigateToPersonnel()
+                        onNavigateToPersonnel() // Artık ayrı operasyonel yönetim ekranına (personnel_management) yönlendirir
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -301,7 +301,7 @@ fun AdminMainScreen(
                                 onNavigateToAddService = onNavigateToAddService,
                                 onServiceClick = onServiceClick,
                                 onOpenArchive = { serviceSubScreen = "archive" },
-                                onEditServiceClick = onEditServiceClick, // <--- Bağlandı
+                                onEditServiceClick = onEditServiceClick,
                                 onLogOut = onLogOut
                             )
                         } else if (serviceSubScreen == "archive") {

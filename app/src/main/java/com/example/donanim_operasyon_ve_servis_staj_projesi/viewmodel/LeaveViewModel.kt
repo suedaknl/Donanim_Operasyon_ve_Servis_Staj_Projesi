@@ -7,6 +7,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.leave.ManageLeaveUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.leave.CalculateLeaveConflictUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.leave.LeaveConflictInfo
+import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.WorkforceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -15,7 +16,8 @@ import javax.inject.Inject
 @HiltViewModel
 class LeaveViewModel @Inject constructor(
     private val manageLeaveUseCase: ManageLeaveUseCase,
-    private val calculateLeaveConflictUseCase: CalculateLeaveConflictUseCase
+    private val calculateLeaveConflictUseCase: CalculateLeaveConflictUseCase,
+    private val workforceRepository: WorkforceRepository // Doğrudan tüm verileri çekmek için eklendi
 ) : ViewModel() {
 
     private val _pendingRequests = MutableStateFlow<List<LeaveRequestEntity>>(emptyList())
@@ -23,6 +25,9 @@ class LeaveViewModel @Inject constructor(
 
     private val _approvedRequests = MutableStateFlow<List<LeaveRequestEntity>>(emptyList())
     val approvedRequests: StateFlow<List<LeaveRequestEntity>> = _approvedRequests.asStateFlow()
+
+    private val _rejectedRequests = MutableStateFlow<List<LeaveRequestEntity>>(emptyList())
+    val rejectedRequests: StateFlow<List<LeaveRequestEntity>> = _rejectedRequests.asStateFlow()
 
     private val _personnelRequests = MutableStateFlow<List<LeaveRequestEntity>>(emptyList())
     val personnelRequests: StateFlow<List<LeaveRequestEntity>> = _personnelRequests.asStateFlow()
@@ -51,7 +56,7 @@ class LeaveViewModel @Inject constructor(
 
     fun loadData() {
         loadPendingRequests()
-        loadApprovedRequests()
+        loadAllEvaluatedRequestsFromRepository()
         loadPersonnelList()
     }
 
@@ -70,32 +75,16 @@ class LeaveViewModel @Inject constructor(
         }
     }
 
-    fun loadApprovedRequests() {
+    // WorkforceRepository üzerinden TÜM izinleri dinleyip status'e göre anında süzüyoruz
+    fun loadAllEvaluatedRequestsFromRepository() {
         viewModelScope.launch {
             try {
-                // Her personelin kendi izinlerini tek tek toplayarak veya tüm koleksiyonu dinleyerek
-                // Firestore'daki APPROVED olan kayıtları güvenle çekiyoruz.
-                manageListFromAllPersonnel()
+                workforceRepository.getAllLeaveRequests().collect { allRequests ->
+                    _approvedRequests.value = allRequests.filter { it.status.equals("APPROVED", ignoreCase = true) }
+                    _rejectedRequests.value = allRequests.filter { it.status.equals("REJECTED", ignoreCase = true) }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
-            }
-        }
-    }
-
-    private suspend fun manageListFromAllPersonnel() {
-        // Sistemdeki tüm personellerin izin taleplerini birleştirip APPROVED olanları süzüyoruz
-        val personnelList = manageLeaveUseCase.getAllPersonnel()
-        val allApproved = mutableListOf<LeaveRequestEntity>()
-
-        for (personnel in personnelList) {
-            manageLeaveUseCase.getPersonnelLeaveRequests(personnel.id).collect { requests ->
-                val approvedOnes = requests.filter { it.status.equals("APPROVED", ignoreCase = true) }
-                for (req in approvedOnes) {
-                    if (allApproved.none { it.id == req.id || it.firestoreId == req.firestoreId }) {
-                        allApproved.add(req)
-                    }
-                }
-                _approvedRequests.value = allApproved.toList()
             }
         }
     }
@@ -167,7 +156,6 @@ class LeaveViewModel @Inject constructor(
                 _capacityWarning.value = null
                 _pendingApprovalRequestId.value = null
                 loadPendingRequests()
-                loadApprovedRequests()
             } else {
                 _errorMessage.value = result.message
             }

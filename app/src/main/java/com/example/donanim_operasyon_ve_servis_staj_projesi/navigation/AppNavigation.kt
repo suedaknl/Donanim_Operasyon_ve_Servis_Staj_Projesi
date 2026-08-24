@@ -33,6 +33,9 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.AdminMainScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.detail.PersonnelDetailScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.detail.PersonnelDetailViewModel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.management.PersonnelManagementScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.management.PersonnelWorkDetailScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.LocationPickerScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.profile.EditProfileScreen
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -163,7 +166,9 @@ fun AppNavigation(
                 onNavigateToPersonnelDetail = { id ->
                     navController.navigate(route = "personnel_detail/$id")
                 },
-                onNavigateToPersonnel = {},
+                onNavigateToPersonnel = {
+                    navController.navigate("personnel_management")
+                },
                 onNavigateToShift = {
                     navController.navigate("admin_shift")
                 },
@@ -185,6 +190,50 @@ fun AppNavigation(
                     navController.navigate(route = "welcome") {
                         popUpTo(0)
                     }
+                }
+            )
+        }
+
+        // --- YÖNETİCİ DRAWER: PERSONEL YÖNETİMİ DASHBOARD ---
+        composable("personnel_management") {
+            val personnelViewModel: PersonnelViewModel = hiltViewModel()
+            PersonnelManagementScreen(
+                personnelViewModel = personnelViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onPersonnelWorkClick = { personnelId ->
+                    navController.navigate("personnel_work_detail/$personnelId")
+                }
+            )
+        }
+
+        // --- PERSONEL ÇALIŞMA DETAYI ---
+        composable(
+            route = "personnel_work_detail/{personnelId}",
+            arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
+            val detailViewModel: PersonnelDetailViewModel = hiltViewModel()
+
+            val personnel by detailViewModel.personnel.collectAsState()
+            val summary by detailViewModel.summary.collectAsState()
+            val shifts by detailViewModel.shifts.collectAsState()
+            val leaves by detailViewModel.leaves.collectAsState()
+            val overtimes by detailViewModel.overtimes.collectAsState()
+
+            LaunchedEffect(personnelId) {
+                detailViewModel.loadPersonnelDetail(personnelId)
+            }
+
+            PersonnelWorkDetailScreen(
+                personnelName = personnel?.fullName ?: "Personel",
+                personnelRole = personnel?.role ?: "",
+                summary = summary,
+                shifts = shifts,
+                leaves = leaves,
+                overtimes = overtimes,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToServiceDetail = { serviceId ->
+                    navController.navigate("personnel_service_detail/$serviceId/$personnelId")
                 }
             )
         }
@@ -259,17 +308,25 @@ fun AppNavigation(
             )
         }
 
-        composable(route = "personnel_detail/{personnelId}") { backStackEntry ->
-            val personnelId = backStackEntry.arguments?.getString("personnelId")?.toIntOrNull()
+        composable(
+            route = "personnel_detail/{personnelId}",
+            arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
             val personnelList by personnelViewModel.personnelList.collectAsState()
             val personnel = personnelList.find { it.id == personnelId }
 
-            if (personnel != null) {
+            personnel?.let { p ->
                 PersonnelDetailScreen(
-                    personnel = personnel,
+                    personnel = p,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToEdit = { id -> navController.navigate("add_personnel?personnelId=$id") },
+                    onToggleStatus = { targetPersonnel ->
+                        personnelViewModel.updatePersonnel(targetPersonnel.copy(isActive = !targetPersonnel.isActive)) {
+                            // onComplete callback parametresi hatasını çözer
+                        }
+                    },
                     onDeletePersonnel = { targetPersonnel ->
                         personnelViewModel.deletePersonnel(targetPersonnel)
                         navController.popBackStack()

@@ -32,6 +32,7 @@ fun AdminLeaveScreen(
 
     val pendingRequests by leaveViewModel.pendingRequests.collectAsState()
     val approvedRequests by leaveViewModel.approvedRequests.collectAsState()
+    val rejectedRequests by leaveViewModel.rejectedRequests.collectAsState()
     val personnelList by leaveViewModel.personnelList.collectAsState()
 
     val capacityWarning by leaveViewModel.capacityWarning.collectAsState()
@@ -87,7 +88,10 @@ fun AdminLeaveScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            TabRow(selectedTabIndex = selectedMainTab) {
+            ScrollableTabRow(
+                selectedTabIndex = selectedMainTab,
+                edgePadding = 16.dp
+            ) {
                 Tab(
                     selected = selectedMainTab == 0,
                     onClick = { selectedMainTab = 0 },
@@ -98,95 +102,102 @@ fun AdminLeaveScreen(
                     onClick = { selectedMainTab = 1 },
                     text = { Text("Aktif & Yaklaşan (${approvedRequests.size})", fontWeight = FontWeight.Bold) }
                 )
+                Tab(
+                    selected = selectedMainTab == 2,
+                    onClick = { selectedMainTab = 2 },
+                    text = { Text("Reddedilenler (${rejectedRequests.size})", fontWeight = FontWeight.Bold) }
+                )
             }
 
-            if (selectedMainTab == 0) {
-                if (pendingRequests.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        Text("Bekleyen izin talebi bulunmuyor.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f).padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(pendingRequests) { req ->
-                            val personnel = personnelList.find { it.id == req.personnelId }
-                            val personnelName = personnel?.fullName ?: "Personel #${req.personnelId}"
-                            val conflictInfo = leaveViewModel.calculateConflict(req)
+            when (selectedMainTab) {
+                0 -> {
+                    if (pendingRequests.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            Text("Bekleyen izin talebi bulunmuyor.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().weight(1f).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(pendingRequests) { req ->
+                                val personnel = personnelList.find { it.id == req.personnelId }
+                                val personnelName = personnel?.fullName ?: "Personel #${req.personnelId}"
+                                val conflictInfo = leaveViewModel.calculateConflict(req)
 
-                            ElevatedCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ElevatedCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text(text = personnelName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
-                                    Text(text = "İzin Türü: ${req.leaveType}")
-                                    Text(text = "Tarih: ${req.startDate} / ${req.endDate}")
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(text = personnelName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+                                        Text(text = "İzin Türü: ${req.leaveType}")
+                                        Text(text = "Tarih: ${req.startDate} / ${req.endDate}")
 
-                                    if (!req.description.isNullOrBlank()) {
-                                        Text(text = "Açıklama: ${req.description}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
+                                        if (!req.description.isNullOrBlank()) {
+                                            Text(text = "Açıklama: ${req.description}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
 
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                                    Text(
-                                        text = if (conflictInfo.conflictingLeaves.isEmpty()) "Bu tarih aralığında başka onaylı izin bulunmuyor."
-                                        else "Çakışan Onaylı İzinler (${conflictInfo.conflictingLeaves.size} personel):",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (conflictInfo.conflictingLeaves.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                    )
-
-                                    conflictInfo.conflictingLeaves.forEach { conflict ->
                                         Text(
-                                            text = "• ${conflict.personnelName} · ${conflict.leaveType} (${conflict.startDate} - ${conflict.endDate})",
-                                            style = MaterialTheme.typography.bodySmall
+                                            text = if (conflictInfo.conflictingLeaves.isEmpty()) "Bu tarih aralığında başka onaylı izin bulunmuyor."
+                                            else "Çakışan Onaylı İzinler (${conflictInfo.conflictingLeaves.size} personel):",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (conflictInfo.conflictingLeaves.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                                         )
-                                    }
 
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(modifier = Modifier.padding(8.dp)) {
-                                            Text("Kapasite Özeti: Toplam: ${conflictInfo.totalPersonnelCount} | Mevcut İzinli: ${conflictInfo.currentlyOnLeaveCount} | Onaylanırsa İzinli: ${conflictInfo.currentlyOnLeaveCount + 1}", style = MaterialTheme.typography.labelSmall)
+                                        conflictInfo.conflictingLeaves.forEach { conflict ->
+                                            Text(
+                                                text = "• ${conflict.personnelName} · ${conflict.leaveType} (${conflict.startDate} - ${conflict.endDate})",
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
                                         }
-                                    }
 
-                                    if (conflictInfo.isCapacityCritical) {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                            Text("Bu izin onaylanırsa ekip kapasitesi kritik seviyeye düşecek.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Button(
-                                            onClick = { leaveViewModel.approveRequest(req.id) },
-                                            modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(8.dp)
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text("Onayla")
+                                            Column(modifier = Modifier.padding(8.dp)) {
+                                                Text("Kapasite Özeti: Toplam: ${conflictInfo.totalPersonnelCount} | Mevcut İzinli: ${conflictInfo.currentlyOnLeaveCount} | Onaylanırsa İzinli: ${conflictInfo.currentlyOnLeaveCount + 1}", style = MaterialTheme.typography.labelSmall)
+                                            }
                                         }
-                                        Button(
-                                            onClick = {
-                                                rejectTargetId = req.id
-                                                adminNoteInput = ""
-                                                showRejectDialog = true
-                                            },
-                                            modifier = Modifier.weight(1f),
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                            shape = RoundedCornerShape(8.dp)
+
+                                        if (conflictInfo.isCapacityCritical) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                                Text("Bu izin onaylanırsa ekip kapasitesi kritik seviyeye düşecek.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Text("Reddet")
+                                            Button(
+                                                onClick = { leaveViewModel.approveRequest(req.id) },
+                                                modifier = Modifier.weight(1f),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text("Onayla")
+                                            }
+                                            Button(
+                                                onClick = {
+                                                    rejectTargetId = req.id
+                                                    adminNoteInput = ""
+                                                    showRejectDialog = true
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text("Reddet")
+                                            }
                                         }
                                     }
                                 }
@@ -194,67 +205,144 @@ fun AdminLeaveScreen(
                         }
                     }
                 }
-            } else {
-                Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SummaryMetricCard("Şu An İzinli", currentlyOnLeaveCount.toString(), Modifier.weight(1f))
-                        SummaryMetricCard("Yaklaşan", upcomingCount.toString(), Modifier.weight(1f))
-                        SummaryMetricCard("Toplam Onaylı", approvedRequests.size.toString(), Modifier.weight(1f))
-                    }
+                1 -> {
+                    Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SummaryMetricCard("Şu An İzinli", currentlyOnLeaveCount.toString(), Modifier.weight(1f))
+                            SummaryMetricCard("Yaklaşan", upcomingCount.toString(), Modifier.weight(1f))
+                            SummaryMetricCard("Toplam Onaylı", approvedRequests.size.toString(), Modifier.weight(1f))
+                        }
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Tümü", "Şu An İzinli", "Yaklaşan", "Geçmiş").forEach { filter ->
-                            FilterChip(
-                                selected = activeFilter == filter,
-                                onClick = { activeFilter = filter },
-                                label = { Text(filter) }
-                            )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("Tümü", "Şu An İzinli", "Yaklaşan", "Geçmiş").forEach { filter ->
+                                FilterChip(
+                                    selected = activeFilter == filter,
+                                    onClick = { activeFilter = filter },
+                                    label = { Text(filter) }
+                                )
+                            }
+                        }
+
+                        if (filteredApproved.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                                Text("Bu filtreye uygun onaylı izin bulunmuyor.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(filteredApproved) { leave ->
+                                    val personnel = personnelList.find { it.id == leave.personnelId }
+                                    val personnelName = personnel?.fullName ?: "Personel #${leave.personnelId}"
+                                    val start = parseDate(leave.startDate)
+                                    val end = parseDate(leave.endDate)
+                                    val statusLabel = getLeaveStatusLabel(start, end, today)
+                                    val totalDays = calculateDays(start, end)
+
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text(text = personnelName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                                Text(text = "${leave.leaveType} · $totalDays gün", style = MaterialTheme.typography.bodyMedium)
+                                                Text(text = "${leave.startDate} - ${leave.endDate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            Surface(
+                                                color = when (statusLabel) {
+                                                    "Şu An İzinli" -> MaterialTheme.colorScheme.errorContainer
+                                                    "Yaklaşan" -> MaterialTheme.colorScheme.primaryContainer
+                                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                                },
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = statusLabel,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-
-                    if (filteredApproved.isEmpty()) {
+                }
+                2 -> {
+                    if (rejectedRequests.isEmpty()) {
                         Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                            Text("Bu filtreye uygun onaylı izin bulunmuyor.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Reddedilen izin talebi bulunmuyor.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
-                        LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(filteredApproved) { leave ->
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().weight(1f).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(rejectedRequests) { leave ->
                                 val personnel = personnelList.find { it.id == leave.personnelId }
                                 val personnelName = personnel?.fullName ?: "Personel #${leave.personnelId}"
                                 val start = parseDate(leave.startDate)
                                 val end = parseDate(leave.endDate)
-                                val statusLabel = getLeaveStatusLabel(start, end, today)
                                 val totalDays = calculateDays(start, end)
+                                val dateFormatter = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+                                val reviewDateStr = if ((leave.reviewedAt ?: 0L) > 0L) dateFormatter.format(Date(leave.reviewedAt!!)) else ""
 
-                                Card(
+                                ElevatedCard(
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                                    shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Row(
+                                    Column(
                                         modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text(text = personnelName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                            Text(text = "${leave.leaveType} · $totalDays gün", style = MaterialTheme.typography.bodyMedium)
-                                            Text(text = "${leave.startDate} - ${leave.endDate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                        Surface(
-                                            color = when (statusLabel) {
-                                                "Şu An İzinli" -> MaterialTheme.colorScheme.errorContainer
-                                                "Yaklaşan" -> MaterialTheme.colorScheme.primaryContainer
-                                                else -> MaterialTheme.colorScheme.surfaceVariant
-                                            },
-                                            shape = RoundedCornerShape(8.dp)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(
-                                                text = statusLabel,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                            Text(text = personnelName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.errorContainer,
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (reviewDateStr.isNotBlank()) "Reddedildi · $reviewDateStr" else "Reddedildi",
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.error,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+
+                                        Text(text = "İzin Türü: ${leave.leaveType} · $totalDays gün")
+                                        Text(text = "Tarih: ${leave.startDate} - ${leave.endDate}")
+
+                                        if (!leave.description.isNullOrBlank()) {
+                                            Text(text = "Açıklama: ${leave.description}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+
+                                        if (!leave.adminNote.isNullOrBlank()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(
+                                                    text = "Red Nedeni: ${leave.adminNote}",
+                                                    modifier = Modifier.padding(8.dp),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
                                         }
                                     }
                                 }

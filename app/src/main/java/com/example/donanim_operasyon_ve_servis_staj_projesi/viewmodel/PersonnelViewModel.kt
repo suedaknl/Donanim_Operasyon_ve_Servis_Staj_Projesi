@@ -6,7 +6,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.LeaveRequestEntity
 import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.PersonnelRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.WorkforceRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.personnel.DeletePersonnelUseCase
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
@@ -22,12 +25,27 @@ import javax.inject.Inject
 @HiltViewModel
 class PersonnelViewModel @Inject constructor(
     private val repository: PersonnelRepository,
+    private val workforceRepository: WorkforceRepository,
     private val deletePersonnelUseCase: DeletePersonnelUseCase,
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore
 ) : ViewModel() {
 
     val personnelList: StateFlow<List<Personnel>> = repository.getAllPersonnel()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val serviceRecords: StateFlow<List<ServiceRecord>> = flowOf<List<ServiceRecord>>(emptyList())
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val leaveRequests: StateFlow<List<LeaveRequestEntity>> = workforceRepository.getPendingLeaveRequests()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -267,7 +285,7 @@ class PersonnelViewModel @Inject constructor(
             var secondaryApp = FirebaseApp.getApps(context).find { it.name == secondaryAppName }
             if (secondaryApp == null) secondaryApp = FirebaseApp.initializeApp(context, defaultApp.options, secondaryAppName)
 
-            val secondaryAuth = FirebaseAuth.getInstance(secondaryApp!!)
+            val secondaryAuth = FirebaseAuth.getInstance(secondaryApp)
             val authResult = secondaryAuth.createUserWithEmailAndPassword(personnel.email, personnel.password).await()
             val generatedUid = authResult.user?.uid ?: throw Exception("UID alınamadı.")
 
