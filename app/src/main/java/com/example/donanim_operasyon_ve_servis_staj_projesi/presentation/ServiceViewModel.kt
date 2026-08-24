@@ -23,6 +23,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.servi
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.GetPoolJobsUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.ClaimPoolJobUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.overtime.DetectOvertimeUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.SortServiceRecordsUseCase
 
 @HiltViewModel
 class ServiceViewModel @Inject constructor(
@@ -35,7 +36,8 @@ class ServiceViewModel @Inject constructor(
     private val archiveServiceUseCase: ArchiveServiceUseCase,
     private val getPoolJobsUseCase: GetPoolJobsUseCase,
     private val claimPoolJobUseCase: ClaimPoolJobUseCase,
-    private val detectOvertimeUseCase: DetectOvertimeUseCase
+    private val detectOvertimeUseCase: DetectOvertimeUseCase,
+    private val sortServiceRecordsUseCase: SortServiceRecordsUseCase // <--- Eklendi
 ) : ViewModel() {
 
     // --- TEMEL STATE'LER ---
@@ -47,6 +49,7 @@ class ServiceViewModel @Inject constructor(
 
     // --- İŞ HAVUZU STATE'İ ---
     val poolJobs: StateFlow<List<ServiceRecord>> = getPoolJobsUseCase()
+        .map { records -> sortServiceRecordsUseCase(records) } // Havuz listesinde akıllı sıralama
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedRecord = MutableStateFlow<ServiceRecord?>(null)
@@ -105,7 +108,7 @@ class ServiceViewModel @Inject constructor(
         personnelName: String,
         personnelUid: String,
         hasActiveJob: Boolean,
-        plannedDateStr: String?, // <--- Eklendi
+        plannedDateStr: String?,
         isOnLeave: Boolean
     ) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -116,18 +119,17 @@ class ServiceViewModel @Inject constructor(
                 personnelName = personnelName,
                 personnelUid = personnelUid,
                 hasActiveJob = hasActiveJob,
-                plannedDateStr = plannedDateStr, // <--- UseCase'e iletildi
+                plannedDateStr = plannedDateStr,
                 isOnLeave = isOnLeave
             )
-            // Sonuç yönetimi (başarı / hata durumu UI state veya event'e aktarılır)
             if (result.isSuccess) {
-                // Başarılı işlem logu veya state güncellemesi
+                // Başarılı
             } else {
-                // Hata yönetimi (örn: "Bu iş başka bir personel tarafından az önce üstlenildi.")
                 val errorMsg = result.exceptionOrNull()?.message ?: "İş üstlenilemedi."
             }
         }
     }
+
     // --- ADMIN AKIŞ VE FİLTRE STATE'LERİ ---
     private val _adminSelectedStatusTab = MutableStateFlow("Tümü")
     var adminSelectedStatusTab by mutableStateOf("Tümü")
@@ -166,14 +168,13 @@ class ServiceViewModel @Inject constructor(
         private set
     var selectedAssignmentStatusFilter by mutableStateOf("Tümü")
         private set
-    var selectedSortOption by mutableStateOf("En yeni")
-        private set
+    var selectedSortOption by mutableStateOf("Öncelik + Saat") // <--- Varsayılan operasyonel sıralama
 
     private val _selectedPersonnelFilterFlow = MutableStateFlow<String?>("Tümü")
     private val _selectedCompanyFilterFlow = MutableStateFlow<String?>("Tümü")
     private val _selectedLocationFilterFlow = MutableStateFlow<String?>("Tümü")
     private val _selectedAssignmentStatusFilterFlow = MutableStateFlow("Tümü")
-    private val _selectedSortOptionFlow = MutableStateFlow("En yeni")
+    private val _selectedSortOptionFlow = MutableStateFlow("Öncelik + Saat")
 
     private val _adminCurrentPage = MutableStateFlow(1)
     val adminCurrentPage: StateFlow<Int> = _adminCurrentPage.asStateFlow()
@@ -322,7 +323,9 @@ class ServiceViewModel @Inject constructor(
         _selectedTabFlow,
         _currentPersonnelUidFlow
     ) { records, query, priority, tab, currentUid ->
-        filterPersonnelRecords(records, query, priority, tab, currentUid)
+        val filtered = filterPersonnelRecords(records, query, priority, tab, currentUid)
+        // Personel Bana Atananlar listesinde de akıllı sıralamayı uyguluyoruz
+        sortServiceRecordsUseCase(filtered)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val totalPages: StateFlow<Int> = filteredPersonnelServiceRecords.map { list ->
@@ -429,20 +432,14 @@ class ServiceViewModel @Inject constructor(
             notArchived && tabMatch && queryMatch && statusMatch && priorityMatch && deviceMatch && personnelMatch && companyMatch && locationMatch && assignmentMatch
         }
 
-        return filtered.sortedWith(
-            when (sort) {
-                "En eski" -> compareBy { it.id }
-                "Önceliği yüksek olan" -> compareByDescending {
-                    when (it.priority) {
-                        "Acil", "Çok Yüksek" -> 3
-                        "Yüksek" -> 2
-                        "Normal", "Orta" -> 1
-                        else -> 0
-                    }
-                }
-                else -> compareByDescending { it.id }
-            }
-        )
+        // Sıralama Mantığı (SortServiceRecordsUseCase entegre edildi)
+        return when (sort) {
+            "Öncelik + Saat", "Operasyon Önceliği" -> sortServiceRecordsUseCase(filtered)
+            "En eski" -> filtered.sortedBy { it.id }
+            "En yeni" -> filtered.sortedByDescending { it.id }
+            "Önceliği yüksek olan" -> sortServiceRecordsUseCase(filtered)
+            else -> sortServiceRecordsUseCase(filtered)
+        }
     }
 
     private fun filterPersonnelRecords(
@@ -548,7 +545,7 @@ class ServiceViewModel @Inject constructor(
         selectedCompanyFilter = "Tümü"
         selectedLocationFilter = "Tümü"
         selectedAssignmentStatusFilter = "Tümü"
-        selectedSortOption = "En yeni"
+        selectedSortOption = "Öncelik + Saat"
         adminSearchQuery = ""
         adminSelectedStatusTab = "Tümü"
 
@@ -561,7 +558,7 @@ class ServiceViewModel @Inject constructor(
         _selectedCompanyFilterFlow.value = "Tümü"
         _selectedLocationFilterFlow.value = "Tümü"
         _selectedAssignmentStatusFilterFlow.value = "Tümü"
-        _selectedSortOptionFlow.value = "En yeni"
+        _selectedSortOptionFlow.value = "Öncelik + Saat"
 
         _adminCurrentPage.value = 1
     }
@@ -577,7 +574,7 @@ class ServiceViewModel @Inject constructor(
             if (!selectedCompanyFilter.isNullOrBlank() && selectedCompanyFilter != "Tümü") count++
             if (!selectedLocationFilter.isNullOrBlank() && selectedLocationFilter != "Tümü") count++
             if (selectedAssignmentStatusFilter != "Tümü") count++
-            if (selectedSortOption != "En yeni") count++
+            if (selectedSortOption != "Öncelik + Saat") count++
             return count
         }
 
