@@ -1,7 +1,8 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel
 
 import android.Manifest
-import android.os.Looper
+import android.content.Intent
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,21 +28,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.*
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.PersonnelMapScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.profile.PersonnelProfileScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.StandaloneUserFormScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.service.location.ActiveJobLocationService
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.LocationHelper
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
-import com.google.android.gms.location.*
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -85,7 +83,7 @@ fun PersonnelMainScreen(
     val filteredPersonnelServices by serviceViewModel.filteredPersonnelServiceRecords.collectAsState()
     val allPersonnelRawServices by serviceViewModel.personnelServiceRecords.collectAsState()
 
-    // Aktif saha işi kontrolü: Sadece ISLEME_BASLANDI durumundaki iş GPS takibini tetikler
+    // Aktif saha işi kontrolü: Sadece ISLEME_BASLANDI durumundaki iş Foreground Service'i tetikler
     val activeService = remember(allPersonnelRawServices, personnelId) {
         allPersonnelRawServices.find {
             it.assignedPersonnelId == personnelId && it.status == ServiceStatus.ISLEME_BASLANDI
@@ -101,27 +99,7 @@ fun PersonnelMainScreen(
     }
 
     val locationStatus by personnelViewModel.locationStatus.collectAsState()
-    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
-    val locationCallback = remember {
-        object : LocationCallback() {
-            override fun onLocationResult(locationResult: LocationResult) {
-                for (location in locationResult.locations) {
-                    if (currentPersonnelUid != null) {
-                        android.util.Log.d("GPS_TRACKING", "GPS_TRACKING location=${location.latitude},${location.longitude}")
-                        personnelViewModel.updateCurrentLocation(
-                            uid = currentPersonnelUid,
-                            lat = location.latitude,
-                            lon = location.longitude
-                        )
-                        personnelViewModel.updateLocationStatus("Konum: Saha Takibinde")
-                    }
-                }
-            }
-        }
-    }
-
-    val lifecycleOwner = LocalLifecycleOwner.current
     var permissionGranted by remember { mutableStateOf(LocationHelper.hasLocationPermission(context)) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -141,48 +119,33 @@ fun PersonnelMainScreen(
         }
     }
 
-    // GPS Takibini yalnızca aktif iş (ISLEME_BASLANDI) varsa ve izin/lifecycle uygunsa başlatıyoruz
-    DisposableEffect(lifecycleOwner, permissionGranted, activeService) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START && permissionGranted && activeService != null) {
-                android.util.Log.d("GPS_TRACKING", "GPS_TRACKING START activeService=${activeService.id}")
-                val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30000L).apply {
-                    setMinUpdateIntervalMillis(15000L)
-                }.build()
-                try {
-                    fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-                    personnelViewModel.updateLocationStatus("Konum: Saha Takibinde")
-                } catch (e: SecurityException) {
-                    personnelViewModel.updateLocationStatus("Konum izni reddedildi")
-                }
-            } else if (event == Lifecycle.Event.ON_STOP || activeService == null) {
-                android.util.Log.d("GPS_TRACKING", "GPS_TRACKING STOP")
-                fusedLocationClient.removeLocationUpdates(locationCallback)
-                if (activeService == null) {
-                    personnelViewModel.updateLocationStatus("Konum: Beklemede (Aktif İş Yok)")
-                }
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
+    // Aktif iş (ISLEME_BASLANDI) durumuna göre Foreground Service'i başlatma veya durdurma
+    LaunchedEffect(activeService, permissionGranted) {
+        if (permissionGranted) {
+            val serviceIntent = Intent(context, ActiveJobLocationService::class.java)
+            if (activeService != null && !currentPersonnelUid.isNullOrEmpty()) {
+                serviceIntent.action = ActiveJobLocationService.ACTION_START
+                serviceIntent.putExtra(ActiveJobLocationService.EXTRA_PERSONNEL_UID, currentPersonnelUid)
+                serviceIntent.putExtra(ActiveJobLocationService.EXTRA_SERVICE_ID, activeService.id)
 
-        // Eğer bileşen zaten STARTED durumundaysa ve aktif iş varsa hemen başlat
-        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && permissionGranted && activeService != null) {
-            android.util.Log.d("GPS_TRACKING", "GPS_TRACKING START activeService=${activeService.id}")
-            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30000L).apply {
-                setMinUpdateIntervalMillis(15000L)
-            }.build()
-            try {
-                fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
                 personnelViewModel.updateLocationStatus("Konum: Saha Takibinde")
-            } catch (e: SecurityException) {
-                personnelViewModel.updateLocationStatus("Konum izni reddedildi")
+            } else {
+                serviceIntent.action = ActiveJobLocationService.ACTION_STOP
+                context.startService(serviceIntent)
+                personnelViewModel.updateLocationStatus("Konum: Beklemede (Aktif İş Yok)")
             }
         }
+    }
 
+    // Bileşen kapatıldığında servisi durdurma emniyeti
+    DisposableEffect(Unit) {
         onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            android.util.Log.d("GPS_TRACKING", "GPS_TRACKING STOP (Dispose)")
-            fusedLocationClient.removeLocationUpdates(locationCallback)
+            // İhtiyaç halinde ek temizlik yapılabilir
         }
     }
 

@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
+    <!-- Foreground Service İzinleri -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
     <application
         android:name=".ServisTakipApplication"
         android:allowBackup="true"
@@ -34,6 +38,13 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="***REMOVED***" />
 
+        <!-- Aktif İş Konum Takibi Foreground Service Bildirimi -->
+        <service
+            android:name=".service.location.ActiveJobLocationService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -45,6 +56,5 @@
             </intent-filter>
         </activity>
     </application>
-
 
 </manifest>
