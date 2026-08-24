@@ -79,13 +79,18 @@ fun PersonnelMainScreen(
     LaunchedEffect(currentPersonnelUid) {
         if (!currentPersonnelUid.isNullOrEmpty()) {
             serviceViewModel.setCurrentPersonnelUid(currentPersonnelUid)
-            personnelViewModel.updateCurrentLocation(currentPersonnelUid, 40.5139, 34.9612)
-            personnelViewModel.updateLocationStatus("Konum: Aktif")
         }
     }
 
     val filteredPersonnelServices by serviceViewModel.filteredPersonnelServiceRecords.collectAsState()
     val allPersonnelRawServices by serviceViewModel.personnelServiceRecords.collectAsState()
+
+    // Aktif saha işi kontrolü: Sadece ISLEME_BASLANDI durumundaki iş GPS takibini tetikler
+    val activeService = remember(allPersonnelRawServices, personnelId) {
+        allPersonnelRawServices.find {
+            it.assignedPersonnelId == personnelId && it.status == ServiceStatus.ISLEME_BASLANDI
+        }
+    }
 
     val activeServicesForFab = remember(allPersonnelRawServices, personnelId) {
         allPersonnelRawServices.filter {
@@ -103,11 +108,13 @@ fun PersonnelMainScreen(
             override fun onLocationResult(locationResult: LocationResult) {
                 for (location in locationResult.locations) {
                     if (currentPersonnelUid != null) {
+                        android.util.Log.d("GPS_TRACKING", "GPS_TRACKING location=${location.latitude},${location.longitude}")
                         personnelViewModel.updateCurrentLocation(
                             uid = currentPersonnelUid,
                             lat = location.latitude,
                             lon = location.longitude
                         )
+                        personnelViewModel.updateLocationStatus("Konum: Saha Takibinde")
                     }
                 }
             }
@@ -134,22 +141,47 @@ fun PersonnelMainScreen(
         }
     }
 
-    DisposableEffect(lifecycleOwner, permissionGranted) {
+    // GPS Takibini yalnızca aktif iş (ISLEME_BASLANDI) varsa ve izin/lifecycle uygunsa başlatıyoruz
+    DisposableEffect(lifecycleOwner, permissionGranted, activeService) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START && permissionGranted) {
-                val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30000L).build()
+            if (event == Lifecycle.Event.ON_START && permissionGranted && activeService != null) {
+                android.util.Log.d("GPS_TRACKING", "GPS_TRACKING START activeService=${activeService.id}")
+                val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30000L).apply {
+                    setMinUpdateIntervalMillis(15000L)
+                }.build()
                 try {
                     fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+                    personnelViewModel.updateLocationStatus("Konum: Saha Takibinde")
                 } catch (e: SecurityException) {
                     personnelViewModel.updateLocationStatus("Konum izni reddedildi")
                 }
-            } else if (event == Lifecycle.Event.ON_STOP) {
+            } else if (event == Lifecycle.Event.ON_STOP || activeService == null) {
+                android.util.Log.d("GPS_TRACKING", "GPS_TRACKING STOP")
                 fusedLocationClient.removeLocationUpdates(locationCallback)
+                if (activeService == null) {
+                    personnelViewModel.updateLocationStatus("Konum: Beklemede (Aktif İş Yok)")
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
+
+        // Eğer bileşen zaten STARTED durumundaysa ve aktif iş varsa hemen başlat
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && permissionGranted && activeService != null) {
+            android.util.Log.d("GPS_TRACKING", "GPS_TRACKING START activeService=${activeService.id}")
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30000L).apply {
+                setMinUpdateIntervalMillis(15000L)
+            }.build()
+            try {
+                fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+                personnelViewModel.updateLocationStatus("Konum: Saha Takibinde")
+            } catch (e: SecurityException) {
+                personnelViewModel.updateLocationStatus("Konum izni reddedildi")
+            }
+        }
+
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            android.util.Log.d("GPS_TRACKING", "GPS_TRACKING STOP (Dispose)")
             fusedLocationClient.removeLocationUpdates(locationCallback)
         }
     }
@@ -249,7 +281,7 @@ fun PersonnelMainScreen(
                             Text(
                                 text = locationStatus,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (locationStatus.contains("Aktif")) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+                                color = if (locationStatus.contains("Saha")) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },

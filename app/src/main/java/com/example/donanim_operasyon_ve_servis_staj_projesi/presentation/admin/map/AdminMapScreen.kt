@@ -112,10 +112,10 @@ fun AdminMapScreen(
         val matchDevice = if (cfDevice == "Tümü") true else s.deviceType == cfDevice
         val matchLocation = if (cfLocation == "Tümü") true else s.location == cfLocation
         val matchPriority = if (cfPriority == "Tümü") true else s.priority == cfPriority
+
         matchPersonnel && matchCompany && matchDevice && matchLocation && matchPriority
     }.sortedWith(if (cfSort == "En eski") compareBy { it.id } else compareByDescending { it.id })
 
-    // 3. PERSONELLER FİLTRESİ (Model uyumlu hale getirildi)
     val filteredPersonnel = allPersonnel.filter { p ->
         when (pfStatus) {
             "Aktif işi olan" -> baseActiveServices.any { it.assignedPersonnelId == p.id }
@@ -180,6 +180,8 @@ fun AdminMapScreen(
                         val lon = (locData["currentLongitude"] as? Double) ?: (locData["longitude"] as? Double)
                         val name = (locData["fullName"] as? String) ?: (locData["username"] as? String) ?: "Personel"
                         val lastUpdate = (locData["lastUpdated"] as? Long) ?: 0L
+                        val pId = (locData["id"] as? Int)
+                        val pUid = (locData["firebaseUid"] as? String)
 
                         if (lat != null && lon != null) {
                             val latLng = LatLng(lat, lon)
@@ -190,10 +192,30 @@ fun AdminMapScreen(
                                 "Bilinmiyor"
                             }
 
+                            // Personelin ISLEME_BASLANDI durumundaki aktif işini buluyoruz
+                            val personnelActiveJob = allServices.find { s ->
+                                (s.assignedPersonnelId == pId || (!pUid.isNullOrEmpty() && s.assignedPersonnelUid == pUid)) &&
+                                        s.status == ServiceStatus.ISLEME_BASLANDI
+                            }
+
+                            val siteStatusSnippet = if (personnelActiveJob != null && personnelActiveJob.latitude != null && personnelActiveJob.longitude != null) {
+                                val distance = LocationHelper.calculateDistanceInMetres(
+                                    lat, lon,
+                                    personnelActiveJob.latitude!!, personnelActiveJob.longitude!!
+                                )
+                                if (distance <= ServiceViewModel.SERVICE_START_RADIUS_METERS) {
+                                    "İş Sahasında (${distance.toInt()}m) • Güncelleme: $timeStr"
+                                } else {
+                                    "İş Sahası Dışında (${LocationHelper.formatDistance(distance)}) • Güncelleme: $timeStr"
+                                }
+                            } else {
+                                "Aktif Saha İşi Yok • Güncelleme: $timeStr"
+                            }
+
                             Marker(
                                 state = MarkerState(position = latLng),
                                 title = name,
-                                snippet = "Son Güncelleme: $timeStr",
+                                snippet = siteStatusSnippet,
                                 icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
                             )
                         }
@@ -373,7 +395,6 @@ fun AdminMapScreen(
 
     if (showNearbyPersonnelDialog && selectedActiveService != null) {
         val s = selectedActiveService!!
-        // Personel sınıfında latitude/longitude alanı bulunmadığı için doğrudan boş liste döner, hata engellenir
         val nearbyList = emptyList<Pair<Personnel, Float>>()
 
         AlertDialog(
