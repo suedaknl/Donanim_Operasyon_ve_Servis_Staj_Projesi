@@ -150,6 +150,10 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_19_20 = object : Migration(19, 20) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE service_records ADD COLUMN assignmentType TEXT NOT NULL DEFAULT 'DIRECT'")
+                // Yeni eklenen entity alanları için ALTER sorguları:
+                db.execSQL("ALTER TABLE shifts ADD COLUMN firestoreId TEXT")
+                db.execSQL("ALTER TABLE leave_requests ADD COLUMN firestoreId TEXT")
+                db.execSQL("ALTER TABLE overtimes ADD COLUMN firestoreId TEXT")
             }
         }
 

@@ -6,13 +6,15 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "leave_requests")
 data class LeaveRequestEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val personnelId: Int,
-    val startDate: String, // Format: YYYY-MM-DD
-    val endDate: String,   // Format: YYYY-MM-DD
-    val leaveType: String, // Yıllık, Mazeret, Sağlık vb.
-    val description: String,
-    val status: String = "PENDING", // PENDING, APPROVED, REJECTED
+    val firestoreId: String? = null,
+    val personnelId: Int = 0,
+    val startDate: String = "",
+    val endDate: String = "",
+    val leaveType: String = "",
+    val reason: String? = null,
+    val description: String? = null,
     val adminNote: String? = null,
-    val createdAt: Long = System.currentTimeMillis(),
-    val reviewedAt: Long? = null
+    val reviewedAt: Long? = null,
+    val status: String = "PENDING",
+    val createdAt: Long = System.currentTimeMillis()
 )

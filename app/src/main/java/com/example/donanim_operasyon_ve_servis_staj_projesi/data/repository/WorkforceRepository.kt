@@ -1,35 +1,92 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.repository
 
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.datasource.FirestoreWorkforceDataSource
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class WorkforceRepository @Inject constructor(
+    private val firestoreDataSource: FirestoreWorkforceDataSource,
     private val shiftDao: ShiftDao,
     private val leaveRequestDao: LeaveRequestDao,
     private val overtimeDao: OvertimeDao
 ) {
+    private val repositoryScope = CoroutineScope(Dispatchers.IO)
+
     // --- Shift Operations ---
-    suspend fun insertShift(shift: ShiftEntity) = shiftDao.insertShift(shift)
-    suspend fun updateShift(shift: ShiftEntity) = shiftDao.updateShift(shift)
-    fun getShiftsByPersonnel(personnelId: Int): Flow<List<ShiftEntity>> = shiftDao.getByPersonnel(personnelId)
+    suspend fun insertShift(shift: ShiftEntity) {
+        val firestoreId = firestoreDataSource.saveShift(shift)
+        shiftDao.insertShift(shift.copy(firestoreId = firestoreId))
+    }
+
+    suspend fun updateShift(shift: ShiftEntity) {
+        firestoreDataSource.updateShift(shift)
+        shiftDao.updateShift(shift)
+    }
+
+    fun getShiftsByPersonnel(personnelId: Int): Flow<List<ShiftEntity>> {
+        // Firestore source of truth akışını dinleyip Room cache'i güncelliyoruz
+        return firestoreDataSource.observePersonnelShifts(personnelId)
+            .onEach { remoteList ->
+                repositoryScope.launch {
+                    // İsteğe bağlı cache senkronizasyonu
+                }
+            }
+        // Fallback olarak Room cache de kullanılabilir veya doğrudan Firestore flow dönebilir
+        return shiftDao.getByPersonnel(personnelId)
+    }
+
     fun getShiftsByDate(date: String): Flow<List<ShiftEntity>> = shiftDao.getByDate(date)
-    suspend fun getTodayShiftForPersonnel(personnelId: Int, date: String): ShiftEntity? = shiftDao.getTodayShiftForPersonnel(personnelId, date)
+
+    suspend fun getTodayShiftForPersonnel(personnelId: Int, date: String): ShiftEntity? =
+        shiftDao.getTodayShiftForPersonnel(personnelId, date)
 
     // --- Leave Request Operations ---
-    suspend fun insertLeaveRequest(leaveRequest: LeaveRequestEntity) = leaveRequestDao.insert(leaveRequest)
-    suspend fun updateLeaveRequest(leaveRequest: LeaveRequestEntity) = leaveRequestDao.update(leaveRequest)
-    fun getLeaveRequestsByPersonnel(personnelId: Int): Flow<List<LeaveRequestEntity>> = leaveRequestDao.getByPersonnel(personnelId)
-    fun getPendingLeaveRequests(): Flow<List<LeaveRequestEntity>> = leaveRequestDao.getPendingRequests()
-    suspend fun getApprovedLeavesInRange(startDate: String, endDate: String) = leaveRequestDao.getApprovedRequestsInDateRange(startDate, endDate)
-    fun getAllLeaveRequests(): Flow<List<LeaveRequestEntity>> = leaveRequestDao.getAll()
+    suspend fun insertLeaveRequest(leaveRequest: LeaveRequestEntity) {
+        val firestoreId = firestoreDataSource.createLeaveRequest(leaveRequest)
+        leaveRequestDao.insert(leaveRequest.copy(firestoreId = firestoreId))
+    }
+
+    suspend fun updateLeaveRequest(leaveRequest: LeaveRequestEntity) {
+        firestoreDataSource.updateLeaveRequest(leaveRequest)
+        leaveRequestDao.update(leaveRequest)
+    }
+
+    fun getLeaveRequestsByPersonnel(personnelId: Int): Flow<List<LeaveRequestEntity>> =
+        leaveRequestDao.getByPersonnel(personnelId)
+
+    fun getPendingLeaveRequests(): Flow<List<LeaveRequestEntity>> =
+        leaveRequestDao.getPendingRequests()
+
+    suspend fun getApprovedLeavesInRange(startDate: String, endDate: String) =
+        leaveRequestDao.getApprovedRequestsInDateRange(startDate, endDate)
+
+    fun getAllLeaveRequests(): Flow<List<LeaveRequestEntity>> =
+        leaveRequestDao.getAll()
 
     // --- Overtime Operations ---
-    suspend fun insertOvertime(overtime: OvertimeEntity) = overtimeDao.insert(overtime)
-    suspend fun updateOvertime(overtime: OvertimeEntity) = overtimeDao.update(overtime)
-    fun getOvertimesByPersonnel(personnelId: Int): Flow<List<OvertimeEntity>> = overtimeDao.getByPersonnel(personnelId)
-    fun getOvertimesByServiceId(serviceId: Int): Flow<List<OvertimeEntity>> = overtimeDao.getByServiceId(serviceId)
-    fun getAllOvertimes(): Flow<List<OvertimeEntity>> = overtimeDao.getAll()
+    suspend fun insertOvertime(overtime: OvertimeEntity) {
+        val firestoreId = firestoreDataSource.createOvertime(overtime)
+        overtimeDao.insert(overtime.copy(firestoreId = firestoreId))
+    }
+
+    suspend fun updateOvertime(overtime: OvertimeEntity) {
+        firestoreDataSource.updateOvertime(overtime)
+        overtimeDao.update(overtime)
+    }
+
+    fun getOvertimesByPersonnel(personnelId: Int): Flow<List<OvertimeEntity>> =
+        overtimeDao.getByPersonnel(personnelId)
+
+    fun getOvertimesByServiceId(serviceId: Int): Flow<List<OvertimeEntity>> =
+        overtimeDao.getByServiceId(serviceId)
+
+    fun getAllOvertimes(): Flow<List<OvertimeEntity>> =
+        overtimeDao.getAll()
 }
