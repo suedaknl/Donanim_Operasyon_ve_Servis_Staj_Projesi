@@ -3,7 +3,10 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.LeaveRequestEntity
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.leave.ManageLeaveUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.leave.CalculateLeaveConflictUseCase
+import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.leave.LeaveConflictInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -11,14 +14,21 @@ import javax.inject.Inject
 
 @HiltViewModel
 class LeaveViewModel @Inject constructor(
-    private val manageLeaveUseCase: ManageLeaveUseCase
+    private val manageLeaveUseCase: ManageLeaveUseCase,
+    private val calculateLeaveConflictUseCase: CalculateLeaveConflictUseCase
 ) : ViewModel() {
 
     private val _pendingRequests = MutableStateFlow<List<LeaveRequestEntity>>(emptyList())
     val pendingRequests: StateFlow<List<LeaveRequestEntity>> = _pendingRequests.asStateFlow()
 
+    private val _approvedRequests = MutableStateFlow<List<LeaveRequestEntity>>(emptyList())
+    val approvedRequests: StateFlow<List<LeaveRequestEntity>> = _approvedRequests.asStateFlow()
+
     private val _personnelRequests = MutableStateFlow<List<LeaveRequestEntity>>(emptyList())
     val personnelRequests: StateFlow<List<LeaveRequestEntity>> = _personnelRequests.asStateFlow()
+
+    private val _personnelList = MutableStateFlow<List<Personnel>>(emptyList())
+    val personnelList: StateFlow<List<Personnel>> = _personnelList.asStateFlow()
 
     private val _capacityWarning = MutableStateFlow<String?>(null)
     val capacityWarning: StateFlow<String?> = _capacityWarning.asStateFlow()
@@ -35,6 +45,16 @@ class LeaveViewModel @Inject constructor(
     private val _successMessage = MutableStateFlow<String?>(null)
     val successMessage: StateFlow<String?> = _successMessage.asStateFlow()
 
+    init {
+        loadData()
+    }
+
+    fun loadData() {
+        loadPendingRequests()
+        loadApprovedRequests()
+        loadPersonnelList()
+    }
+
     fun loadPendingRequests() {
         viewModelScope.launch {
             _isLoading.value = true
@@ -48,6 +68,54 @@ class LeaveViewModel @Inject constructor(
                 _isLoading.value = false
             }
         }
+    }
+
+    fun loadApprovedRequests() {
+        viewModelScope.launch {
+            try {
+                // Her personelin kendi izinlerini tek tek toplayarak veya tüm koleksiyonu dinleyerek
+                // Firestore'daki APPROVED olan kayıtları güvenle çekiyoruz.
+                manageListFromAllPersonnel()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private suspend fun manageListFromAllPersonnel() {
+        // Sistemdeki tüm personellerin izin taleplerini birleştirip APPROVED olanları süzüyoruz
+        val personnelList = manageLeaveUseCase.getAllPersonnel()
+        val allApproved = mutableListOf<LeaveRequestEntity>()
+
+        for (personnel in personnelList) {
+            manageLeaveUseCase.getPersonnelLeaveRequests(personnel.id).collect { requests ->
+                val approvedOnes = requests.filter { it.status.equals("APPROVED", ignoreCase = true) }
+                for (req in approvedOnes) {
+                    if (allApproved.none { it.id == req.id || it.firestoreId == req.firestoreId }) {
+                        allApproved.add(req)
+                    }
+                }
+                _approvedRequests.value = allApproved.toList()
+            }
+        }
+    }
+
+    fun loadPersonnelList() {
+        viewModelScope.launch {
+            try {
+                _personnelList.value = manageLeaveUseCase.getAllPersonnel()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun calculateConflict(request: LeaveRequestEntity): LeaveConflictInfo {
+        return calculateLeaveConflictUseCase(
+            targetRequest = request,
+            allApprovedLeaves = _approvedRequests.value,
+            allPersonnel = _personnelList.value
+        )
     }
 
     fun loadPersonnelRequests(personnelId: Int) {
@@ -98,6 +166,8 @@ class LeaveViewModel @Inject constructor(
                 _successMessage.value = result.message
                 _capacityWarning.value = null
                 _pendingApprovalRequestId.value = null
+                loadPendingRequests()
+                loadApprovedRequests()
             } else {
                 _errorMessage.value = result.message
             }
@@ -116,6 +186,7 @@ class LeaveViewModel @Inject constructor(
             _isLoading.value = false
             result.onSuccess {
                 _successMessage.value = "İzin talebi reddedildi."
+                loadPendingRequests()
             }.onFailure { e ->
                 _errorMessage.value = e.localizedMessage
             }

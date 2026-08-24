@@ -1,6 +1,7 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.leave
 
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.LeaveRequestEntity
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.PersonnelRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.WorkforceRepository
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +17,10 @@ class ManageLeaveUseCase @Inject constructor(
 
     fun getPendingRequests(): Flow<List<LeaveRequestEntity>> {
         return workforceRepository.getPendingLeaveRequests()
+    }
+
+    suspend fun getAllPersonnel(): List<Personnel> {
+        return personnelRepository.getAllPersonnelList()
     }
 
     suspend fun createLeaveRequest(
@@ -66,7 +71,6 @@ class ManageLeaveUseCase @Inject constructor(
                 targetRequest.endDate
             )
 
-            // Bu talep de onaylanırsa aynı aralıkta izinli olacak benzersiz personel sayısı
             val personnelIdsOnLeave = overlappingLeaves.map { it.personnelId }.toMutableSet()
             personnelIdsOnLeave.add(targetRequest.personnelId)
 
