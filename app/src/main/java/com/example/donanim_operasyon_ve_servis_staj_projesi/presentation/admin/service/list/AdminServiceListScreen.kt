@@ -41,7 +41,8 @@ fun AdminServiceListScreen(
     onEditServiceClick: (Int) -> Unit = {},
     onLogOut: () -> Unit = {}
 ) {
-    val tabs = listOf("Tümü", "Bekleyen", "Yolda", "İşlemde", "Tamamlanan", "Reddedilen")
+    // --- İŞ HAVUZU SEKMESİ EKLENDİ ---
+    val tabs = listOf("Tümü", "Havuzda", "Bekleyen", "Yolda", "İşlemde", "Tamamlanan", "Reddedilen")
 
     var showFilterSheet by remember { mutableStateOf(false) }
     var recordToDelete by remember { mutableStateOf<ServiceRecord?>(null) }

@@ -1,5 +1,6 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form
 
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -46,6 +47,7 @@ fun StandaloneUserFormScreen(
     onLogOut: () -> Unit,
     serviceViewModel: ServiceViewModel,
     firebaseUid: String?,
+    getOperationalStatus: (ServiceRecord) -> String,
     localPersonnelId: Int
 ) {
     val context = LocalContext.current
@@ -53,6 +55,9 @@ fun StandaloneUserFormScreen(
     val currentPage by serviceViewModel.currentPage.collectAsState()
     val totalPages by serviceViewModel.totalPages.collectAsState()
     val poolJobs by serviceViewModel.poolJobs.collectAsState()
+
+    // Giriş yapan personelin güncel bilgilerini buluyoruz (Bulunamazsa local ID üzerinden güvenli fallback)
+    val currentPersonnel = personnelList.find { it.id == localPersonnelId || it.firebaseUid == firebaseUid }
 
     var innerSelectedTab by remember { mutableStateOf("Bana Atananlar") }
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -128,12 +133,40 @@ fun StandaloneUserFormScreen(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // TODO: ENABLE POOL CLAIM AFTER BUSINESS RULE FIX
             PersonnelJobPoolSection(
                 poolJobs = poolJobs,
+                getOperationalStatus = getOperationalStatus, // <--- Eksik virgül eklendi
                 onClaimJob = { service: ServiceRecord ->
-                    // İş üstlenme geçici olarak donduruldu, loading state ve claim tetiklenmiyor.
-                    Toast.makeText(context, "İş üstlenme kuralları güncelleniyor.", Toast.LENGTH_SHORT).show()
+                    Log.d("POOL_CLAIM", "Button clicked for serviceId: ${service.id}, firestoreId: ${service.firestoreId}")
+
+                    val personnelId = currentPersonnel?.id ?: localPersonnelId
+                    val personnelName = currentPersonnel?.fullName ?: "Personel"
+                    val personnelUid = currentPersonnel?.firebaseUid ?: (firebaseUid ?: "")
+
+                    if (personnelId <= 0) {
+                        Toast.makeText(context, "Hata: Personel ID bulunamadı.", Toast.LENGTH_SHORT).show()
+                        Log.e("POOL_CLAIM", "Error: personnelId is invalid ($personnelId)")
+                        return@PersonnelJobPoolSection
+                    }
+
+                    // Aktif iş kontrolü (Üzerinde ISLEME_BASLANDI veya YOLDA olan iş var mı?)
+                    val hasActiveJob = serviceList.any {
+                        it.status == ServiceStatus.ISLEME_BASLANDI || it.status == ServiceStatus.YOLDA
+                    }
+
+                    Log.d("POOL_CLAIM", "Calling viewmodel claimPoolJob -> personnelId: $personnelId, name: $personnelName")
+
+                    // ViewModel üzerinden gerçek claimPoolJob fonksiyonunu tetikliyoruz
+                    serviceViewModel.claimPoolJob(
+                        serviceId = service.id,
+                        firestoreId = service.firestoreId ?: "",
+                        personnelId = personnelId,
+                        personnelName = personnelName,
+                        personnelUid = personnelUid,
+                        hasActiveJob = hasActiveJob,
+                        plannedDateStr = service.plannedDate ?: service.date,
+                        isOnLeave = false
+                    )
                 }
             )
         } else {

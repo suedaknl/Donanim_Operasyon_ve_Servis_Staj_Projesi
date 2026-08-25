@@ -2,6 +2,7 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.serv
 
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
@@ -17,14 +18,21 @@ class ClaimPoolJobUseCase @Inject constructor(
         personnelUid: String,
         hasActiveJob: Boolean,
         plannedDateStr: String?,
-        isOnLeave: Boolean
+        isOnLeave: Boolean,
+        poolAssignmentDeadline: Long? = null
     ): Result<Unit> {
         // 1. Aktif İş Engeli Kontrolü
         if (hasActiveJob) {
             return Result.failure(Exception("Üzerinizde devam eden aktif bir iş bulunmaktadır."))
         }
 
-        // 2. Planlanan Tarih Varlığı ve Geçmiş Zaman Kontrolü (Fail-Close)
+        // 2. Havuz Son Atama (Deadline) Kontrolü
+        val currentTime = System.currentTimeMillis()
+        if (poolAssignmentDeadline != null && currentTime > poolAssignmentDeadline) {
+            return Result.failure(Exception("Bu işin havuzda kalma süresi doldu. Yönetici ataması bekleniyor."))
+        }
+
+        // 3. Planlanan Tarih Varlığı ve Geçmiş Gün Kontrolü
         if (plannedDateStr.isNullOrBlank()) {
             return Result.failure(Exception("İş emrinin planlanan tarihi doğrulanamadı."))
         }
@@ -44,17 +52,32 @@ class ClaimPoolJobUseCase @Inject constructor(
             return Result.failure(Exception("İş emrinin planlanan tarihi doğrulanamadı."))
         }
 
-        val currentTime = System.currentTimeMillis()
-        if (jobDate.time < currentTime) {
-            return Result.failure(Exception("Planlanan zamanı geçmiş bir iş emrini üstlenemezsiniz."))
+        // Gün bazlı karşılaştırma (Bugünün başlangıcı vs İşin günü)
+        val calendarToday = Calendar.getInstance(trLocale).apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
         }
 
-        // 3. Onaylı İzin Çakışma Kontrolü
+        val jobCalendar = Calendar.getInstance(trLocale).apply {
+            time = jobDate
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        if (jobCalendar.timeInMillis < calendarToday.timeInMillis) {
+            return Result.failure(Exception("Planlanan tarihi geçmiş olan iş emri üstlenilemez."))
+        }
+
+        // 4. Onaylı İzin Çakışma Kontrolü
         if (isOnLeave) {
             return Result.failure(Exception("Bu işin planlanan tarihinde onaylanmış izniniz bulunmaktadır."))
         }
 
-        // 4. Firestore Transaction ile Atomik Claim İşlemi
+        // 5. Firestore Transaction ile Atomik Claim İşlemi
         if (firestoreId.isBlank()) {
             return Result.failure(Exception("Hata: İş emri Firestore ID bilgisi bulunamadı."))
         }

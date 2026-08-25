@@ -24,6 +24,8 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.servi
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.service.ClaimPoolJobUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.overtime.DetectOvertimeUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.SortServiceRecordsUseCase
+import java.text.SimpleDateFormat
+import java.util.Calendar
 
 @HiltViewModel
 class ServiceViewModel @Inject constructor(
@@ -51,6 +53,32 @@ class ServiceViewModel @Inject constructor(
     val poolJobs: StateFlow<List<ServiceRecord>> = getPoolJobsUseCase()
         .map { records -> sortServiceRecordsUseCase(records) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // --- İŞ HAVUZU OPERASYONEL DURUM HESAPLAMALARI (HAVUZDA, KRİTİK, ATAMA_GEREKİYOR, GECİKMİŞ) ---
+    fun getPoolJobOperationalStatus(record: ServiceRecord): String {
+        val currentTime = System.currentTimeMillis()
+        val deadline = record.poolAssignmentDeadline ?: (parseServiceDate(record.plannedDate ?: record.date)?.time?.minus(2L * 24L * 60L * 60L * 1000L) ?: currentTime)
+        val serviceMillis = parseServiceDate(record.plannedDate ?: record.date)?.time ?: currentTime
+
+        return when {
+            currentTime >= serviceMillis -> "GECİKMİŞ"
+            currentTime >= deadline -> "ATAMA_GEREKİYOR"
+            (deadline - currentTime) <= (24L * 60L * 60L * 1000L) -> "KRİTİK"
+            else -> "HAVUZDA"
+        }
+    }
+
+    private fun parseServiceDate(dateStr: String?): java.util.Date? {
+        if (dateStr.isNullOrBlank()) return null
+        val trLocale = Locale.forLanguageTag("tr-TR")
+        val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", trLocale).apply { isLenient = false }
+        val dayOnlyFormat = SimpleDateFormat("dd.MM.yyyy", trLocale).apply { isLenient = false }
+        return try {
+            dateFormat.parse(dateStr.trim()) ?: dayOnlyFormat.parse(dateStr.take(10).trim())
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private val _selectedRecord = MutableStateFlow<ServiceRecord?>(null)
     val selectedRecord: StateFlow<ServiceRecord?> = _selectedRecord.asStateFlow()
@@ -109,7 +137,8 @@ class ServiceViewModel @Inject constructor(
         personnelUid: String,
         hasActiveJob: Boolean,
         plannedDateStr: String?,
-        isOnLeave: Boolean
+        isOnLeave: Boolean,
+        poolAssignmentDeadline: Long? = null
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val result = claimPoolJobUseCase(
@@ -120,12 +149,15 @@ class ServiceViewModel @Inject constructor(
                 personnelUid = personnelUid,
                 hasActiveJob = hasActiveJob,
                 plannedDateStr = plannedDateStr,
-                isOnLeave = isOnLeave
+                isOnLeave = isOnLeave,
+                poolAssignmentDeadline = poolAssignmentDeadline
             )
             if (result.isSuccess) {
-                // Başarılı
+                loadRecords()
+                loadRecordsForPersonnel(personnelId)
             } else {
-                val errorMsg = result.exceptionOrNull()?.message ?: "İş üstlenilemedi."
+                // --- DÜZELTİLDİ: Hata mesajı doğrudan _errorMessage state'ine atanarak UI Snackbar'da görünmesi sağlandı ---
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "İş üstlenilemedi."
             }
         }
     }
@@ -277,11 +309,11 @@ class ServiceViewModel @Inject constructor(
         emptyList()
     )
 
-    // Admin pagination page size 2 olarak güncellendi
+    // --- 1. SAYFADA 2 KART, 2. SAYFADAN İTİBAREN 4 KART OLACAK ŞEKİLDE SAYFALAMA ---
     val admintotalPages: StateFlow<Int> = filteredServiceRecords.map { list ->
         if (list.isEmpty()) 1
         else if (list.size <= 2) 1
-        else 1 + (list.size - 2 + 1) / 2
+        else 1 + (list.size - 2 + 3) / 4
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1)
 
     val adminPagedServiceRecords: StateFlow<List<ServiceRecord>> = combine(
@@ -289,7 +321,7 @@ class ServiceViewModel @Inject constructor(
         _adminCurrentPage
     ) { list, page ->
         if (list.isEmpty()) return@combine emptyList()
-        val maxPage = if (list.size <= 2) 1 else 1 + (list.size - 2 + 1) / 2
+        val maxPage = if (list.size <= 2) 1 else 1 + (list.size - 2 + 3) / 4
         val safePage = page.coerceIn(1, maxPage)
 
         val startIndex: Int
@@ -299,8 +331,8 @@ class ServiceViewModel @Inject constructor(
             startIndex = 0
             endIndex = minOf(2, list.size)
         } else {
-            startIndex = 2 + (safePage - 2) * 2
-            endIndex = minOf(startIndex + 2, list.size)
+            startIndex = 2 + (safePage - 2) * 4
+            endIndex = minOf(startIndex + 4, list.size)
         }
 
         if (startIndex < list.size && startIndex < endIndex) {
@@ -381,6 +413,7 @@ class ServiceViewModel @Inject constructor(
 
             val tabMatch = when (tab) {
                 "Tümü" -> true
+                "Havuzda" -> record.assignmentType == "POOL" && !record.isArchived && record.status != ServiceStatus.TAMAMLANDI && record.status != ServiceStatus.IPTAL
                 "Bekleyen" -> record.status == ServiceStatus.BEKLIYOR
                 "Yolda" -> record.status == ServiceStatus.YOLDA
                 "İşlemde" -> record.status == ServiceStatus.ISLEME_BASLANDI || record.status == ServiceStatus.PARCA_BEKLENIYOR || record.status == ServiceStatus.YOLDA
@@ -736,6 +769,7 @@ class ServiceViewModel @Inject constructor(
             val updatedRecord = currentRecord.copy(
                 assignedPersonnelId = newPersonnelId,
                 assignedPersonnelUid = newPersonnelUid,
+                assignmentType = if (newPersonnelId != null) "DIRECT" else currentRecord.assignmentType,
                 status = if (currentRecord.status == ServiceStatus.IPTAL) ServiceStatus.BEKLIYOR else currentRecord.status,
                 rejectionReason = null
             )

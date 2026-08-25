@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -20,6 +21,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRe
 @Composable
 fun PersonnelJobPoolSection(
     poolJobs: List<ServiceRecord>,
+    getOperationalStatus: (ServiceRecord) -> String, // <--- Operasyonel durum hesaplayıcı eklendi
     onClaimJob: (ServiceRecord) -> Unit
 ) {
     if (poolJobs.isEmpty()) {
@@ -40,6 +42,20 @@ fun PersonnelJobPoolSection(
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             items(poolJobs) { service ->
+                val operationalStatus = getOperationalStatus(service)
+                val statusColor = when (operationalStatus) {
+                    "GECİKMİŞ" -> MaterialTheme.colorScheme.error
+                    "ATAMA_GEREKİYOR" -> MaterialTheme.colorScheme.error
+                    "KRİTİK" -> Color(0xFFF59E0B)
+                    else -> MaterialTheme.colorScheme.primary
+                }
+                val statusText = when (operationalStatus) {
+                    "GECİKMİŞ" -> "Süresi Geçti"
+                    "ATAMA_GEREKİYOR" -> "Yönetici Bekliyor"
+                    "KRİTİK" -> "Kritik Süre"
+                    else -> "Havuzda"
+                }
+
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
@@ -61,19 +77,35 @@ fun PersonnelJobPoolSection(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = when (service.priority) {
-                                    "Yüksek", "Acil" -> MaterialTheme.colorScheme.errorContainer
-                                    else -> MaterialTheme.colorScheme.secondaryContainer
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                // Operasyonel Durum Rozeti
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = statusColor.copy(alpha = 0.12f)
+                                ) {
+                                    Text(
+                                        text = statusText,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = statusColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
-                            ) {
-                                Text(
-                                    text = service.priority,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                // Öncelik Rozeti
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = when (service.priority) {
+                                        "Yüksek", "Acil" -> MaterialTheme.colorScheme.errorContainer
+                                        else -> MaterialTheme.colorScheme.secondaryContainer
+                                    }
+                                ) {
+                                    Text(
+                                        text = service.priority,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
 

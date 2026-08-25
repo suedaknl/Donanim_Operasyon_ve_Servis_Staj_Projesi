@@ -18,7 +18,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AdminServiceFilterSheet(
     serviceViewModel: ServiceViewModel,
@@ -79,12 +79,16 @@ fun AdminServiceFilterSheet(
                 item {
                     Text("Sıralama", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         listOf("En yeni", "En eski", "Önceliği yüksek olan").forEach { sortOpt ->
                             FilterChip(
                                 selected = tempSortOption == sortOpt,
                                 onClick = { tempSortOption = sortOpt },
-                                label = { Text(sortOpt) }
+                                label = { Text(sortOpt, maxLines = 1) }
                             )
                         }
                     }
@@ -103,7 +107,7 @@ fun AdminServiceFilterSheet(
                                         onClick = {
                                             tempSelectedStatuses = if (tempSelectedStatuses.contains(st)) tempSelectedStatuses - st else tempSelectedStatuses + st
                                         },
-                                        label = { Text(st, style = MaterialTheme.typography.labelSmall) }
+                                        label = { Text(st, style = MaterialTheme.typography.labelSmall, maxLines = 1) }
                                     )
                                 }
                             }
@@ -114,14 +118,18 @@ fun AdminServiceFilterSheet(
                 item {
                     Text("Öncelik", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         listOf("Düşük", "Normal", "Yüksek", "Acil").forEach { pri ->
                             FilterChip(
                                 selected = tempSelectedPriorities.contains(pri),
                                 onClick = {
                                     tempSelectedPriorities = if (tempSelectedPriorities.contains(pri)) tempSelectedPriorities - pri else tempSelectedPriorities + pri
                                 },
-                                label = { Text(pri) }
+                                label = { Text(pri, maxLines = 1) }
                             )
                         }
                     }
@@ -130,12 +138,17 @@ fun AdminServiceFilterSheet(
                 item {
                     Text("Atama Durumu", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // --- DÜZELTME: FlowRow ve maxLines = 1 kullanılarak "Havuzda" yazısının bölünmesi engellendi ---
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         listOf("Tümü", "Atanmış", "Atanmamış", "Havuzda").forEach { assignOpt ->
                             FilterChip(
                                 selected = tempAssignmentStatus == assignOpt,
                                 onClick = { tempAssignmentStatus = assignOpt },
-                                label = { Text(assignOpt) }
+                                label = { Text(assignOpt, maxLines = 1) }
                             )
                         }
                     }
@@ -155,7 +168,7 @@ fun AdminServiceFilterSheet(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(selectedPersonnelLabel)
+                            Text(selectedPersonnelLabel, maxLines = 1)
                             Icon(Icons.Default.ArrowDropDown, null)
                         }
                     }
@@ -171,7 +184,7 @@ fun AdminServiceFilterSheet(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(selectedDeviceLabel)
+                            Text(selectedDeviceLabel, maxLines = 1)
                             Icon(Icons.Default.ArrowDropDown, null)
                         }
                     }
@@ -187,7 +200,7 @@ fun AdminServiceFilterSheet(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(selectedCompanyLabel)
+                            Text(selectedCompanyLabel, maxLines = 1)
                             Icon(Icons.Default.ArrowDropDown, null)
                         }
                     }
@@ -203,7 +216,7 @@ fun AdminServiceFilterSheet(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(selectedLocationLabel)
+                            Text(selectedLocationLabel, maxLines = 1)
                             Icon(Icons.Default.ArrowDropDown, null)
                         }
                     }

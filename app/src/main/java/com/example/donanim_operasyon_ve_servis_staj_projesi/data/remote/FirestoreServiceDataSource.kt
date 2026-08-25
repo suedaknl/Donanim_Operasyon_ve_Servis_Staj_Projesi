@@ -2,12 +2,16 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.data.remote
 
 import android.net.Uri
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 class FirestoreServiceDataSource @Inject constructor(
@@ -16,10 +20,14 @@ class FirestoreServiceDataSource @Inject constructor(
 ) {
     private val collection = firestore.collection("services")
 
-    // --- İŞ HAVUZU: REALTIME LISTENER (Esnek Filtreleme) ---
+    // --- İŞ HAVUZU: REALTIME LISTENER (Kesin ve Robust Filtreleme + Tarih Kontrolü) ---
     fun observePoolJobs(): Flow<List<ServiceRecord>> = callbackFlow {
+        val trLocale = Locale.forLanguageTag("tr-TR")
+        val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", trLocale).apply { isLenient = false }
+        val dayOnlyFormat = SimpleDateFormat("dd.MM.yyyy", trLocale).apply { isLenient = false }
+        val todayMillis = System.currentTimeMillis()
+
         val listener = collection
-            .whereEqualTo("assignmentType", "POOL")
             .whereEqualTo("isArchived", false)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -29,11 +37,33 @@ class FirestoreServiceDataSource @Inject constructor(
 
                 val records = snapshot?.documents?.mapNotNull { doc ->
                     try {
+                        val assignmentType = doc.getString("assignmentType") ?: "DIRECT"
                         val assignedId = doc.getLong("assignedPersonnelId")
                         val assignedUid = doc.getString("assignedPersonnelUid")
+                        val status = doc.getString("status") ?: "Bekliyor"
+                        val plannedDate = doc.getString("plannedDate")
+                        val date = doc.getString("date") ?: ""
 
-                        // Atanmamış (assignedPersonnelId null/0 ve uid boş olanlar) havuz işleridir
-                        if (assignedId == null && assignedUid.isNullOrBlank()) {
+                        // Havuz son atama deadline alanı (Yoksa planlanan tarihten 2 gün önceye fallback hesaplanır)
+                        val storedDeadline = doc.getLong("poolAssignmentDeadline")
+                        val targetDateStr = plannedDate?.takeIf { it.isNotBlank() } ?: date
+                        val recordDate: Date? = try {
+                            dateFormat.parse(targetDateStr.trim()) ?: dayOnlyFormat.parse(targetDateStr.take(10).trim())
+                        } catch (e: Exception) {
+                            null
+                        }
+
+                        val computedDeadline = storedDeadline ?: recordDate?.let { it.time - (2L * 24L * 60L * 60L * 1000L) }
+
+                        // Havuz Kriteri: assignmentType "POOL" OLMALI VEYA (assignedPersonnelId null ve uid boş olmalı)
+                        // Ve kesinlikle tamamlanmış/iptal edilmiş olmamalı
+                        val isPool = assignmentType == "POOL" || (assignedId == null && assignedUid.isNullOrBlank())
+                        val isNotCompletedOrCancelled = status != ServiceStatus.TAMAMLANDI && status != ServiceStatus.IPTAL
+
+                        // Geçmiş Tarih Kontrolü: Geçmiş tarihli işler havuzda görünmemeli
+                        val isNotPast = recordDate == null || recordDate.time >= (todayMillis - 86400000L) // Tolerans payı
+
+                        if (isPool && isNotCompletedOrCancelled && isNotPast) {
                             ServiceRecord(
                                 id = 0,
                                 companyName = doc.getString("companyName") ?: "",
@@ -43,22 +73,23 @@ class FirestoreServiceDataSource @Inject constructor(
                                 location = doc.getString("location") ?: "",
                                 priority = doc.getString("priority") ?: "Normal",
                                 issueDescription = doc.getString("issueDescription") ?: "",
-                                status = doc.getString("status") ?: "Bekliyor",
-                                date = doc.getString("date") ?: "",
+                                status = status,
+                                date = date,
                                 assignedPersonnelId = null,
                                 assignedPersonnelName = null,
                                 assignedPersonnelUid = null,
                                 contactPerson = doc.getString("contactPerson"),
                                 contactPhone = doc.getString("contactPhone"),
                                 address = doc.getString("address"),
-                                plannedDate = doc.getString("plannedDate"),
+                                plannedDate = plannedDate,
                                 firestoreId = doc.id,
                                 rejectionReason = doc.getString("rejectionReason"),
                                 latitude = doc.getDouble("latitude"),
                                 longitude = doc.getDouble("longitude"),
                                 isArchived = doc.getBoolean("isArchived") ?: false,
                                 archivedAt = doc.getLong("archivedAt"),
-                                assignmentType = doc.getString("assignmentType") ?: "POOL"
+                                assignmentType = "POOL",
+                                poolAssignmentDeadline = computedDeadline
                             )
                         } else {
                             null
@@ -99,7 +130,8 @@ class FirestoreServiceDataSource @Inject constructor(
                         "assignmentType" to "DIRECT",
                         "assignedPersonnelId" to personnelId,
                         "assignedPersonnelName" to personnelName,
-                        "assignedPersonnelUid" to personnelUid
+                        "assignedPersonnelUid" to personnelUid,
+                        "status" to ServiceStatus.BEKLIYOR
                     )
                 )
             }.await()
@@ -288,7 +320,8 @@ class FirestoreServiceDataSource @Inject constructor(
                 "longitude" to record.longitude,
                 "isArchived" to record.isArchived,
                 "archivedAt" to record.archivedAt,
-                "assignmentType" to record.assignmentType
+                "assignmentType" to record.assignmentType,
+                "poolAssignmentDeadline" to record.poolAssignmentDeadline
             )
 
             if (!record.firestoreId.isNullOrEmpty()) {
@@ -310,6 +343,18 @@ class FirestoreServiceDataSource @Inject constructor(
             val servicesList = mutableListOf<ServiceRecord>()
 
             for (document in snapshot.documents) {
+                val targetDateStr = document.getString("plannedDate")?.takeIf { it.isNotBlank() } ?: (document.getString("date") ?: "")
+                val trLocale = Locale.forLanguageTag("tr-TR")
+                val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", trLocale).apply { isLenient = false }
+                val dayOnlyFormat = SimpleDateFormat("dd.MM.yyyy", trLocale).apply { isLenient = false }
+                val parsedDate = try {
+                    dateFormat.parse(targetDateStr.trim()) ?: dayOnlyFormat.parse(targetDateStr.take(10).trim())
+                } catch (e: Exception) {
+                    null
+                }
+                val storedDeadline = document.getLong("poolAssignmentDeadline")
+                val computedDeadline = storedDeadline ?: parsedDate?.let { it.time - (2L * 24L * 60L * 60L * 1000L) }
+
                 val service = ServiceRecord(
                     id = 0,
                     companyName = document.getString("companyName") ?: "",
@@ -334,7 +379,8 @@ class FirestoreServiceDataSource @Inject constructor(
                     longitude = document.getDouble("longitude"),
                     isArchived = document.getBoolean("isArchived") ?: false,
                     archivedAt = document.getLong("archivedAt"),
-                    assignmentType = document.getString("assignmentType") ?: "DIRECT"
+                    assignmentType = document.getString("assignmentType") ?: "DIRECT",
+                    poolAssignmentDeadline = computedDeadline
                 )
                 servicesList.add(service)
             }
@@ -371,7 +417,8 @@ class FirestoreServiceDataSource @Inject constructor(
                 "longitude" to record.longitude,
                 "isArchived" to record.isArchived,
                 "archivedAt" to record.archivedAt,
-                "assignmentType" to record.assignmentType
+                "assignmentType" to record.assignmentType,
+                "poolAssignmentDeadline" to record.poolAssignmentDeadline
             )
 
             collection.document(firestoreId).set(serviceMap).await()
@@ -498,6 +545,18 @@ class FirestoreServiceDataSource @Inject constructor(
             val servicesList = mutableListOf<ServiceRecord>()
 
             for (document in snapshot.documents) {
+                val targetDateStr = document.getString("plannedDate")?.takeIf { it.isNotBlank() } ?: (document.getString("date") ?: "")
+                val trLocale = Locale.forLanguageTag("tr-TR")
+                val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", trLocale).apply { isLenient = false }
+                val dayOnlyFormat = SimpleDateFormat("dd.MM.yyyy", trLocale).apply { isLenient = false }
+                val parsedDate = try {
+                    dateFormat.parse(targetDateStr.trim()) ?: dayOnlyFormat.parse(targetDateStr.take(10).trim())
+                } catch (e: Exception) {
+                    null
+                }
+                val storedDeadline = document.getLong("poolAssignmentDeadline")
+                val computedDeadline = storedDeadline ?: parsedDate?.let { it.time - (2L * 24L * 60L * 60L * 1000L) }
+
                 val service = ServiceRecord(
                     id = 0,
                     companyName = document.getString("companyName") ?: "",
@@ -522,7 +581,8 @@ class FirestoreServiceDataSource @Inject constructor(
                     longitude = document.getDouble("longitude"),
                     isArchived = document.getBoolean("isArchived") ?: false,
                     archivedAt = document.getLong("archivedAt"),
-                    assignmentType = document.getString("assignmentType") ?: "DIRECT"
+                    assignmentType = document.getString("assignmentType") ?: "DIRECT",
+                    poolAssignmentDeadline = computedDeadline
                 )
                 servicesList.add(service)
             }

@@ -29,7 +29,8 @@ data class ServiceRecord(
     val assignedPersonnelUid: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val assignmentType: String = "DIRECT" // <--- İş Havuzu için eklendi ("DIRECT" veya "POOL")
+    val assignmentType: String = "DIRECT", // "DIRECT" veya "POOL"
+    val poolAssignmentDeadline: Long? = null // <--- İş Havuzu Son Atama Zamanı (Epoch Millis)
 )
 
 object ServiceStatus {

@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
@@ -294,7 +295,8 @@ fun AdminMainScreen(
                         onPersonnelCardClick = {
                             selectedTab = 2
                             serviceSubScreen = "list"
-                        }
+                        },
+                        onServiceClick = onServiceClick
                     )
 
                     1 -> {
@@ -364,7 +366,8 @@ fun AdminDashboardContent(
     personnelViewModel: PersonnelViewModel,
     onOpenDrawer: () -> Unit,
     onCardClick: (String) -> Unit,
-    onPersonnelCardClick: () -> Unit
+    onPersonnelCardClick: () -> Unit,
+    onServiceClick: (ServiceRecord) -> Unit
 ) {
     val allServices by serviceViewModel.serviceRecords.collectAsState(initial = emptyList())
     val allPersonnel by personnelViewModel.personnelList.collectAsState(initial = emptyList())
@@ -383,7 +386,6 @@ fun AdminDashboardContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-        // FAB ve alt menü çakışmasını önlemek için alt boşluk (bottom padding) artırıldı
         contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -466,11 +468,314 @@ fun AdminDashboardContent(
             }
         }
 
+        // --- YENİ EKLENEN: HAVUZ TAKİBİ BÖLÜMÜ ---
+        item {
+            AdminPoolTrackingSection(
+                allServices = allServices,
+                personnelList = allPersonnel,
+                serviceViewModel = serviceViewModel,
+                onViewAllClick = {
+                    onCardClick("Havuzda")
+                },
+                onServiceClick = onServiceClick
+            )
+        }
+
         item {
             AdminWorkAnalysisSection(
                 records = allServices,
                 analysisUseCase = analysisUseCase
             )
+        }
+    }
+}
+
+// --- YÖNETİCİ ÖZETİ İÇİN HAVUZ TAKİBİ BİLEŞENİ ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AdminPoolTrackingSection(
+    allServices: List<ServiceRecord>,
+    personnelList: List<Personnel>,
+    serviceViewModel: ServiceViewModel,
+    onViewAllClick: () -> Unit,
+    onServiceClick: (ServiceRecord) -> Unit
+) {
+    val context = LocalContext.current
+    // Sadece aktif ve havuzda olan (tamamlanmamış/iptal edilmemiş) işler
+    val poolJobs = remember(allServices) {
+        allServices.filter {
+            it.assignmentType == "POOL" &&
+                    it.status != ServiceStatus.TAMAMLANDI &&
+                    it.status != ServiceStatus.IPTAL &&
+                    !it.isArchived
+        }
+    }
+
+    var countHavuzda = 0
+    var countKritik = 0
+    var countAtamaGerekiyor = 0
+    var countGecikmis = 0
+
+    val categorizedJobs = poolJobs.map { job ->
+        val status = serviceViewModel.getPoolJobOperationalStatus(job)
+        when (status) {
+            "HAVUZDA" -> countHavuzda++
+            "KRİTİK" -> countKritik++
+            "ATAMA_GEREKİYOR" -> countAtamaGerekiyor++
+            "GECİKMİŞ" -> countGecikmis++
+        }
+        job to status
+    }
+
+    // Dikkat gerektiren işler öncelik sırasına göre: GECİKMİŞ > ATAMA_GEREKİYOR > KRİTİK (en fazla 3 adet)
+    val attentionJobs = categorizedJobs
+        .filter { it.second != "HAVUZDA" }
+        .sortedWith(compareBy {
+            when (it.second) {
+                "GECİKMİŞ" -> 0
+                "ATAMA_GEREKİYOR" -> 1
+                "KRİTİK" -> 2
+                else -> 3
+            }
+        })
+        .take(3)
+
+    var assignJobTarget by remember { mutableStateOf<ServiceRecord?>(null) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Havuz Takibi",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onViewAllClick) {
+                    Text("Tümünü Gör")
+                }
+            }
+
+            // Üst Özet Sayaçları
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PoolStatusBadge("Havuzda", countHavuzda.toString(), MaterialTheme.colorScheme.primary, Modifier.weight(1f))
+                PoolStatusBadge("Kritik", countKritik.toString(), Color(0xFFF59E0B), Modifier.weight(1f))
+                PoolStatusBadge("Atama Gerekli", countAtamaGerekiyor.toString(), MaterialTheme.colorScheme.error, Modifier.weight(1f))
+            }
+
+            if (countGecikmis > 0) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                        Text(
+                            text = "$countGecikmis adet gecikmiş havuz işi bulunuyor!",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            if (attentionJobs.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Yönetici müdahalesi gerektiren havuz işi bulunmuyor.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Text(
+                    text = "Dikkat Gerektiren İşler",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                attentionJobs.forEach { (job, status) ->
+                    val statusColor = when (status) {
+                        "GECİKMİŞ" -> MaterialTheme.colorScheme.error
+                        "ATAMA_GEREKİYOR" -> MaterialTheme.colorScheme.error
+                        "KRİTİK" -> Color(0xFFF59E0B)
+                        else -> MaterialTheme.colorScheme.primary
+                    }
+
+                    val statusText = when (status) {
+                        "GECİKMİŞ" -> "Gecikmiş"
+                        "ATAMA_GEREKİYOR" -> "Atama Gerekiyor"
+                        "KRİTİK" -> "Kritik (Bugün atanmalı)"
+                        else -> status
+                    }
+
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onServiceClick(job) },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = job.companyName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Surface(
+                                    color = statusColor.copy(alpha = 0.12f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = statusText,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = statusColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "${job.deviceType} - ${job.deviceModel}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Servis: ${job.plannedDate ?: job.date}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Button(
+                                    onClick = { assignJobTarget = job },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(32.dp),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Hemen Ata", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Hemen Ata Personel Seçim Dialog'u
+    if (assignJobTarget != null) {
+        var selectedPersonnel by remember { mutableStateOf<Personnel?>(null) }
+        var showPersonnelDropdown by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { assignJobTarget = null },
+            title = { Text("Hemen İş Ata") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("İş: ${assignJobTarget?.companyName} (${assignJobTarget?.deviceType})")
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedButton(
+                        onClick = { showPersonnelDropdown = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(selectedPersonnel?.fullName ?: "Personel Seçin")
+                    }
+
+                    DropdownMenu(
+                        expanded = showPersonnelDropdown,
+                        onDismissRequest = { showPersonnelDropdown = false }
+                    ) {
+                        personnelList.forEach { personnel ->
+                            DropdownMenuItem(
+                                text = { Text(personnel.fullName) },
+                                onClick = {
+                                    selectedPersonnel = personnel
+                                    showPersonnelDropdown = false
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val personnel = selectedPersonnel
+                        val job = assignJobTarget
+                        if (personnel != null && job != null) {
+                            serviceViewModel.reassignService(
+                                recordId = job.id,
+                                newPersonnelId = personnel.id,
+                                newPersonnelUid = personnel.firebaseUid
+                            )
+                            Toast.makeText(context, "${personnel.fullName} adlı personele atandı.", Toast.LENGTH_SHORT).show()
+                            assignJobTarget = null
+                        } else {
+                            Toast.makeText(context, "Lütfen bir personel seçin.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Text("Ata")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { assignJobTarget = null }) {
+                    Text("İptal")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun PoolStatusBadge(title: String, count: String, color: Color, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        color = color.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(text = count, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = color)
+            Text(text = title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -591,7 +896,6 @@ fun AdminWorkAnalysisSection(
                 val primaryColor = MaterialTheme.colorScheme.primary
                 val successColor = Color(0xFF16A34A)
                 val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                val textColorInt = android.graphics.Color.GRAY // Native Android text paint için
 
                 val maxVal = (analysis.createdCounts + analysis.completedCounts).maxOrNull()?.coerceAtLeast(4) ?: 4
 

@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LeaveRequestEntity::class,
         OvertimeEntity::class
     ],
-    version = 20, // <--- Versiyon 20'ye yükseltildi
+    version = 20,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -146,11 +146,11 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        // İŞ HAVUZU İÇİN YENİ MİGRASYON (19 -> 20)
+        // İŞ HAVUZU İÇİN GÜNCELLENMİŞ MİGRASYON (19 -> 20)
         val MIGRATION_19_20 = object : Migration(19, 20) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE service_records ADD COLUMN assignmentType TEXT NOT NULL DEFAULT 'DIRECT'")
-                // Yeni eklenen entity alanları için ALTER sorguları:
+                db.execSQL("ALTER TABLE service_records ADD COLUMN poolAssignmentDeadline INTEGER DEFAULT NULL") // <--- Eksik alan eklendi
                 db.execSQL("ALTER TABLE shifts ADD COLUMN firestoreId TEXT")
                 db.execSQL("ALTER TABLE leave_requests ADD COLUMN firestoreId TEXT")
                 db.execSQL("ALTER TABLE overtimes ADD COLUMN firestoreId TEXT")
@@ -176,7 +176,7 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase.MIGRATION_16_17,
                         AppDatabase.MIGRATION_17_18,
                         AppDatabase.MIGRATION_18_19,
-                        AppDatabase.MIGRATION_19_20 // <--- Migrasyon zincirine eklendi
+                        AppDatabase.MIGRATION_19_20
                     )
                     .build()
                 INSTANCE = instance

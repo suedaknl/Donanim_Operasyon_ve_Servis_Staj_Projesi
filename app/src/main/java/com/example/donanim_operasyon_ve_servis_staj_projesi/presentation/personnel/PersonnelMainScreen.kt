@@ -64,6 +64,18 @@ fun PersonnelMainScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
+    // --- SNACKBAR STATE TANIMLAMASI ---
+    val snackbarHostState = remember { SnackbarHostState() }
+    val errorMessage by serviceViewModel.errorMessage.collectAsState()
+
+    // ViewModel'den gelen hata mesajlarını (Geçmiş tarih, deadline dolması vb.) Snackbar ile gösterir
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            serviceViewModel.clearErrorMessage()
+        }
+    }
+
     var fabOffsetX by remember { mutableStateOf(0f) }
     var fabOffsetY by remember { mutableStateOf(0f) }
 
@@ -232,6 +244,7 @@ fun PersonnelMainScreen(
         }
     ) {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) }, // <--- SNACKBAR HOST EKLENDİ
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
@@ -387,7 +400,11 @@ fun PersonnelMainScreen(
                                 selectedFilter = serviceViewModel.selectedFilter,
                                 onFilterSelected = { serviceViewModel.updateSelectedFilter(it) },
                                 selectedPriority = serviceViewModel.selectedPriorityFilter,
-                                onPrioritySelected = { serviceViewModel.updateSelectedPriorityFilter(it) },
+                                onPrioritySelected = {
+                                    serviceViewModel.updateSelectedPriorityFilter(
+                                        it
+                                    )
+                                },
                                 onClearFilters = {
                                     serviceViewModel.updateSearchQuery("")
                                     serviceViewModel.updateSelectedFilter("Hepsi")
@@ -400,7 +417,8 @@ fun PersonnelMainScreen(
                                 onLogOut = onLogOut,
                                 serviceViewModel = serviceViewModel,
                                 firebaseUid = currentPersonnelUid,
-                                localPersonnelId = personnelId
+                                localPersonnelId = personnelId,
+                                getOperationalStatus = { serviceViewModel.getPoolJobOperationalStatus(it) }
                             )
                         }
                     }

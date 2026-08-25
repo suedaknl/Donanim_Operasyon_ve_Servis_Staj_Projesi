@@ -30,22 +30,31 @@ class ServiceRepository @Inject constructor(
             }
         }
 
-        val recordWithPersonnel = record.copy(
+        // Çoğaltma veya yeni kayıt sırasında operasyonel alanların resetlenmesi
+        val cleanRecord = record.copy(
+            id = 0,
+            firestoreId = null,
+            status = ServiceStatus.BEKLIYOR,
+            assignmentType = if (isPool) "POOL" else "DIRECT",
             assignedPersonnelId = if (isPool) null else record.assignedPersonnelId,
             assignedPersonnelUid = if (isPool) null else assignedPersonnel?.firebaseUid,
-            assignedPersonnelName = if (isPool) null else assignedPersonnel?.fullName
+            assignedPersonnelName = if (isPool) null else assignedPersonnel?.fullName,
+            isArchived = false,
+            archivedAt = null,
+            rejectionReason = null,
+            poolAssignmentDeadline = if (isPool) record.poolAssignmentDeadline else null
         )
 
-        serviceDao.insertRecord(recordWithPersonnel)
+        serviceDao.insertRecord(cleanRecord)
 
         withContext(Dispatchers.IO) {
             try {
                 val allRecords = serviceDao.getAllRecords()
                 val savedRecord = allRecords.find {
-                    it.companyName == recordWithPersonnel.companyName &&
-                            it.serialNumber == recordWithPersonnel.serialNumber &&
+                    it.companyName == cleanRecord.companyName &&
+                            it.serialNumber == cleanRecord.serialNumber &&
                             it.firestoreId == null
-                } ?: recordWithPersonnel
+                } ?: cleanRecord
 
                 val result = firestoreDataSource.saveServiceRecord(savedRecord)
 
@@ -97,12 +106,15 @@ class ServiceRepository @Inject constructor(
             withContext(Dispatchers.IO) {
                 try {
                     val localRecord = serviceDao.getServiceByFirestoreId(firestoreId)
+                        ?: serviceDao.getServiceById(serviceId)
+
                     if (localRecord != null) {
                         val updatedLocal = localRecord.copy(
                             assignmentType = "DIRECT",
                             assignedPersonnelId = personnelId,
                             assignedPersonnelName = personnelName,
-                            assignedPersonnelUid = personnelUid
+                            assignedPersonnelUid = personnelUid,
+                            status = ServiceStatus.BEKLIYOR
                         )
                         serviceDao.updateService(updatedLocal)
                     }
@@ -123,7 +135,7 @@ class ServiceRepository @Inject constructor(
             }
             return Result.success(Unit)
         } else {
-            return Result.failure(result.exceptionOrNull() ?: Exception("İş üstlenilemedi."))
+            return Result.failure(result.exceptionOrNull() ?: Exception("Bu iş başka bir personel tarafından az önce üstlenildi."))
         }
     }
 
