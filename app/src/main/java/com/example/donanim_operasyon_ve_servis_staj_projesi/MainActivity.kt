@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
     lateinit var authRepository: AuthRepository
 
     @Inject
-    lateinit var notificationRepository: NotificationRepository // <-- EKLENDİ
+    lateinit var notificationRepository: NotificationRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     AppNavigation(
                         authRepository = authRepository,
-                        notificationRepository = notificationRepository // <-- EKLENDİ
+                        notificationRepository = notificationRepository
                     )
                 }
             }

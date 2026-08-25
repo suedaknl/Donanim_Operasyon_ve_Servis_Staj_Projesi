@@ -26,44 +26,38 @@ import kotlinx.coroutines.tasks.await
 @Composable
 fun SplashScreen(
     authRepository: AuthRepository,
-    notificationRepository: NotificationRepository, // <-- FCM Token yönetimi için eklendi
-    // DİKKAT: Artık yönlendirilecek rotayı (String) dışarı iletiyor
+    notificationRepository: NotificationRepository,
     onSplashFinished: (String) -> Unit
 ) {
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
 
-    // Animasyonların tetikleyicisi olarak kullanılacak state
     var startAnimation by remember { mutableStateOf(false) }
 
-    // Opaklık (Fade) Animasyonu
     val alphaAnim by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
         animationSpec = tween(durationMillis = 1000),
         label = "AlphaAnimation"
     )
 
-    // Büyüme (Scale) Animasyonu
     val scaleAnim by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0.5f,
         animationSpec = tween(durationMillis = 1000),
         label = "ScaleAnimation"
     )
 
-    // Ekran açıldığı an animasyonu başlatıp 2 saniye bekler, sonra duruma göre yönlendirir
     LaunchedEffect(key1 = true) {
         startAnimation = true
-        delay(2000L)
+        delay(1500L)
 
-        // --- Auth ve Beni Hatırla Kontrolü ---
         val currentUser = authRepository.getCurrentUser()
-        val isRememberMe = sessionManager.isRememberMe()
+        val savedRole = sessionManager.getUserRole()
+        val savedPersonnelId = sessionManager.getPersonnelId()
 
-        if (currentUser != null && isRememberMe) {
-            // Firebase Auth geçerli ve kullanıcı beni hatırla demiş -> FCM Token'ı tazele / senkronize et
+        if (currentUser != null && (!savedRole.isNullOrBlank() || savedPersonnelId > 0)) {
             try {
-                val role = sessionManager.getUserRole() ?: "PERSONNEL"
-                val personnelId = if (role == "PERSONNEL") sessionManager.getPersonnelId() else null
+                val role = savedRole ?: "PERSONNEL"
+                val personnelId = if (role == "PERSONNEL") savedPersonnelId else null
                 val fcmToken = FirebaseMessaging.getInstance().token.await()
 
                 notificationRepository.saveToken(
@@ -72,31 +66,20 @@ fun SplashScreen(
                     personnelId = personnelId,
                     token = fcmToken
                 )
-            } catch (e: Exception) {
-                // Token yenilenemezse splash akışı kesilmez
-            }
+            } catch (e: Exception) {}
 
-            val role = sessionManager.getUserRole()
+            val role = savedRole ?: "PERSONNEL"
             if (role == "ADMIN") {
                 onSplashFinished("home")
-            } else if (role == "PERSONNEL") {
-                val pId = sessionManager.getPersonnelId()
-                onSplashFinished("personnel_main/$pId")
             } else {
-                onSplashFinished("welcome")
+                val pId = sessionManager.getPersonnelId()
+                if (pId > 0) {
+                    onSplashFinished("personnel_main/$pId")
+                } else {
+                    onSplashFinished("welcome")
+                }
             }
         } else {
-            // Kullanıcı oturumu Firebase'de açık kalmış ama cihazda "Beni Hatırla" DEMEMİŞ.
-            // Güvenlik gereği oturumu temizliyoruz ve token'ı siliyoruz.
-            if (currentUser != null && !isRememberMe) {
-                try {
-                    notificationRepository.clearToken(currentUser.uid)
-                } catch (e: Exception) {}
-
-                authRepository.signOut()
-                sessionManager.clearSession()
-            }
-            // Standart giriş seçim ekranına yönlendir
             onSplashFinished("welcome")
         }
     }
@@ -108,7 +91,6 @@ fun SplashScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Ortadaki Büyük İkon
         Icon(
             imageVector = Icons.Default.Build,
             contentDescription = "Uygulama Logosu",
@@ -121,7 +103,6 @@ fun SplashScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Büyük Başlık
         Text(
             text = "Servis Takip",
             style = MaterialTheme.typography.headlineMedium,
@@ -135,7 +116,6 @@ fun SplashScreen(
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        // Hazırlanıyor yazısı (Buna sadece fade efekti uyguladık)
         Text(
             text = "Sistem hazırlanıyor...",
             style = MaterialTheme.typography.bodyLarge,
@@ -145,7 +125,6 @@ fun SplashScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Opsiyonel olarak bir yükleme animasyonu (Tasarıma ufak bir hareket katar)
         CircularProgressIndicator(
             modifier = Modifier.alpha(alphaAnim),
             color = MaterialTheme.colorScheme.primary

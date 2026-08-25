@@ -62,7 +62,6 @@ fun AppNavigation(
     val coroutineScope = rememberCoroutineScope()
 
     val sharedServiceViewModel: ServiceViewModel = hiltViewModel()
-
     val sessionManager = remember { SessionManager(context) }
 
     NavHost(navController = navController, startDestination = "splash") {
@@ -201,7 +200,6 @@ fun AppNavigation(
                             try {
                                 notificationRepository.clearToken(currentUserUid)
                             } catch (e: Exception) {
-                                // Token temizlenemezse logout takılmamalı
                             }
                         }
                         authRepository.signOut()
@@ -214,7 +212,6 @@ fun AppNavigation(
             )
         }
 
-        // --- YÖNETİCİ DRAWER: PERSONEL YÖNETİMİ DASHBOARD ---
         composable("personnel_management") {
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
             PersonnelManagementScreen(
@@ -226,7 +223,6 @@ fun AppNavigation(
             )
         }
 
-        // --- PERSONEL ÇALIŞMA DETAYI ---
         composable(
             route = "personnel_work_detail/{personnelId}",
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
@@ -271,7 +267,6 @@ fun AppNavigation(
             )
         }
 
-        // --- SERVİS SİCİLİ ROTA TANIMI ---
         composable(
             route = "service_registry?companyName={companyName}&serialNumber={serialNumber}",
             arguments = listOf(
@@ -344,7 +339,6 @@ fun AppNavigation(
                     onNavigateToEdit = { id -> navController.navigate("add_personnel?personnelId=$id") },
                     onToggleStatus = { targetPersonnel ->
                         personnelViewModel.updatePersonnel(targetPersonnel.copy(isActive = !targetPersonnel.isActive)) {
-                            // onComplete callback parametresi hatasını çözer
                         }
                     },
                     onDeletePersonnel = { targetPersonnel ->
@@ -542,7 +536,6 @@ fun AppNavigation(
                             try {
                                 notificationRepository.clearToken(currentUserUid)
                             } catch (e: Exception) {
-                                // Token temizlenemezse logout takılmamalı
                             }
                         }
                         authRepository.signOut()
