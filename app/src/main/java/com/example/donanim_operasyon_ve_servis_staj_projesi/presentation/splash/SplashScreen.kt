@@ -18,11 +18,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.NotificationRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun SplashScreen(
     authRepository: AuthRepository,
+    notificationRepository: NotificationRepository, // <-- FCM Token yönetimi için eklendi
     // DİKKAT: Artık yönlendirilecek rotayı (String) dışarı iletiyor
     onSplashFinished: (String) -> Unit
 ) {
@@ -51,25 +55,44 @@ fun SplashScreen(
         startAnimation = true
         delay(2000L)
 
-        // --- YENİ EKLENEN KISIM: Auth ve Beni Hatırla Kontrolü ---
+        // --- Auth ve Beni Hatırla Kontrolü ---
         val currentUser = authRepository.getCurrentUser()
         val isRememberMe = sessionManager.isRememberMe()
 
         if (currentUser != null && isRememberMe) {
-            // Firebase Auth geçerli ve kullanıcı beni hatırla demiş
+            // Firebase Auth geçerli ve kullanıcı beni hatırla demiş -> FCM Token'ı tazele / senkronize et
+            try {
+                val role = sessionManager.getUserRole() ?: "PERSONNEL"
+                val personnelId = if (role == "PERSONNEL") sessionManager.getPersonnelId() else null
+                val fcmToken = FirebaseMessaging.getInstance().token.await()
+
+                notificationRepository.saveToken(
+                    uid = currentUser.uid,
+                    role = role,
+                    personnelId = personnelId,
+                    token = fcmToken
+                )
+            } catch (e: Exception) {
+                // Token yenilenemezse splash akışı kesilmez
+            }
+
             val role = sessionManager.getUserRole()
             if (role == "ADMIN") {
                 onSplashFinished("home")
             } else if (role == "PERSONNEL") {
                 val pId = sessionManager.getPersonnelId()
-                onSplashFinished("user_form/$pId")
+                onSplashFinished("personnel_main/$pId")
             } else {
                 onSplashFinished("welcome")
             }
         } else {
             // Kullanıcı oturumu Firebase'de açık kalmış ama cihazda "Beni Hatırla" DEMEMİŞ.
-            // Güvenlik gereği oturumu temizliyoruz.
+            // Güvenlik gereği oturumu temizliyoruz ve token'ı siliyoruz.
             if (currentUser != null && !isRememberMe) {
+                try {
+                    notificationRepository.clearToken(currentUser.uid)
+                } catch (e: Exception) {}
+
                 authRepository.signOut()
                 sessionManager.clearSession()
             }

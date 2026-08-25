@@ -11,12 +11,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.NotificationRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun PersonnelLoginScreen(
     authRepository: AuthRepository,
+    notificationRepository: NotificationRepository, // <-- FCM Token yönetimi için eklendi
     viewModel: PersonnelViewModel,
     onLoginSuccess: (Int) -> Unit,
     onNavigateBack: () -> Unit
@@ -92,11 +96,24 @@ fun PersonnelLoginScreen(
                                 onSuccess = { firebaseUser ->
                                     // 2. Firebase başarılı. Şimdi Room ile eşleştirme zamanı:
                                     val syncResult = viewModel.syncPersonnelWithFirebase(trimmedEmail, firebaseUser.uid)
-                                    isLoading = false
 
                                     syncResult.fold(
                                         onSuccess = { matchedPersonnel ->
-                                            // 3. Eşleşme başarılı. Oturumu kaydet ve içeri al.
+                                            // 3. Eşleşme başarılı. FCM Token'ı alıp notification_users koleksiyonuna kaydediyoruz
+                                            try {
+                                                val fcmToken = FirebaseMessaging.getInstance().token.await()
+                                                notificationRepository.saveToken(
+                                                    uid = firebaseUser.uid,
+                                                    role = "PERSONNEL",
+                                                    personnelId = matchedPersonnel.id,
+                                                    token = fcmToken
+                                                )
+                                            } catch (e: Exception) {
+                                                // Token alınamazsa login akışı kesilmez, hata loglanır
+                                            }
+
+                                            isLoading = false
+                                            // 4. Oturumu kaydet ve içeri al.
                                             sessionManager.saveSession(
                                                 isRememberMe = rememberMe,
                                                 role = "PERSONNEL",
@@ -106,6 +123,7 @@ fun PersonnelLoginScreen(
                                             onLoginSuccess(matchedPersonnel.id)
                                         },
                                         onFailure = { syncError ->
+                                            isLoading = false
                                             // Eşleşme yoksa veya hesap pasifse, Firebase oturumunu güvenle kapat ve hata göster.
                                             authRepository.signOut()
                                             generalError = syncError.message ?: "Personel kaydı bulunamadı."

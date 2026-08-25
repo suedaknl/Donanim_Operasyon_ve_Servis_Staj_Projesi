@@ -45,6 +45,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.servi
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.nativeCanvas
 import kotlinx.coroutines.launch
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.components.NotificationPermissionHandler // <-- FCM İzin Handler Eklendi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +66,9 @@ fun AdminMainScreen(
     onEditServiceClick: (Int) -> Unit,
     onLogOut: () -> Unit
 ) {
+    // Android 13+ Bildirim İzni Kontrolü / İsteme Bileşeni
+    NotificationPermissionHandler()
+
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var serviceSubScreen by rememberSaveable { mutableStateOf("list") }
     val context = LocalContext.current
@@ -468,7 +472,7 @@ fun AdminDashboardContent(
             }
         }
 
-        // --- YENİ EKLENEN: HAVUZ TAKİBİ BÖLÜMÜ ---
+        // --- HAVUZ TAKİBİ BÖLÜMÜ ---
         item {
             AdminPoolTrackingSection(
                 allServices = allServices,
@@ -501,7 +505,6 @@ fun AdminPoolTrackingSection(
     onServiceClick: (ServiceRecord) -> Unit
 ) {
     val context = LocalContext.current
-    // Sadece aktif ve havuzda olan (tamamlanmamış/iptal edilmemiş) işler
     val poolJobs = remember(allServices) {
         allServices.filter {
             it.assignmentType == "POOL" &&
@@ -527,7 +530,6 @@ fun AdminPoolTrackingSection(
         job to status
     }
 
-    // Dikkat gerektiren işler öncelik sırasına göre: GECİKMİŞ > ATAMA_GEREKİYOR > KRİTİK (en fazla 3 adet)
     val attentionJobs = categorizedJobs
         .filter { it.second != "HAVUZDA" }
         .sortedWith(compareBy {
@@ -567,7 +569,6 @@ fun AdminPoolTrackingSection(
                 }
             }
 
-            // Üst Özet Sayaçları
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -698,7 +699,6 @@ fun AdminPoolTrackingSection(
         }
     }
 
-    // Hemen Ata Personel Seçim Dialog'u
     if (assignJobTarget != null) {
         var selectedPersonnel by remember { mutableStateOf<Personnel?>(null) }
         var showPersonnelDropdown by remember { mutableStateOf(false) }
@@ -820,7 +820,6 @@ fun AdminWorkAnalysisSection(
                 }
             }
 
-            // Dönem Seçici
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -899,7 +898,6 @@ fun AdminWorkAnalysisSection(
 
                 val maxVal = (analysis.createdCounts + analysis.completedCounts).maxOrNull()?.coerceAtLeast(4) ?: 4
 
-                // X Ekseni Etiketleri ile birlikte Canvas Çizimi
                 val textPaint = android.graphics.Paint().apply {
                     textSize = 10.dp.value * LocalDensity.current.density
                     color = android.graphics.Color.DKGRAY
@@ -922,7 +920,6 @@ fun AdminWorkAnalysisSection(
 
                         val stepX = if (analysis.labels.size > 1) chartWidth / (analysis.labels.size - 1) else chartWidth
 
-                        // Grid Çizgileri
                         for (i in 0..4) {
                             val y = chartHeight * (i / 4f)
                             drawLine(
@@ -972,7 +969,6 @@ fun AdminWorkAnalysisSection(
                             drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(getX(index), getY(value)))
                         }
 
-                        // X Eksen Etiketleri (Native Canvas Text)
                         analysis.labels.forEachIndexed { index, label ->
                             val x = getX(index)
                             drawContext.canvas.nativeCanvas.drawText(

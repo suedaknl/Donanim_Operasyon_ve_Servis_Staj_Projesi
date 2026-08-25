@@ -11,11 +11,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.NotificationRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun AdminLoginScreen(
     authRepository: AuthRepository,
+    notificationRepository: NotificationRepository, // <-- FCM Token yönetimi için eklendi
     onLoginSuccess: () -> Unit
 ) {
     // Firebase Auth Repository ve Coroutine Scope
@@ -88,16 +92,30 @@ fun AdminLoginScreen(
                         coroutineScope.launch {
                             // AuthRepository üzerinden Firebase'e giriş isteği
                             val result = authRepository.signInWithEmailAndPassword(username, password)
-                            isLoading = false
 
                             result.fold(
-                                onSuccess = {
+                                onSuccess = { firebaseUser ->
+                                    // Başarılı girişte FCM Token'ı alıp notification_users koleksiyonuna kaydediyoruz
+                                    try {
+                                        val fcmToken = FirebaseMessaging.getInstance().token.await()
+                                        notificationRepository.saveToken(
+                                            uid = firebaseUser.uid,
+                                            role = "ADMIN",
+                                            personnelId = null,
+                                            token = fcmToken
+                                        )
+                                    } catch (e: Exception) {
+                                        // Token alınamazsa login akışı kesilmez, hata loglanır
+                                    }
+
+                                    isLoading = false
                                     // Başarılı girişte navigasyonu tetikle
                                     sessionManager.saveSession(isRememberMe = rememberMe, role = "ADMIN")
                                     sessionManager.saveLastUsername(username)
                                     onLoginSuccess()
                                 },
                                 onFailure = {
+                                    isLoading = false
                                     // Hatalı giriş durumunda UI'ı bozmadan genel hatayı göster
                                     generalError = "Giriş başarısız: E-posta veya şifre hatalı."
                                 }

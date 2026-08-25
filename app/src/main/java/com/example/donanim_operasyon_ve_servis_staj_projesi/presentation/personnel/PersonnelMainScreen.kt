@@ -43,6 +43,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelV
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.components.NotificationPermissionHandler // <-- FCM İzin Handler Eklendi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +60,9 @@ fun PersonnelMainScreen(
     onNavigateToOvertime: () -> Unit,
     onNavigateToCameraForService: (Int, String) -> Unit = { _, _ -> }
 ) {
+    // Android 13+ Bildirim İzni Kontrolü / İsteme Bileşeni
+    NotificationPermissionHandler()
+
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)

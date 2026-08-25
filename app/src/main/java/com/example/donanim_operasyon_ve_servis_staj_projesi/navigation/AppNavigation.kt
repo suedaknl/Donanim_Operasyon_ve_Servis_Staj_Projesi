@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
@@ -31,6 +32,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.camera.
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.ClosingFormScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.NotificationRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.AdminMainScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.detail.PersonnelDetailScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.personnel.detail.PersonnelDetailViewModel
@@ -48,21 +50,27 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.ShiftViewM
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.shift.PersonnelShiftScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.overtime.PersonnelOvertimeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.overtime.AdminOvertimeScreen
+import kotlinx.coroutines.launch
 
 @Composable
 fun AppNavigation(
-    authRepository: AuthRepository
+    authRepository: AuthRepository,
+    notificationRepository: NotificationRepository
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     val sharedServiceViewModel: ServiceViewModel = hiltViewModel()
+
     val sessionManager = remember { SessionManager(context) }
+
     NavHost(navController = navController, startDestination = "splash") {
 
         composable("splash") {
             SplashScreen(
                 authRepository = authRepository,
+                notificationRepository = notificationRepository,
                 onSplashFinished = { destination ->
                     navController.navigate(destination) {
                         popUpTo("splash") { inclusive = true }
@@ -81,6 +89,7 @@ fun AppNavigation(
         composable("admin_login") {
             AdminLoginScreen(
                 authRepository = authRepository,
+                notificationRepository = notificationRepository,
                 onLoginSuccess = {
                     navController.navigate("home") {
                         popUpTo("welcome") { inclusive = true }
@@ -93,6 +102,7 @@ fun AppNavigation(
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
             PersonnelLoginScreen(
                 authRepository = authRepository,
+                notificationRepository = notificationRepository,
                 viewModel = personnelViewModel,
                 onLoginSuccess = { personnelId ->
                     navController.navigate("personnel_welcome/$personnelId") {
@@ -185,10 +195,20 @@ fun AppNavigation(
                     navController.navigate("add_service?serviceId=$serviceId")
                 },
                 onLogOut = {
-                    authRepository.signOut()
-                    sessionManager.clearSession()
-                    navController.navigate(route = "welcome") {
-                        popUpTo(0)
+                    coroutineScope.launch {
+                        val currentUserUid = authRepository.getCurrentUser()?.uid
+                        if (!currentUserUid.isNullOrBlank()) {
+                            try {
+                                notificationRepository.clearToken(currentUserUid)
+                            } catch (e: Exception) {
+                                // Token temizlenemezse logout takılmamalı
+                            }
+                        }
+                        authRepository.signOut()
+                        sessionManager.clearSession()
+                        navController.navigate(route = "welcome") {
+                            popUpTo(0)
+                        }
                     }
                 }
             )
@@ -516,10 +536,20 @@ fun AppNavigation(
                 },
 
                 onLogOut = {
-                    authRepository.signOut()
-                    sessionManager.clearSession()
-                    navController.navigate("welcome") {
-                        popUpTo(0)
+                    coroutineScope.launch {
+                        val currentUserUid = authRepository.getCurrentUser()?.uid
+                        if (!currentUserUid.isNullOrBlank()) {
+                            try {
+                                notificationRepository.clearToken(currentUserUid)
+                            } catch (e: Exception) {
+                                // Token temizlenemezse logout takılmamalı
+                            }
+                        }
+                        authRepository.signOut()
+                        sessionManager.clearSession()
+                        navController.navigate("welcome") {
+                            popUpTo(0)
+                        }
                     }
                 },
 

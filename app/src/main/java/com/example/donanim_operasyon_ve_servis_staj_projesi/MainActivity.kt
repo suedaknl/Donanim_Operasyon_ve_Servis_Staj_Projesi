@@ -13,12 +13,16 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.ui.theme.Donanim_Ope
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.NotificationRepository
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var authRepository: AuthRepository
+
+    @Inject
+    lateinit var notificationRepository: NotificationRepository // <-- EKLENDİ
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,9 +34,9 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // Artık uygulamamız Navigasyon dosyası üzerinden başlıyor
                     AppNavigation(
-                        authRepository = authRepository
+                        authRepository = authRepository,
+                        notificationRepository = notificationRepository // <-- EKLENDİ
                     )
                 }
             }
