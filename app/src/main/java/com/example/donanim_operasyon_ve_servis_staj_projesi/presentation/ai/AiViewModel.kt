@@ -12,16 +12,22 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.PersonnelDao
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.PersonnelRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.WorkforceRepository
+import com.google.firebase.auth.FirebaseAuth
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @HiltViewModel
 class AiViewModel @Inject constructor(
     private val repository: AiRepository,
     private val serviceRepository: ServiceRepository,
     private val personnelRepository: PersonnelRepository,
-    private val workforceRepository: WorkforceRepository
+    private val workforceRepository: WorkforceRepository,
+    private val personnelDao: PersonnelDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AiUiState())
@@ -41,7 +47,7 @@ class AiViewModel @Inject constructor(
     fun sendMessage(text: String, role: String, contextOverride: String? = null) {
         if (text.isBlank()) return
 
-        Log.d("AiViewModel", "sendMessage started with text: $text, role: $role")
+        Log.d("AiViewModel", "sendMessage started with text: $text, role: '$role'")
 
         val userMessage = AiMessage(text = text, sender = AiSender.USER)
 
@@ -58,7 +64,9 @@ class AiViewModel @Inject constructor(
                 val history = _uiState.value.messages.dropLast(1)
                 var finalContext = ""
 
-                if (role.equals("ADMIN", ignoreCase = true)) {
+                val normalizedRole = role.trim().uppercase()
+
+                if (normalizedRole == "ADMIN") {
                     val allServices = try {
                         serviceRepository.getAllRecords()
                     } catch (e: Exception) {
@@ -77,14 +85,14 @@ class AiViewModel @Inject constructor(
                         emptyList()
                     }
 
-                    val activeJobs = allServices.filter {
-                        val st = it.status.trim()
+                    val activeJobs = allServices.filter { s ->
+                        val st = s.status.trim()
                         st.isNotEmpty() &&
                                 st != ServiceStatus.TAMAMLANDI &&
                                 st != ServiceStatus.IPTAL &&
                                 !st.equals("Tamamlandı", ignoreCase = true) &&
                                 !st.equals("İptal", ignoreCase = true) &&
-                                !it.isArchived
+                                !s.isArchived
                     }.sortedByDescending { it.id }.take(30)
 
                     val totalOpen = activeJobs.size
@@ -93,7 +101,7 @@ class AiViewModel @Inject constructor(
                         it.status == ServiceStatus.ISLEME_BASLANDI ||
                                 it.status == ServiceStatus.PARCA_BEKLENIYOR ||
                                 it.status.equals("İşleme Başlandı", ignoreCase = true) ||
-                                it.status.equals("Parça Bekleniyor", ignoreCase = true)
+                                statusMatchesInProgress(it.status)
                     }
                     val onTheWay = activeJobs.count { it.status == ServiceStatus.YOLDA || it.status.equals("Yolda", ignoreCase = true) }
 
@@ -134,6 +142,86 @@ $jobDetails
 İZİN TALEPLERİ VE DURUMLARI:
 $leaveDetails
                     """.trimIndent()
+
+                } else if (normalizedRole == "PERSONEL" || normalizedRole == "PERSONNEL") {
+                    val firebaseUser = FirebaseAuth.getInstance().currentUser
+                    val currentUid = firebaseUser?.uid
+                    val currentEmail = firebaseUser?.email
+
+                    val personnelList = try {
+                        personnelRepository.getAllPersonnelList()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+
+                    val currentPersonnel = personnelList.find { p ->
+                        (!currentUid.isNullOrBlank() && p.firebaseUid == currentUid) ||
+                                (!currentEmail.isNullOrBlank() && p.email.equals(currentEmail, ignoreCase = true))
+                    } ?: personnelList.firstOrNull()
+
+                    val personnelId = currentPersonnel?.id ?: 1
+                    val personnelName = currentPersonnel?.fullName ?: "Personel"
+
+                    val allServices = try {
+                        serviceRepository.getAllRecords()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+
+                    val ownActiveJobs = allServices.filter { j ->
+                        val st = j.status.trim()
+                        j.assignedPersonnelId == personnelId &&
+                                st.isNotEmpty() &&
+                                st != ServiceStatus.TAMAMLANDI &&
+                                st != ServiceStatus.IPTAL &&
+                                !st.equals("Tamamlandı", ignoreCase = true) &&
+                                !st.equals("İptal", ignoreCase = true) &&
+                                !j.isArchived
+                    }.sortedByDescending { it.id }.take(15)
+
+                    val currentActiveJob = ownActiveJobs.firstOrNull { j ->
+                        j.status.equals("İşleme Başlandı", ignoreCase = true) ||
+                                j.status == ServiceStatus.ISLEME_BASLANDI ||
+                                j.status.equals("Yolda", ignoreCase = true) ||
+                                j.status == ServiceStatus.YOLDA
+                    } ?: ownActiveJobs.firstOrNull()
+
+                    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                    val todayStr = dateFormat.format(Date())
+
+                    // Lokasyon, seri no ve cihaz modeli kaldırıldı
+                    val currentJobDetail = if (currentActiveJob != null) {
+                        """
+MEVCUT AKTİF GÖREV:
+İş Emri ID: #${currentActiveJob.id}
+Firma: ${currentActiveJob.companyName}
+Cihaz Tipi: ${currentActiveJob.deviceType}
+Öncelik: ${currentActiveJob.priority}
+Durum: ${currentActiveJob.status}
+Arıza/Talep Açıklaması: ${currentActiveJob.issueDescription ?: "Açıklama girilmemiş."}
+                        """.trimIndent()
+                    } else {
+                        "Şu an atanmış aktif bir göreviniz bulunmuyor."
+                    }
+
+                    val otherJobsList = ownActiveJobs.filter { j -> j.id != currentActiveJob?.id }.joinToString("\n") { j ->
+                        "- #${j.id} | Firma: ${j.companyName} | Cihaz: ${j.deviceType} | Durum: ${j.status} | Öncelik: ${j.priority}"
+                    }.ifEmpty { "Başka aktif görev bulunmuyor." }
+
+                    finalContext = """
+ROL: PERSONNEL
+PERSONEL: $personnelName
+BUGÜN: $todayStr
+
+$currentJobDetail
+
+DİĞER AKTİF İŞLERİM:
+$otherJobsList
+
+YÖNERGE: Kullanıcı işlerini sorduğunda lokasyon, seri no veya cihaz modeli okumadan sadece yukarıdaki temel bilgileri (Firma, Cihaz Tipi, Durum, Arıza Açıklaması) kısa ve net bir dille özetle. Öneri ve kontrol adımlarını SADECE kullanıcı özellikle sorduğunda ver.
+                    """.trimIndent()
+
+                    Log.d("PersonnelAiContext", "matchedPersonnelId=$personnelId name=$personnelName services=${ownActiveJobs.size}")
                 }
 
                 val responseText = repository.sendMessage(text, role, history, finalContext)
@@ -148,15 +236,19 @@ $leaveDetails
                         isLoading = false
                     )
                 }
-            } catch (e: Exception) {
-                Log.e("AiViewModel", "sendMessage failed: ${e.message}", e)
+            } catch (ex: Exception) {
+                Log.e("AiViewModel", "sendMessage failed: ${ex.message}", ex)
                 _uiState.update { state ->
                     state.copy(
                         isLoading = false,
-                        errorMessage = e.localizedMessage ?: "AI servisine ulaşılamadı."
+                        errorMessage = ex.localizedMessage ?: "AI servisine ulaşılamadı."
                     )
                 }
             }
         }
+    }
+
+    private fun statusMatchesInProgress(status: String): Boolean {
+        return status.equals("Parça Bekleniyor", ignoreCase = true)
     }
 }
