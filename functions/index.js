@@ -10,6 +10,42 @@ admin.initializeApp();
 
 setGlobalOptions({maxInstances: 10});
 
+/**
+ * Helper to create a notification record in Firestore.
+ * @param {Object} params - The notification parameters.
+ * @param {string} params.recipientUid - The recipient user UID.
+ * @param {string} params.role - The recipient role (ADMIN or PERSONNEL).
+ * @param {string} params.type - The notification type.
+ * @param {string} params.title - The notification title.
+ * @param {string} params.body - The notification body.
+ * @param {string} [params.targetId] - The optional target ID.
+ * @return {Promise<void>}
+ */
+async function createNotificationRecord({
+  recipientUid,
+  role,
+  type,
+  title,
+  body,
+  targetId,
+}) {
+  try {
+    if (!recipientUid) return;
+    await admin.firestore().collection("notifications").add({
+      recipientUid: recipientUid,
+      role: role,
+      type: type,
+      title: title || "",
+      body: body || "",
+      targetId: targetId || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      isRead: false,
+    });
+  } catch (error) {
+    logger.error("Error creating notification history record:", error);
+  }
+}
+
 exports.onServiceAssignedDirectly = onDocumentUpdated(
     "services/{serviceId}",
     async (event) => {
@@ -62,6 +98,19 @@ exports.onServiceAssignedDirectly = onDocumentUpdated(
         return;
       }
 
+      const title = "Yeni İş Emri";
+      const body = "Size yeni bir iş emri atandı.";
+
+      // Firestore Bildirim Merkezi Geçmişine Kayıt Ekleme
+      await createNotificationRecord({
+        recipientUid: assignedUid,
+        role: "PERSONNEL",
+        type: "SERVICE_ASSIGNED",
+        title: title,
+        body: body,
+        targetId: String(serviceId),
+      });
+
       try {
         const userDocRef = admin
             .firestore()
@@ -91,9 +140,6 @@ exports.onServiceAssignedDirectly = onDocumentUpdated(
           );
           return;
         }
-
-        const title = "Yeni İş Emri";
-        const body = "Size yeni bir iş emri atandı.";
 
         const message = {
           token: fcmToken,
@@ -150,6 +196,18 @@ exports.onLeaveRequestCreated = onDocumentCreated(
 
         const sendPromises = adminsSnapshot.docs.map(async (doc) => {
           const adminData = doc.data();
+          const adminUid = doc.id; // Admin Firebase UID
+
+          // Firestore Bildirim Merkezi Geçmişine Kayıt Ekleme
+          await createNotificationRecord({
+            recipientUid: adminUid,
+            role: "ADMIN",
+            type: "LEAVE_REQUEST_CREATED",
+            title: title,
+            body: body,
+            targetId: String(leaveId),
+          });
+
           const fcmToken = adminData ? adminData.fcmToken : null;
 
           if (
@@ -260,6 +318,18 @@ exports.onLeaveRequestUpdated = onDocumentUpdated(
 
         const sendPromises = usersSnapshot.docs.map(async (doc) => {
           const userData = doc.data();
+          const personnelUid = doc.id; // Personel Firebase UID
+
+          // Firestore Bildirim Merkezi Geçmişine Kayıt Ekleme
+          await createNotificationRecord({
+            recipientUid: personnelUid,
+            role: "PERSONNEL",
+            type: type,
+            title: title,
+            body: body,
+            targetId: String(leaveId),
+          });
+
           const fcmToken = userData ? userData.fcmToken : null;
 
           if (
@@ -309,6 +379,99 @@ exports.onLeaveRequestUpdated = onDocumentUpdated(
     },
 );
 
+/**
+ * Triggers when a new shift document is created.
+ * Sends FCM notification and logs notification history to Firestore.
+ */
+exports.onShiftCreated = onDocumentCreated(
+    "shifts/{shiftId}",
+    async (event) => {
+      const shiftId = event.params.shiftId;
+      const afterData = event.data.data();
+
+      if (!afterData) {
+        return;
+      }
+
+      logger.info(`SHIFT_CREATED triggered shiftId=${shiftId}`);
+
+      const personnelId = afterData.personnelId;
+      if (personnelId === undefined || personnelId === null) {
+        logger.info(
+            `SHIFT_CREATED skipped reason=no_personnel_id shiftId=${shiftId}`,
+        );
+        return;
+      }
+
+      try {
+        const usersSnapshot = await admin
+            .firestore()
+            .collection("notification_users")
+            .where("personnelId", "==", Number(personnelId))
+            .get();
+
+        if (usersSnapshot.empty) {
+          logger.info(
+              `SHIFT_CREATED skipped reason=user_not_found shiftId=${shiftId}`,
+          );
+          return;
+        }
+
+        const title = "Yeni Vardiya";
+        const body = "Size yeni bir vardiya atandı.";
+        const type = "SHIFT_CREATED";
+
+        const sendPromises = usersSnapshot.docs.map(async (doc) => {
+          const userData = doc.data();
+          const personnelUid = doc.id;
+
+          await createNotificationRecord({
+            recipientUid: personnelUid,
+            role: "PERSONNEL",
+            type: type,
+            title: title,
+            body: body,
+            targetId: String(shiftId),
+          });
+
+          const fcmToken = userData ? userData.fcmToken : null;
+          if (
+            !fcmToken ||
+            typeof fcmToken !== "string" ||
+            fcmToken.trim() === ""
+          ) {
+            return;
+          }
+
+          const message = {
+            token: fcmToken,
+            notification: {
+              title: title,
+              body: body,
+            },
+            data: {
+              type: type,
+              targetId: String(shiftId),
+              title: title,
+              body: body,
+            },
+          };
+
+          try {
+            await admin.messaging().send(message);
+            logger.info(`SHIFT_CREATED sent shiftId=${shiftId}`);
+          } catch (err) {
+            logger.error(`SHIFT_CREATED error shiftId=${shiftId}`, err);
+          }
+        });
+
+        await Promise.all(sendPromises);
+      } catch (error) {
+        logger.error(`SHIFT_CREATED error shiftId=${shiftId}`, error);
+      }
+    },
+);
+
 exports.onShiftUpdated = onDocumentUpdated(
     "shifts/{shiftId}",
     async (event) => {
@@ -317,6 +480,85 @@ exports.onShiftUpdated = onDocumentUpdated(
       const afterData = event.data.after.data();
 
       if (!beforeData || !afterData) {
+        return;
+      }
+
+      // CANCELLED geçişini ayrı olarak yakalıyoruz (Vardiya İptal Edildi)
+      const isNewlyCancelled =
+        beforeData.status !== "CANCELLED" && afterData.status === "CANCELLED";
+
+      if (isNewlyCancelled) {
+        logger.info(`SHIFT_CANCELLED triggered shiftId=${shiftId}`);
+
+        const personnelId = afterData.personnelId;
+        if (personnelId === undefined || personnelId === null) {
+          return;
+        }
+
+        try {
+          const usersSnapshot = await admin
+              .firestore()
+              .collection("notification_users")
+              .where("personnelId", "==", Number(personnelId))
+              .get();
+
+          if (usersSnapshot.empty) {
+            return;
+          }
+
+          const title = "Vardiyanız İptal Edildi";
+          const body = "Planlanan vardiyanız iptal edildi.";
+          const type = "SHIFT_CANCELLED";
+
+          const sendPromises = usersSnapshot.docs.map(async (doc) => {
+            const userData = doc.data();
+            const personnelUid = doc.id;
+
+            // Firestore Bildirim Merkezi Geçmişine Kayıt Ekleme
+            await createNotificationRecord({
+              recipientUid: personnelUid,
+              role: "PERSONNEL",
+              type: type,
+              title: title,
+              body: body,
+              targetId: String(shiftId),
+            });
+
+            const fcmToken = userData ? userData.fcmToken : null;
+            if (
+              !fcmToken ||
+              typeof fcmToken !== "string" ||
+              fcmToken.trim() === ""
+            ) {
+              return;
+            }
+
+            const message = {
+              token: fcmToken,
+              notification: {
+                title: title,
+                body: body,
+              },
+              data: {
+                type: type,
+                targetId: String(shiftId),
+                title: title,
+                body: body,
+              },
+            };
+
+            try {
+              await admin.messaging().send(message);
+              logger.info(`SHIFT_CANCELLED sent shiftId=${shiftId}`);
+            } catch (err) {
+              logger.error(`SHIFT_CANCELLED error shiftId=${shiftId}`, err);
+            }
+          });
+
+          await Promise.all(sendPromises);
+        } catch (error) {
+          logger.error(`SHIFT_CANCELLED error shiftId=${shiftId}`, error);
+        }
         return;
       }
 
@@ -331,6 +573,10 @@ exports.onShiftUpdated = onDocumentUpdated(
         !isEndChanged &&
         !isStatusChanged
       ) {
+        return;
+      }
+
+      if (afterData.status === "CANCELLED") {
         return;
       }
 
@@ -362,11 +608,24 @@ exports.onShiftUpdated = onDocumentUpdated(
           return;
         }
 
-        const title = "Vardiya Güncellendi";
-        const body = "Vardiya planınız güncellendi.";
+        const title = "Vardiyanız Güncellendi";
+        const body = "Vardiya bilgileriniz güncellendi.";
+        const type = "SHIFT_UPDATED";
 
         const sendPromises = usersSnapshot.docs.map(async (doc) => {
           const userData = doc.data();
+          const personnelUid = doc.id; // Personel Firebase UID
+
+          // Firestore Bildirim Merkezi Geçmişine Kayıt Ekleme
+          await createNotificationRecord({
+            recipientUid: personnelUid,
+            role: "PERSONNEL",
+            type: type,
+            title: title,
+            body: body,
+            targetId: String(shiftId),
+          });
+
           const fcmToken = userData ? userData.fcmToken : null;
 
           if (
@@ -384,7 +643,7 @@ exports.onShiftUpdated = onDocumentUpdated(
               body: body,
             },
             data: {
-              type: "SHIFT_UPDATED",
+              type: type,
               targetId: String(shiftId),
               title: title,
               body: body,

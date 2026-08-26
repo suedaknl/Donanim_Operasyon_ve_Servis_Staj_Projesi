@@ -1,6 +1,7 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.shift
 
 import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -244,17 +245,34 @@ fun ShiftFormDialog(
     var dateStr by remember { mutableStateOf(initialShift?.shiftDate ?: "") }
     var startTimeStr by remember { mutableStateOf(initialShift?.startTime ?: "08:00") }
     var endTimeStr by remember { mutableStateOf(initialShift?.endTime ?: "17:00") }
+    var validationError by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initialShift == null) "Yeni Vardiya Ekle" else "Vardiya Düzenle", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (validationError != null) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.errorContainer
+                    ) {
+                        Text(
+                            text = validationError!!,
+                            modifier = Modifier.padding(8.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+
+                // Tarih Seçici Alanı
                 OutlinedTextField(
                     value = dateStr,
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Tarih (YYYY-MM-DD)") },
+                    trailingIcon = { Icon(Icons.Default.DateRange, contentDescription = "Tarih Seç") },
                     modifier = Modifier.fillMaxWidth().clickable {
                         DatePickerDialog(
                             context,
@@ -270,27 +288,91 @@ fun ShiftFormDialog(
                     colors = OutlinedTextFieldDefaults.colors(
                         disabledTextColor = MaterialTheme.colorScheme.onSurface,
                         disabledBorderColor = MaterialTheme.colorScheme.outline,
-                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 )
 
+                // Başlangıç Saati Seçici Alanı (TimePickerDialog)
                 OutlinedTextField(
                     value = startTimeStr,
-                    onValueChange = { startTimeStr = it },
+                    onValueChange = {},
+                    readOnly = true,
                     label = { Text("Başlangıç Saati (HH:mm)") },
-                    modifier = Modifier.fillMaxWidth()
+                    trailingIcon = { Icon(Icons.Default.Schedule, contentDescription = "Saat Seç") },
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        val parts = startTimeStr.split(":")
+                        val initHour = parts.getOrNull(0)?.toIntOrNull() ?: 8
+                        val initMinute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+
+                        TimePickerDialog(
+                            context,
+                            { _, hour, minute ->
+                                startTimeStr = String.format(Locale.getDefault(), "%02d:%02d", hour, minute)
+                            },
+                            initHour,
+                            initMinute,
+                            true // 24 saat formatı
+                        ).show()
+                    },
+                    enabled = false,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
 
+                // Bitiş Saati Seçici Alanı (TimePickerDialog)
                 OutlinedTextField(
                     value = endTimeStr,
-                    onValueChange = { endTimeStr = it },
+                    onValueChange = {},
+                    readOnly = true,
                     label = { Text("Bitiş Saati (HH:mm)") },
-                    modifier = Modifier.fillMaxWidth()
+                    trailingIcon = { Icon(Icons.Default.Schedule, contentDescription = "Saat Seç") },
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        val parts = endTimeStr.split(":")
+                        val initHour = parts.getOrNull(0)?.toIntOrNull() ?: 17
+                        val initMinute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+
+                        TimePickerDialog(
+                            context,
+                            { _, hour, minute ->
+                                endTimeStr = String.format(Locale.getDefault(), "%02d:%02d", hour, minute)
+                            },
+                            initHour,
+                            initMinute,
+                            true // 24 saat formatı
+                        ).show()
+                    },
+                    enabled = false,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(dateStr, startTimeStr, endTimeStr) }) {
+            Button(onClick = {
+                if (dateStr.isBlank()) {
+                    validationError = "Lütfen bir tarih seçin."
+                    return@Button
+                }
+                if (startTimeStr.isBlank() || endTimeStr.isBlank()) {
+                    validationError = "Başlangıç ve bitiş saatleri boş olamaz."
+                    return@Button
+                }
+                if (endTimeStr <= startTimeStr) {
+                    validationError = "Bitiş saati başlangıç saatinden büyük olmalıdır."
+                    return@Button
+                }
+                validationError = null
+                onSave(dateStr, startTimeStr, endTimeStr)
+            }) {
                 Text("Kaydet")
             }
         },
