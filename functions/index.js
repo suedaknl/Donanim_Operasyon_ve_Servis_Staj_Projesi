@@ -3,8 +3,17 @@ const {
   onDocumentUpdated,
   onDocumentCreated,
 } = require("firebase-functions/v2/firestore");
+const {
+  onCall,
+  HttpsError,
+} = require("firebase-functions/v2/https");
+const {defineSecret} = require("firebase-functions/params");
+
 const admin = require("firebase-admin");
 const logger = require("firebase-functions/logger");
+
+const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
+const GROQ_API_KEY = defineSecret("GROQ_API_KEY");
 
 admin.initializeApp();
 
@@ -101,7 +110,6 @@ exports.onServiceAssignedDirectly = onDocumentUpdated(
       const title = "Yeni İş Emri";
       const body = "Size yeni bir iş emri atandı.";
 
-      // Firestore Bildirim Merkezi Geçmişine Kayıt Ekleme
       await createNotificationRecord({
         recipientUid: assignedUid,
         role: "PERSONNEL",
@@ -196,9 +204,8 @@ exports.onLeaveRequestCreated = onDocumentCreated(
 
         const sendPromises = adminsSnapshot.docs.map(async (doc) => {
           const adminData = doc.data();
-          const adminUid = doc.id; // Admin Firebase UID
+          const adminUid = doc.id;
 
-          // Firestore Bildirim Merkezi Geçmişine Kayıt Ekleme
           await createNotificationRecord({
             recipientUid: adminUid,
             role: "ADMIN",
@@ -318,9 +325,8 @@ exports.onLeaveRequestUpdated = onDocumentUpdated(
 
         const sendPromises = usersSnapshot.docs.map(async (doc) => {
           const userData = doc.data();
-          const personnelUid = doc.id; // Personel Firebase UID
+          const personnelUid = doc.id;
 
-          // Firestore Bildirim Merkezi Geçmişine Kayıt Ekleme
           await createNotificationRecord({
             recipientUid: personnelUid,
             role: "PERSONNEL",
@@ -379,10 +385,6 @@ exports.onLeaveRequestUpdated = onDocumentUpdated(
     },
 );
 
-/**
- * Triggers when a new shift document is created.
- * Sends FCM notification and logs notification history to Firestore.
- */
 exports.onShiftCreated = onDocumentCreated(
     "shifts/{shiftId}",
     async (event) => {
@@ -483,7 +485,6 @@ exports.onShiftUpdated = onDocumentUpdated(
         return;
       }
 
-      // CANCELLED geçişini ayrı olarak yakalıyoruz (Vardiya İptal Edildi)
       const isNewlyCancelled =
         beforeData.status !== "CANCELLED" && afterData.status === "CANCELLED";
 
@@ -514,7 +515,6 @@ exports.onShiftUpdated = onDocumentUpdated(
             const userData = doc.data();
             const personnelUid = doc.id;
 
-            // Firestore Bildirim Merkezi Geçmişine Kayıt Ekleme
             await createNotificationRecord({
               recipientUid: personnelUid,
               role: "PERSONNEL",
@@ -614,9 +614,8 @@ exports.onShiftUpdated = onDocumentUpdated(
 
         const sendPromises = usersSnapshot.docs.map(async (doc) => {
           const userData = doc.data();
-          const personnelUid = doc.id; // Personel Firebase UID
+          const personnelUid = doc.id;
 
-          // Firestore Bildirim Merkezi Geçmişine Kayıt Ekleme
           await createNotificationRecord({
             recipientUid: personnelUid,
             role: "PERSONNEL",
@@ -673,3 +672,365 @@ exports.onShiftUpdated = onDocumentUpdated(
       }
     },
 );
+
+// ============================================================
+// AI ASSISTANT
+// Gemini -> Groq fallback
+// ============================================================
+
+exports.askAiAssistant = onCall(
+    {
+      region: "europe-west1",
+      secrets: [GEMINI_API_KEY, GROQ_API_KEY],
+      timeoutSeconds: 60,
+      memory: "256MiB",
+    },
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated",
+            "AI Asistanı kullanmak için giriş yapmalısınız.",
+        );
+      }
+
+      const data = request.data || {};
+
+      const message =
+        typeof data.message === "string" ? data.message.trim() : "";
+
+      const role =
+        typeof data.role === "string" ?
+          data.role.trim().toUpperCase() :
+          "";
+
+      const history = Array.isArray(data.history) ?
+        data.history.slice(-12) :
+        [];
+
+      const context =
+        typeof data.context === "string" ?
+          data.context.trim() :
+          "";
+
+      if (!message) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Mesaj boş olamaz.",
+        );
+      }
+
+      if (message.length > 4000) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Mesaj çok uzun.",
+        );
+      }
+
+      if (!["ADMIN", "PERSONNEL"].includes(role)) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Geçersiz kullanıcı rolü.",
+        );
+      }
+
+      const systemPrompt = createAiSystemPrompt(role, context);
+
+      try {
+        const geminiAnswer = await askGemini(
+            systemPrompt,
+            history,
+            message,
+        );
+
+        if (geminiAnswer) {
+          return {
+            answer: geminiAnswer,
+            provider: "gemini",
+          };
+        }
+      } catch (error) {
+        console.error(
+            "Gemini AI hatası:",
+            (error && error.message) || error,
+        );
+      }
+
+      try {
+        const groqAnswer = await askGroq(
+            systemPrompt,
+            history,
+            message,
+        );
+
+        if (groqAnswer) {
+          return {
+            answer: groqAnswer,
+            provider: "groq",
+          };
+        }
+      } catch (error) {
+        console.error(
+            "Groq AI hatası:",
+            (error && error.message) || error,
+        );
+      }
+
+      throw new HttpsError(
+          "unavailable",
+          "AI servislerine şu anda ulaşılamıyor.",
+      );
+    },
+);
+
+/**
+ * Creates the AI system prompt based on user role and context.
+ * @param {string} role - The user role (ADMIN or PERSONNEL).
+ * @param {string} context - Optional application context data.
+ * @return {string} The constructed system prompt.
+ */
+function createAiSystemPrompt(role, context) {
+  let prompt = "";
+
+  if (role === "ADMIN") {
+    prompt = `
+Sen bir Donanım Operasyon ve Servis Yönetim AI Asistanısın.
+
+Kullanıcı ADMIN rolündedir.
+
+Görevin yalnızca verileri tekrar etmek değildir.
+Yöneticiye karar desteği sağlamalısın.
+
+Özellikle:
+- bekleyen iş emirlerini değerlendir,
+- öncelik seviyelerini dikkate al,
+- uzun süredir bekleyen işleri fark et,
+- kritik işleri öne çıkar,
+- personel iş yükünü değerlendir,
+- gecikme risklerini belirt,
+- operasyonel sorunları tespit et,
+- hangi işe neden önce müdahale edilmesi gerektiğini açıkla,
+- kısa ve uygulanabilir öneriler sun.
+
+Veri yoksa veri varmış gibi davranma.
+Bilmediğin operasyonel bilgileri uydurma.
+
+Kullanıcı genel bir soru sorarsa normal şekilde yardımcı ol.
+Yanıtlarını Türkçe, açık ve kısa tut.
+`;
+  } else {
+    prompt = `
+Sen bir Donanım Operasyon ve Servis Saha AI Asistanısın.
+
+Kullanıcı PERSONEL rolündedir.
+
+Görevin saha personeline operasyon sırasında yardımcı olmaktır.
+
+Özellikle:
+- atanmış işleri anlamasına yardımcı ol,
+- arıza açıklamalarını yorumla,
+- servis sürecində izlenebilecek adımları öner,
+- servis notlarının daha anlaşılır yazılmasına yardımcı ol,
+- görev önceliklendirmesinde destek ol,
+- kullanıcıya kısa ve uygulanabilir öneriler sun.
+
+Tehlikeli veya emin olmadığın teknik işlemleri kesin bilgi gibi verme.
+Veri yoksa veri varmış gibi davranma.
+Bilmediğin bilgileri uydurma.
+
+Yanıtlarını Türkçe, açık ve kısa tut.
+`;
+  }
+
+  if (context) {
+    prompt += `
+
+Uygulamadan sağlanan güncel bağlam:
+
+${context}
+
+Bu bağlamı yalnızca gerektiğinde kullan.
+Bağlamda olmayan bilgileri uydurma.
+`;
+  }
+
+  return prompt.trim();
+}
+
+/**
+ * Calls Gemini API to generate a response.
+ * @param {string} systemPrompt - The system prompt.
+ * @param {Array} history - The chat conversation history.
+ * @param {string} message - The current user message.
+ * @return {Promise<string>} The AI response text.
+ */
+async function askGemini(systemPrompt, history, message) {
+  const apiKey = GEMINI_API_KEY.value();
+
+  const contents = [];
+
+  for (const item of history) {
+    if (!item || typeof item.content !== "string") {
+      continue;
+    }
+
+    const itemRole =
+      item.role === "assistant" ? "model" : "user";
+
+    contents.push({
+      role: itemRole,
+      parts: [
+        {
+          text: item.content,
+        },
+      ],
+    });
+  }
+
+  contents.push({
+    role: "user",
+    parts: [
+      {
+        text: message,
+      },
+    ],
+  });
+
+  const response = await fetch(
+      "https://generativelanguage.googleapis.com/" +
+      "v1beta/models/gemini-3.6-flash:generateContent" +
+      `?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [
+              {
+                text: systemPrompt,
+              },
+            ],
+          },
+          contents,
+          generationConfig: {
+            temperature: 0.4,
+            maxOutputTokens: 1000,
+          },
+        }),
+      },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+        `Gemini HTTP ${response.status}: ${errorText}`,
+    );
+  }
+
+  const data = await response.json();
+
+  const parts =
+    data &&
+    data.candidates &&
+    data.candidates[0] &&
+    data.candidates[0].content &&
+    data.candidates[0].content.parts ?
+      data.candidates[0].content.parts :
+      [];
+
+  let answer = "";
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (part && part.text) {
+      answer += part.text;
+    }
+  }
+  answer = answer.trim();
+
+  if (!answer) {
+    throw new Error("Gemini boş cevap döndürdü.");
+  }
+
+  return answer;
+}
+
+/**
+ * Calls Groq API to generate a response.
+ * @param {string} systemPrompt - The system prompt.
+ * @param {Array} history - The chat conversation history.
+ * @param {string} message - The current user message.
+ * @return {Promise<string>} The AI response text.
+ */
+async function askGroq(systemPrompt, history, message) {
+  const apiKey = GROQ_API_KEY.value();
+
+  const messages = [
+    {
+      role: "system",
+      content: systemPrompt,
+    },
+  ];
+
+  for (const item of history) {
+    if (!item || typeof item.content !== "string") {
+      continue;
+    }
+
+    messages.push({
+      role:
+        item.role === "assistant" ?
+          "assistant" :
+          "user",
+      content: item.content,
+    });
+  }
+
+  messages.push({
+    role: "user",
+    content: message,
+  });
+
+  const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-oss-20b",
+          messages,
+          temperature: 0.4,
+          max_tokens: 1000,
+        }),
+      },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+        `Groq HTTP ${response.status}: ${errorText}`,
+    );
+  }
+
+  const data = await response.json();
+
+  const answer =
+    data &&
+    data.choices &&
+    data.choices[0] &&
+    data.choices[0].message &&
+    data.choices[0].message.content ?
+      data.choices[0].message.content.trim() :
+      "";
+
+  if (!answer) {
+    throw new Error("Groq boş cevap döndürdü.");
+  }
+
+  return answer;
+}
