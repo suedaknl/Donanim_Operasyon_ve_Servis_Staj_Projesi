@@ -1,9 +1,11 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.leave
 
 import android.widget.Toast
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -14,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.LeaveRequestEntity
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.LeaveViewModel
@@ -213,12 +216,24 @@ fun AdminLeaveScreen(
                             SummaryMetricCard("Toplam Onaylı", approvedRequests.size.toString(), Modifier.weight(1f))
                         }
 
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Yatay kaydırılabilir (scrollable) filtre çubuğu
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             listOf("Tümü", "Şu An İzinli", "Yaklaşan", "Geçmiş").forEach { filter ->
                                 FilterChip(
                                     selected = activeFilter == filter,
                                     onClick = { activeFilter = filter },
-                                    label = { Text(filter) }
+                                    label = {
+                                        Text(
+                                            text = filter,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 )
                             }
                         }
@@ -450,11 +465,9 @@ private fun parseDate(dateStr: String): Calendar? {
 }
 
 private fun getLeaveStatusLabel(start: Calendar?, end: Calendar?, today: Calendar): String {
-    if (start == null || end == null) return "Bilinmiyor"
-
     val cleanToday = truncateTime(today)
-    val cleanStart = truncateTime(start)
-    val cleanEnd = truncateTime(end)
+    val cleanStart = truncateTime(start ?: return "Bilinmiyor")
+    val cleanEnd = truncateTime(end ?: return "Bilinmiyor")
 
     return when {
         !cleanToday.before(cleanStart) && !cleanToday.after(cleanEnd) -> "Şu An İzinli"

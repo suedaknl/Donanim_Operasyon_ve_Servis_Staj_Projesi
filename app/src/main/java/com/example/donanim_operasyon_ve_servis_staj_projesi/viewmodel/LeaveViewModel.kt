@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.LeaveRequestEntity
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.leave.ManageLeaveUseCase
-import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.leave.CalculateLeaveConflictUseCase
 import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.leave.LeaveConflictInfo
 import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.WorkforceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,8 +15,8 @@ import javax.inject.Inject
 @HiltViewModel
 class LeaveViewModel @Inject constructor(
     private val manageLeaveUseCase: ManageLeaveUseCase,
-    private val calculateLeaveConflictUseCase: CalculateLeaveConflictUseCase,
-    private val workforceRepository: WorkforceRepository // Doğrudan tüm verileri çekmek için eklendi
+    private val calculateLeaveConflictUseCase: com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.leave.CalculateLeaveConflictUseCase,
+    private val workforceRepository: WorkforceRepository
 ) : ViewModel() {
 
     private val _pendingRequests = MutableStateFlow<List<LeaveRequestEntity>>(emptyList())
@@ -75,7 +74,6 @@ class LeaveViewModel @Inject constructor(
         }
     }
 
-    // WorkforceRepository üzerinden TÜM izinleri dinleyip status'e göre anında süzüyoruz
     fun loadAllEvaluatedRequestsFromRepository() {
         viewModelScope.launch {
             try {
@@ -129,6 +127,36 @@ class LeaveViewModel @Inject constructor(
             _isLoading.value = false
             result.onSuccess {
                 _successMessage.value = "İzin talebi başarıyla oluşturuldu."
+                onComplete(true)
+            }.onFailure { e ->
+                _errorMessage.value = e.localizedMessage
+                onComplete(false)
+            }
+        }
+    }
+
+    fun updatePersonnelRequest(leaveRequest: LeaveRequestEntity, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = manageLeaveUseCase.updateLeaveRequest(leaveRequest)
+            _isLoading.value = false
+            result.onSuccess {
+                _successMessage.value = "İzin talebi güncellendi."
+                onComplete(true)
+            }.onFailure { e ->
+                _errorMessage.value = e.localizedMessage
+                onComplete(false)
+            }
+        }
+    }
+
+    fun deletePersonnelRequest(leaveRequest: LeaveRequestEntity, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = manageLeaveUseCase.deleteLeaveRequest(leaveRequest)
+            _isLoading.value = false
+            result.onSuccess {
+                _successMessage.value = "İzin talebi silindi."
                 onComplete(true)
             }.onFailure { e ->
                 _errorMessage.value = e.localizedMessage

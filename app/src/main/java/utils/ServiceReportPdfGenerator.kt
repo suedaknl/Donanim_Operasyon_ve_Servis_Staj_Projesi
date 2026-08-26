@@ -30,129 +30,95 @@ object ServiceReportPdfGenerator {
     ): File? {
 
         return try {
-
             val pdfDocument = PdfDocument()
 
-            val pageWidth = 595
-            val pageHeight = 842
+            val pageWidth = 595 // A4 width in points
+            val pageHeight = 842 // A4 height in points
 
             var pageNum = 1
-
-            var pageInfo = PdfDocument.PageInfo.Builder(
-                pageWidth,
-                pageHeight,
-                pageNum
-            ).create()
-
+            var pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
             var page = pdfDocument.startPage(pageInfo)
             var canvas = page.canvas
 
             // ---------------------------------------------------------
-            // PAINT AYARLARI
+            // PAINT & STYLING SETTINGS
             // ---------------------------------------------------------
-
             val textPaint = Paint().apply {
                 isAntiAlias = true
-                color = Color.parseColor("#444444")
+                color = Color.parseColor("#333333")
                 textSize = 10f
+                typeface = Typeface.DEFAULT
             }
 
             val titlePaint = Paint().apply {
                 isAntiAlias = true
-                color = Color.parseColor("#1976D2")
-                textSize = 18f
+                color = Color.parseColor("#1565C0")
+                textSize = 16f
                 typeface = Typeface.DEFAULT_BOLD
             }
 
-            val headerPaint = Paint().apply {
+            val sectionHeaderPaint = Paint().apply {
                 isAntiAlias = true
-                color = Color.parseColor("#333333")
+                color = Color.parseColor("#0D47A1")
                 textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+            }
+
+            val subHeaderPaint = Paint().apply {
+                isAntiAlias = true
+                color = Color.parseColor("#555555")
+                textSize = 10f
                 typeface = Typeface.DEFAULT_BOLD
             }
 
             val grayLinePaint = Paint().apply {
                 isAntiAlias = true
-                color = Color.parseColor("#CCCCCC")
+                color = Color.parseColor("#E0E0E0")
                 strokeWidth = 1f
             }
 
-            var yPos = 40f
+            val primaryLinePaint = Paint().apply {
+                isAntiAlias = true
+                color = Color.parseColor("#1565C0")
+                strokeWidth = 2f
+            }
 
+            var yPos = 45f
             val leftMargin = 40f
             val rightMargin = pageWidth - 40f
 
             // ---------------------------------------------------------
-            // YENİ SAYFA KONTROLÜ
+            // SAYFA KONTROLÜ VE OTOMATİK SAYFALAMA
             // ---------------------------------------------------------
-
             fun checkNewPage(neededHeight: Float) {
-
-                if (yPos + neededHeight > pageHeight - 40f) {
-
+                if (yPos + neededHeight > pageHeight - 50f) {
                     pdfDocument.finishPage(page)
-
                     pageNum++
-
-                    pageInfo = PdfDocument.PageInfo.Builder(
-                        pageWidth,
-                        pageHeight,
-                        pageNum
-                    ).create()
-
+                    pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
                     page = pdfDocument.startPage(pageInfo)
                     canvas = page.canvas
-
-                    yPos = 40f
+                    yPos = 45f
                 }
             }
 
             // ---------------------------------------------------------
-            // BAŞLIK
+            // BAŞLIK / ÜST BİLGİ
             // ---------------------------------------------------------
+            canvas.drawText("SERDİNÇ TEKNİK SERVİS RAPORU", leftMargin, yPos, titlePaint)
+            yPos += 16f
 
-            canvas.drawText(
-                "SERDİNÇ SERVİS RAPORU",
-                leftMargin,
-                yPos,
-                titlePaint
-            )
+            canvas.drawText("İş Emri #${record.id}  |  Firma: ${record.companyName}", leftMargin, yPos, subHeaderPaint)
+            yPos += 8f
 
-            yPos += 18f
-
-            canvas.drawText(
-                "İş Emri ID: #${record.id} | Firma: ${record.companyName}",
-                leftMargin,
-                yPos,
-                headerPaint
-            )
-
-            yPos += 10f
-
-            canvas.drawLine(
-                leftMargin,
-                yPos,
-                rightMargin,
-                yPos,
-                grayLinePaint
-            )
-
-            yPos += 20f
+            canvas.drawLine(leftMargin, yPos, rightMargin, yPos, primaryLinePaint)
+            yPos += 22f
 
             // ---------------------------------------------------------
-            // İŞ EMRİ BİLGİLERİ
+            // İŞ EMRİ BİLGİLERİ (TEK SÜTUN - TAŞMA YAPMAYAN DÜZEN)
             // ---------------------------------------------------------
-
-            checkNewPage(220f)
-
-            canvas.drawText(
-                "İŞ EMRİ BİLGİLERİ",
-                leftMargin,
-                yPos,
-                headerPaint
-            )
-
-            yPos += 18f
+            checkNewPage(180f)
+            canvas.drawText("İŞ EMRİ DETAYLARI", leftMargin, yPos, sectionHeaderPaint)
+            yPos += 16f
 
             val details = listOf(
                 "İş Emri No: #${record.id}",
@@ -165,538 +131,242 @@ object ServiceReportPdfGenerator {
                 "Lokasyon: ${record.location}",
                 "Açık Adres: ${record.address ?: "Belirtilmemiş"}",
                 "Planlanan Tarih: ${record.plannedDate ?: record.date}",
-                if (
-                    record.latitude != null &&
-                    record.longitude != null
-                ) {
+                if (record.latitude != null && record.longitude != null && record.latitude != 0.0) {
                     "Koordinat: ${record.latitude}, ${record.longitude}"
-                } else {
-                    null
-                }
+                } else null
             ).filterNotNull()
 
             details.forEach { detail ->
-
                 checkNewPage(16f)
-
-                canvas.drawText(
-                    "• $detail",
-                    leftMargin,
-                    yPos,
-                    textPaint
-                )
-
+                canvas.drawText("• $detail", leftMargin, yPos, textPaint)
                 yPos += 15f
             }
 
             yPos += 10f
-
-            canvas.drawLine(
-                leftMargin,
-                yPos,
-                rightMargin,
-                yPos,
-                grayLinePaint
-            )
-
+            canvas.drawLine(leftMargin, yPos, rightMargin, yPos, grayLinePaint)
             yPos += 20f
 
             // ---------------------------------------------------------
-            // ARIZA / TALEP
+            // ARIZA / TALEP AÇIKLAMASI
             // ---------------------------------------------------------
-
-            checkNewPage(50f)
-
-            canvas.drawText(
-                "ARIZA / TALEP AÇIKLAMASI",
-                leftMargin,
-                yPos,
-                headerPaint
-            )
-
+            checkNewPage(45f)
+            canvas.drawText("ARIZA / TALEP AÇIKLAMASI", leftMargin, yPos, sectionHeaderPaint)
             yPos += 16f
 
             canvas.drawText(
-                record.issueDescription.ifBlank {
-                    "Açıklama girilmemiş."
-                },
+                record.issueDescription.ifBlank { "Açıklama girilmemiş." },
                 leftMargin,
                 yPos,
                 textPaint
             )
-
-            yPos += 25f
+            yPos += 24f
 
             // ---------------------------------------------------------
             // SERVİS SONUÇ BİLGİLERİ
             // ---------------------------------------------------------
-
-            checkNewPage(60f)
-
-            canvas.drawText(
-                "SERVİS SONUÇ BİLGİLERİ",
-                leftMargin,
-                yPos,
-                headerPaint
-            )
-
+            checkNewPage(55f)
+            canvas.drawText("SERVİS SONUÇ BİLGİLERİ", leftMargin, yPos, sectionHeaderPaint)
             yPos += 16f
 
-            canvas.drawText(
-                "Mevcut Durum: ${record.status}",
-                leftMargin,
-                yPos,
-                textPaint
-            )
-
-            yPos += 14f
+            canvas.drawText("Mevcut Durum: ${record.status}", leftMargin, yPos, textPaint)
+            yPos += 16f
 
             if (!record.rejectionReason.isNullOrBlank()) {
-
-                canvas.drawText(
-                    "Red Nedeni: ${record.rejectionReason}",
-                    leftMargin,
-                    yPos,
-                    textPaint
-                )
-
-                yPos += 14f
+                canvas.drawText("Red Nedeni: ${record.rejectionReason}", leftMargin, yPos, textPaint)
+                yPos += 16f
             }
 
             yPos += 10f
-
-            canvas.drawLine(
-                leftMargin,
-                yPos,
-                rightMargin,
-                yPos,
-                grayLinePaint
-            )
-
+            canvas.drawLine(leftMargin, yPos, rightMargin, yPos, grayLinePaint)
             yPos += 20f
 
             // ---------------------------------------------------------
             // SERVİS NOTLARI
             // ---------------------------------------------------------
-
-            checkNewPage(50f)
-
-            canvas.drawText(
-                "SERVİS NOTLARI",
-                leftMargin,
-                yPos,
-                headerPaint
-            )
-
+            checkNewPage(45f)
+            canvas.drawText("SERVİS NOTLARI", leftMargin, yPos, sectionHeaderPaint)
             yPos += 16f
 
             if (notes.isEmpty()) {
-
-                canvas.drawText(
-                    "Servis notu bulunmamaktadır.",
-                    leftMargin,
-                    yPos,
-                    textPaint
-                )
-
+                canvas.drawText("Servis notu bulunmamaktadır.", leftMargin, yPos, textPaint)
                 yPos += 20f
-
             } else {
-
                 notes.forEach { note ->
-
-                    checkNewPage(20f)
-
-                    canvas.drawText(
-                        "• ${note.note}",
-                        leftMargin,
-                        yPos,
-                        textPaint
-                    )
-
+                    checkNewPage(18f)
+                    canvas.drawText("• ${note.note}", leftMargin, yPos, textPaint)
                     yPos += 16f
                 }
-
                 yPos += 10f
             }
 
             // ---------------------------------------------------------
-            // FOTOĞRAFLAR
+            // FOTOĞRAFLAR (GÜÇLENDİRİLMİŞ ÇÖZÜM)
             // ---------------------------------------------------------
-
             if (photos.isNotEmpty()) {
-
-                checkNewPage(100f)
-
-                canvas.drawText(
-                    "İŞLEM FOTOĞRAFLARI",
-                    leftMargin,
-                    yPos,
-                    headerPaint
-                )
-
-                yPos += 16f
+                checkNewPage(60f)
+                canvas.drawText("İŞLEM FOTOĞRAFLARI", leftMargin, yPos, sectionHeaderPaint)
+                yPos += 18f
 
                 photos.forEach { photo ->
-
                     try {
+                        val rawPath = listOf(photo.localUri, photo.photoUri)
+                            .firstOrNull { !it.isNullOrBlank() }
 
-                        val path = photo.localUri.ifBlank {
-                            photo.photoUri
-                        }
-
-                        if (!path.isNullOrBlank()) {
-
+                        if (!rawPath.isNullOrBlank()) {
                             val originalBitmap: Bitmap? = when {
-
-                                path.startsWith("content://") -> {
-
-                                    val uri = Uri.parse(path)
-
-                                    context.contentResolver
-                                        .openInputStream(uri)
-                                        ?.use { inputStream ->
-
-                                            BitmapFactory.decodeStream(
-                                                inputStream
-                                            )
+                                rawPath.startsWith("content://") -> {
+                                    try {
+                                        context.contentResolver.openInputStream(Uri.parse(rawPath))?.use {
+                                            BitmapFactory.decodeStream(it)
                                         }
+                                    } catch (e: Exception) {
+                                        null
+                                    }
                                 }
-
-                                path.startsWith("file://") ||
-                                        path.startsWith("/data/") -> {
-
-                                    val cleanPath =
-                                        path.removePrefix("file://")
-
-                                    BitmapFactory.decodeFile(
-                                        cleanPath
-                                    )
+                                rawPath.startsWith("http://") || rawPath.startsWith("https://") -> {
+                                    try {
+                                        val url = java.net.URL(rawPath)
+                                        val conn = url.openConnection() as java.net.HttpURLConnection
+                                        conn.doInput = true
+                                        conn.connect()
+                                        conn.inputStream.use { BitmapFactory.decodeStream(it) }
+                                    } catch (e: Exception) {
+                                        null
+                                    }
                                 }
-
                                 else -> {
-                                    null
+                                    val cleanPath = rawPath.removePrefix("file://")
+                                    val file = File(cleanPath)
+                                    if (file.exists()) {
+                                        BitmapFactory.decodeFile(file.absolutePath)
+                                    } else {
+                                        null
+                                    }
                                 }
                             }
 
                             if (originalBitmap != null) {
-
-                                val maxWidth = 150f
-                                val maxHeight = 120f
-
+                                val maxWidth = 180f
+                                val maxHeight = 130f
                                 val scale = minOf(
                                     maxWidth / originalBitmap.width,
                                     maxHeight / originalBitmap.height
                                 )
 
-                                val scaledWidth =
-                                    (originalBitmap.width * scale)
-                                        .toInt()
+                                val scaledWidth = (originalBitmap.width * scale).toInt()
+                                val scaledHeight = (originalBitmap.height * scale).toInt()
 
-                                val scaledHeight =
-                                    (originalBitmap.height * scale)
-                                        .toInt()
+                                val bitmap = Bitmap.createScaledBitmap(originalBitmap, scaledWidth, scaledHeight, true)
 
-                                val bitmap =
-                                    Bitmap.createScaledBitmap(
-                                        originalBitmap,
-                                        scaledWidth,
-                                        scaledHeight,
-                                        true
-                                    )
+                                checkNewPage(scaledHeight.toFloat() + 35f)
 
-                                checkNewPage(
-                                    scaledHeight.toFloat() + 30f
-                                )
-
-                                canvas.drawText(
-                                    "Kategori: ${
-                                        photo.photoType
-                                            ?: photo.photoCategory
-                                            ?: "DİĞER"
-                                    }",
-                                    leftMargin,
-                                    yPos,
-                                    textPaint
-                                )
-
+                                val catText = "Kategori: ${photo.photoType ?: photo.photoCategory ?: "GENEL"}"
+                                canvas.drawText(catText, leftMargin, yPos, subHeaderPaint)
                                 yPos += 14f
 
-                                canvas.drawBitmap(
-                                    bitmap,
-                                    leftMargin,
-                                    yPos,
-                                    null
-                                )
-
-                                yPos +=
-                                    scaledHeight.toFloat() + 15f
+                                canvas.drawBitmap(bitmap, leftMargin, yPos, null)
+                                yPos += scaledHeight.toFloat() + 18f
                             }
                         }
-
                     } catch (e: Exception) {
-
                         e.printStackTrace()
                     }
                 }
             }
 
-            // =========================================================
-            // MÜŞTERİ / YETKİLİ İMZASI
-            // =========================================================
-
-            checkNewPage(140f)
-
-            canvas.drawText(
-                "MÜŞTERİ / YETKİLİ İMZASI",
-                leftMargin,
-                yPos,
-                headerPaint
-            )
-
+            // ---------------------------------------------------------
+            // MÜŞTERİ / YETKİLİ İMZASI (GÜÇLENDİRİLMİŞ ÇÖZÜM)
+            // ---------------------------------------------------------
+            checkNewPage(130f)
+            canvas.drawText("MÜŞTERİ / YETKİLİ İMZASI", leftMargin, yPos, sectionHeaderPaint)
             yPos += 16f
 
             var sigBitmap: Bitmap? = null
 
-            // ---------------------------------------------------------
-            // 1. YENİ SİSTEM:
-            // X-Y-P JSON -> STROKE -> BITMAP
-            // ---------------------------------------------------------
-
             if (!signatureData.isNullOrBlank()) {
-
                 try {
-
-                    val strokes =
-                        SignatureConverter.fromJson(
-                            signatureData
-                        )
-
+                    val strokes = SignatureConverter.fromJson(signatureData)
                     if (strokes.isNotEmpty()) {
-
-                        sigBitmap =
-                            SignatureRenderer.renderBitmapFromStrokes(
-                                strokes = strokes,
-                                width = 800,
-                                height = 300,
-                                strokeWidth = 8f
-                            )
+                        sigBitmap = SignatureRenderer.renderBitmapFromStrokes(
+                            strokes = strokes,
+                            width = 800,
+                            height = 300,
+                            strokeWidth = 8f
+                        )
                     }
-
                 } catch (e: Exception) {
-
                     e.printStackTrace()
-                    sigBitmap = null
                 }
             }
 
-            // ---------------------------------------------------------
-            // 2. FALLBACK:
-            // ESKİ PNG / URI SİSTEMİ
-            // ---------------------------------------------------------
-
-            if (
-                sigBitmap == null &&
-                !signaturePath.isNullOrBlank()
-            ) {
-
+            if (sigBitmap == null && !signaturePath.isNullOrBlank()) {
                 try {
-
                     sigBitmap = when {
-
-                        signaturePath.startsWith("http://") ||
-                                signaturePath.startsWith("https://") -> {
-
-                            val url =
-                                java.net.URL(
-                                    signaturePath
-                                )
-
-                            val connection =
-                                url.openConnection()
-                                        as java.net.HttpURLConnection
-
-                            connection.doInput = true
-                            connection.connect()
-
-                            connection.inputStream.use {
+                        signaturePath.startsWith("http://") || signaturePath.startsWith("https://") -> {
+                            val url = java.net.URL(signaturePath)
+                            val conn = url.openConnection() as java.net.HttpURLConnection
+                            conn.doInput = true
+                            conn.connect()
+                            conn.inputStream.use { BitmapFactory.decodeStream(it) }
+                        }
+                        signaturePath.startsWith("content://") -> {
+                            context.contentResolver.openInputStream(Uri.parse(signaturePath))?.use {
                                 BitmapFactory.decodeStream(it)
                             }
                         }
-
-                        signaturePath.startsWith(
-                            "content://"
-                        ) -> {
-
-                            val uri =
-                                Uri.parse(
-                                    signaturePath
-                                )
-
-                            context.contentResolver
-                                .openInputStream(uri)
-                                ?.use { inputStream ->
-
-                                    BitmapFactory.decodeStream(
-                                        inputStream
-                                    )
-                                }
-                        }
-
                         else -> {
-
-                            val cleanPath =
-                                signaturePath.removePrefix(
-                                    "file://"
-                                )
-
-                            val file =
-                                File(cleanPath)
-
-                            if (file.exists()) {
-
-                                BitmapFactory.decodeFile(
-                                    file.absolutePath
-                                )
-
-                            } else {
-
-                                try {
-
-                                    val uri =
-                                        Uri.parse(
-                                            signaturePath
-                                        )
-
-                                    context.contentResolver
-                                        .openInputStream(uri)
-                                        ?.use { inputStream ->
-
-                                            BitmapFactory.decodeStream(
-                                                inputStream
-                                            )
-                                        }
-
-                                } catch (e: Exception) {
-
-                                    null
-                                }
-                            }
+                            val cleanPath = signaturePath.removePrefix("file://")
+                            val file = File(cleanPath)
+                            if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
                         }
                     }
-
                 } catch (e: Exception) {
-
                     e.printStackTrace()
-                    sigBitmap = null
                 }
             }
 
-            // ---------------------------------------------------------
-            // 3. İMZAYI PDF'E ÇİZ
-            // ---------------------------------------------------------
-
             if (sigBitmap != null) {
-
-                val maxWidth = 220f
-                val maxHeight = 100f
-
+                val maxWidth = 200f
+                val maxHeight = 80f
                 val scale = minOf(
                     maxWidth / sigBitmap.width.toFloat(),
                     maxHeight / sigBitmap.height.toFloat()
                 )
 
-                val scaledWidth =
-                    (sigBitmap.width * scale)
-                        .toInt()
+                val scaledWidth = (sigBitmap.width * scale).toInt()
+                val scaledHeight = (sigBitmap.height * scale).toInt()
+                val scaledSig = Bitmap.createScaledBitmap(sigBitmap, scaledWidth, scaledHeight, true)
 
-                val scaledHeight =
-                    (sigBitmap.height * scale)
-                        .toInt()
+                checkNewPage(scaledHeight.toFloat() + 30f)
 
-                val scaledSig =
-                    Bitmap.createScaledBitmap(
-                        sigBitmap,
-                        scaledWidth,
-                        scaledHeight,
-                        true
-                    )
+                canvas.drawBitmap(scaledSig, leftMargin, yPos, null)
+                yPos += scaledHeight.toFloat() + 8f
 
-                checkNewPage(
-                    scaledHeight.toFloat() + 35f
-                )
-
-                canvas.drawBitmap(
-                    scaledSig,
-                    leftMargin,
-                    yPos,
-                    null
-                )
-
-                yPos +=
-                    scaledHeight.toFloat() + 10f
-
-                canvas.drawText(
-                    "Müşteri Onay İmzası",
-                    leftMargin,
-                    yPos,
-                    textPaint
-                )
-
+                canvas.drawText("Müşteri Onay İmzası", leftMargin, yPos, textPaint)
                 yPos += 20f
-
             } else {
-
-                canvas.drawText(
-                    "İmza bulunmamaktadır.",
-                    leftMargin,
-                    yPos,
-                    textPaint
-                )
-
+                canvas.drawText("İmza bulunmamaktadır.", leftMargin, yPos, textPaint)
                 yPos += 20f
             }
 
             // ---------------------------------------------------------
-            // İŞLEM GEÇMİŞİ
+            // İŞLEM GEÇMİŞİ (TARİHÇE)
             // ---------------------------------------------------------
-
             if (history.isNotEmpty()) {
+                checkNewPage(50f)
+                canvas.drawLine(leftMargin, yPos, rightMargin, yPos, grayLinePaint)
+                yPos += 15f
 
-                checkNewPage(60f)
-
-                canvas.drawText(
-                    "İŞLEM GEÇMİŞİ (TARİHÇE)",
-                    leftMargin,
-                    yPos,
-                    headerPaint
-                )
-
+                canvas.drawText("İŞLEM GEÇMİŞİ", leftMargin, yPos, sectionHeaderPaint)
                 yPos += 16f
 
                 history.forEach { h ->
+                    checkNewPage(18f)
+                    val title = h["title"] as? String ?: "İşlem"
+                    val desc = h["description"] as? String ?: ""
+                    val time = h["timestamp"] as? String ?: ""
 
-                    checkNewPage(20f)
-
-                    val title =
-                        h["title"] as? String
-                            ?: "İşlem"
-
-                    val desc =
-                        h["description"] as? String
-                            ?: ""
-
-                    val time =
-                        h["timestamp"] as? String
-                            ?: ""
-
-                    canvas.drawText(
-                        "• [$time] $title: $desc",
-                        leftMargin,
-                        yPos,
-                        textPaint
-                    )
-
+                    canvas.drawText("• [$time] $title: $desc", leftMargin, yPos, textPaint)
                     yPos += 16f
                 }
             }
@@ -704,34 +374,19 @@ object ServiceReportPdfGenerator {
             // ---------------------------------------------------------
             // PDF DOSYASINI KAYDET
             // ---------------------------------------------------------
-
             pdfDocument.finishPage(page)
 
-            val safeCompanyName =
-                record.companyName.replace(
-                    Regex("[^a-zA-Z0-9_-]"),
-                    "_"
-                )
-
-            val file =
-                File(
-                    context.cacheDir,
-                    "Servis_Raporu_${record.id}_$safeCompanyName.pdf"
-                )
+            val safeCompanyName = record.companyName.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+            val file = File(context.cacheDir, "Servis_Raporu_${record.id}_$safeCompanyName.pdf")
 
             FileOutputStream(file).use { fos ->
-
                 pdfDocument.writeTo(fos)
             }
-
             pdfDocument.close()
 
             file
-
         } catch (e: Exception) {
-
             e.printStackTrace()
-
             null
         }
     }

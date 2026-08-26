@@ -85,6 +85,20 @@ class ShiftViewModel @Inject constructor(
         }
     }
 
+    fun deleteShift(shift: ShiftEntity, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = manageShiftUseCase.deleteShift(shift)
+            _isLoading.value = false
+            result.onSuccess {
+                onComplete(true)
+            }.onFailure { e ->
+                _errorMessage.value = e.localizedMessage
+                onComplete(false)
+            }
+        }
+    }
+
     fun clearError() {
         _errorMessage.value = null
     }

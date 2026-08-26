@@ -37,10 +37,9 @@ fun AdminShiftScreen(
     var selectedPersonnel by remember { mutableStateOf<Personnel?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingShift by remember { mutableStateOf<ShiftEntity?>(null) }
+    var deletingShift by remember { mutableStateOf<ShiftEntity?>(null) }
 
     val context = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(selectedPersonnel) {
         selectedPersonnel?.let {
@@ -156,6 +155,9 @@ fun AdminShiftScreen(
                                 },
                                 onCancel = {
                                     shiftViewModel.cancelShift(shift)
+                                },
+                                onDelete = {
+                                    deletingShift = shift
                                 }
                             )
                         }
@@ -183,10 +185,41 @@ fun AdminShiftScreen(
             }
         )
     }
+
+    // Vardiya Silme Onay Diyaloğu
+    if (deletingShift != null) {
+        AlertDialog(
+            onDismissRequest = { deletingShift = null },
+            title = { Text("Vardiyayı Sil", fontWeight = FontWeight.Bold) },
+            text = { Text("Bu vardiyayı kalıcı olarak silmek istediğinize emin misiniz?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        deletingShift?.let { shift ->
+                            shiftViewModel.deleteShift(shift) { success ->
+                                if (success) {
+                                    deletingShift = null
+                                    selectedPersonnel?.let { shiftViewModel.loadPersonnelShifts(it.id) }
+                                }
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Sil")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingShift = null }) {
+                    Text("Vazgeç")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-fun ShiftItemCard(shift: ShiftEntity, onEdit: () -> Unit, onCancel: () -> Unit) {
+fun ShiftItemCard(shift: ShiftEntity, onEdit: () -> Unit, onCancel: () -> Unit, onDelete: () -> Unit) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp)
@@ -219,14 +252,17 @@ fun ShiftItemCard(shift: ShiftEntity, onEdit: () -> Unit, onCancel: () -> Unit) 
                 }
             }
 
-            if (shift.status != "CANCELLED" && shift.status != "COMPLETED") {
-                Row {
+            Row {
+                if (shift.status != "CANCELLED" && shift.status != "COMPLETED") {
                     IconButton(onClick = onEdit) {
                         Icon(Icons.Default.Edit, contentDescription = "Düzenle", tint = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = onCancel) {
                         Icon(Icons.Default.Cancel, contentDescription = "İptal Et", tint = MaterialTheme.colorScheme.error)
                     }
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.DeleteForever, contentDescription = "Kalıcı Sil", tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -266,7 +302,6 @@ fun ShiftFormDialog(
                     }
                 }
 
-                // Tarih Seçici Alanı
                 OutlinedTextField(
                     value = dateStr,
                     onValueChange = {},
@@ -293,7 +328,6 @@ fun ShiftFormDialog(
                     )
                 )
 
-                // Başlangıç Saati Seçici Alanı (TimePickerDialog)
                 OutlinedTextField(
                     value = startTimeStr,
                     onValueChange = {},
@@ -312,7 +346,7 @@ fun ShiftFormDialog(
                             },
                             initHour,
                             initMinute,
-                            true // 24 saat formatı
+                            true
                         ).show()
                     },
                     enabled = false,
@@ -324,7 +358,6 @@ fun ShiftFormDialog(
                     )
                 )
 
-                // Bitiş Saati Seçici Alanı (TimePickerDialog)
                 OutlinedTextField(
                     value = endTimeStr,
                     onValueChange = {},
@@ -343,7 +376,7 @@ fun ShiftFormDialog(
                             },
                             initHour,
                             initMinute,
-                            true // 24 saat formatı
+                            true
                         ).show()
                     },
                     enabled = false,

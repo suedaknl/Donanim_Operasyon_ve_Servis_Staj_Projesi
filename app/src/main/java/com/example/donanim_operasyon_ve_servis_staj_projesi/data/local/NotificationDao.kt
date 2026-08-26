@@ -16,26 +16,77 @@ interface NotificationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(notifications: List<NotificationEntity>)
 
-    @Query("SELECT * FROM notifications WHERE recipientUid = :recipientUid ORDER BY createdAt DESC")
-    fun getNotificationsForUser(recipientUid: String): Flow<List<NotificationEntity>>
+    @Query(
+        """
+        SELECT * FROM notifications
+        WHERE recipientUid = :recipientUid
+        ORDER BY createdAt DESC
+        """
+    )
+    fun getNotificationsForUser(
+        recipientUid: String
+    ): Flow<List<NotificationEntity>>
 
-    @Query("SELECT COUNT(*) FROM notifications WHERE recipientUid = :recipientUid AND isRead = 0")
-    fun getUnreadCount(recipientUid: String): Flow<Int>
+    @Query(
+        """
+        SELECT COUNT(*) FROM notifications
+        WHERE recipientUid = :recipientUid
+        AND isRead = 0
+        """
+    )
+    fun getUnreadCount(
+        recipientUid: String
+    ): Flow<Int>
 
-    @Query("UPDATE notifications SET isRead = 1 WHERE recipientUid = :recipientUid")
-    suspend fun markAllAsRead(recipientUid: String)
+    @Query(
+        """
+        UPDATE notifications
+        SET isRead = 1
+        WHERE id = :notificationId
+        AND recipientUid = :recipientUid
+        """
+    )
+    suspend fun markAsRead(
+        notificationId: String,
+        recipientUid: String
+    )
 
-    @Query("DELETE FROM notifications WHERE id = :notificationId")
-    suspend fun deleteById(notificationId: String)
+    @Query(
+        """
+        UPDATE notifications
+        SET isRead = 1
+        WHERE recipientUid = :recipientUid
+        """
+    )
+    suspend fun markAllAsRead(
+        recipientUid: String
+    )
 
-    @Query("DELETE FROM notifications WHERE recipientUid = :recipientUid")
-    suspend fun deleteByRecipient(recipientUid: String)
+    @Query(
+        "DELETE FROM notifications WHERE id = :notificationId"
+    )
+    suspend fun deleteById(
+        notificationId: String
+    )
 
-    @Query("SELECT * FROM notifications WHERE id = :id LIMIT 1")
-    suspend fun getById(id: String): NotificationEntity?
+    @Query(
+        "DELETE FROM notifications WHERE recipientUid = :recipientUid"
+    )
+    suspend fun deleteByRecipient(
+        recipientUid: String
+    )
+
+    @Query(
+        "SELECT * FROM notifications WHERE id = :id LIMIT 1"
+    )
+    suspend fun getById(
+        id: String
+    ): NotificationEntity?
 
     @Transaction
-    suspend fun upsert(notification: NotificationEntity) {
+    suspend fun upsert(
+        notification: NotificationEntity
+    ) {
         insert(notification)
     }
 }

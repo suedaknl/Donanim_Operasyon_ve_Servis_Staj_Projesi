@@ -16,7 +16,9 @@ class FirestoreNotificationCenterDataSource @Inject constructor(
 ) {
     private val notificationsCollection = firestore.collection("notifications")
 
-    fun observeNotifications(recipientUid: String): Flow<List<NotificationEntity>> = callbackFlow {
+    fun observeNotifications(
+        recipientUid: String
+    ): Flow<List<NotificationEntity>> = callbackFlow {
         val listener = notificationsCollection
             .whereEqualTo("recipientUid", recipientUid)
             .addSnapshotListener { snapshot, error ->
@@ -24,10 +26,14 @@ class FirestoreNotificationCenterDataSource @Inject constructor(
                     close(error)
                     return@addSnapshotListener
                 }
+
                 val list = snapshot?.documents?.mapNotNull { doc ->
                     try {
                         val timestamp = doc.get("createdAt") as? Timestamp
-                        val createdAtMillis = timestamp?.toDate()?.time ?: doc.getLong("createdAt") ?: 0L
+                        val createdAtMillis =
+                            timestamp?.toDate()?.time
+                                ?: doc.getLong("createdAt")
+                                ?: 0L
 
                         NotificationEntity(
                             id = doc.id,
@@ -44,9 +50,31 @@ class FirestoreNotificationCenterDataSource @Inject constructor(
                         null
                     }
                 } ?: emptyList()
+
                 trySend(list)
             }
+
         awaitClose { listener.remove() }
+    }
+
+    suspend fun markAsRead(
+        notificationId: String,
+        recipientUid: String
+    ) {
+        val document = notificationsCollection
+            .document(notificationId)
+            .get()
+            .await()
+
+        if (!document.exists()) return
+
+        val ownerUid = document.getString("recipientUid").orEmpty()
+
+        if (ownerUid != recipientUid) return
+
+        document.reference
+            .update("isRead", true)
+            .await()
     }
 
     suspend fun markAllAsRead(recipientUid: String) {
@@ -57,14 +85,19 @@ class FirestoreNotificationCenterDataSource @Inject constructor(
             .await()
 
         val batch = firestore.batch()
+
         for (doc in snapshot.documents) {
             batch.update(doc.reference, "isRead", true)
         }
+
         batch.commit().await()
     }
 
     suspend fun deleteNotification(notificationId: String) {
-        notificationsCollection.document(notificationId).delete().await()
+        notificationsCollection
+            .document(notificationId)
+            .delete()
+            .await()
     }
 
     suspend fun clearAllForUser(recipientUid: String) {
@@ -74,9 +107,11 @@ class FirestoreNotificationCenterDataSource @Inject constructor(
             .await()
 
         val batch = firestore.batch()
+
         for (doc in snapshot.documents) {
             batch.delete(doc.reference)
         }
+
         batch.commit().await()
     }
 }

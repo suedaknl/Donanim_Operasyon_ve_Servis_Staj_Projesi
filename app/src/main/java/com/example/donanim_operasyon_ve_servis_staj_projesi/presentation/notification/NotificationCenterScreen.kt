@@ -1,9 +1,10 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.notification
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -12,9 +13,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.NotificationViewModel
+import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -22,12 +25,12 @@ fun NotificationCenterScreen(
     notificationViewModel: NotificationViewModel,
     onNavigateBack: () -> Unit
 ) {
-    // --- EKRAN AÇILDIĞINDA SYNC BAŞLATMA KONTROLÜ ---
-    val currentUid = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    val currentUid = remember { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
 
-    LaunchedEffect(currentUid) {
-        if (currentUid.isNotBlank()) {
-            notificationViewModel.startSync(currentUid)
+    LaunchedEffect(Unit) {
+        val activeUid = currentUid.ifBlank { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+        if (activeUid.isNotBlank()) {
+            notificationViewModel.startSync(activeUid)
         }
     }
 
@@ -55,14 +58,20 @@ fun NotificationCenterScreen(
                             text = { Text("Tümünü Okundu Yap") },
                             onClick = {
                                 menuExpanded = false
-                                notificationViewModel.markAllAsRead(currentUid)
+                                val uid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+                                if (uid.isNotBlank()) {
+                                    notificationViewModel.markAllAsRead(uid)
+                                }
                             }
                         )
                         DropdownMenuItem(
                             text = { Text("Tümünü Temizle") },
                             onClick = {
                                 menuExpanded = false
-                                notificationViewModel.clearAllNotifications(currentUid)
+                                val uid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+                                if (uid.isNotBlank()) {
+                                    notificationViewModel.clearAllNotifications(uid)
+                                }
                             }
                         )
                     }
@@ -75,7 +84,7 @@ fun NotificationCenterScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             if (notifications.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -84,14 +93,30 @@ fun NotificationCenterScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(notifications, key = { it.id }) { item ->
-                        ElevatedCard(
+                        Card(
+                            onClick = {
+                                val uid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+                                if (!item.isRead && uid.isNotBlank()) {
+                                    notificationViewModel.markAsRead(
+                                        notificationId = item.id,
+                                        recipientUid = uid
+                                    )
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            elevation = CardDefaults.cardElevation(
+                                defaultElevation = if (item.isRead) 0.5.dp else 1.5.dp
+                            ),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (item.isRead) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                containerColor = if (item.isRead) {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                }
                             )
                         ) {
                             Row(
@@ -99,25 +124,51 @@ fun NotificationCenterScreen(
                                     .fillMaxWidth()
                                     .padding(16.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.Top
                             ) {
                                 Column(
                                     modifier = Modifier
                                         .weight(1f)
                                         .padding(end = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Text(text = item.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                                    Text(text = item.body, style = MaterialTheme.typography.bodyMedium)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = item.title,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = if (!item.isRead) FontWeight.Bold else FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+
+                                        if (!item.isRead) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(7.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.primary)
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = item.body,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
 
                                 IconButton(
-                                    onClick = { notificationViewModel.deleteNotification(item.id) }
+                                    onClick = { notificationViewModel.deleteNotification(item.id) },
+                                    modifier = Modifier.size(32.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
                                         contentDescription = "Bildirimi Sil",
-                                        tint = MaterialTheme.colorScheme.error
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }

@@ -49,6 +49,29 @@ class ManageLeaveUseCase @Inject constructor(
         return Result.success(Unit)
     }
 
+    suspend fun updateLeaveRequest(leaveRequest: LeaveRequestEntity): Result<Unit> {
+        if (leaveRequest.startDate.isBlank() || leaveRequest.endDate.isBlank()) {
+            return Result.failure(Exception("Tarih alanları boş olamaz."))
+        }
+        if (leaveRequest.startDate > leaveRequest.endDate) {
+            return Result.failure(Exception("Başlangıç tarihi bitiş tarihinden sonra olamaz."))
+        }
+        if (!leaveRequest.status.equals("PENDING", ignoreCase = true)) {
+            return Result.failure(Exception("Sadece bekleyen (PENDING) izin talepleri düzenlenebilir."))
+        }
+
+        workforceRepository.updateLeaveRequest(leaveRequest)
+        return Result.success(Unit)
+    }
+
+    suspend fun deleteLeaveRequest(leaveRequest: LeaveRequestEntity): Result<Unit> {
+        if (!leaveRequest.status.equals("PENDING", ignoreCase = true)) {
+            return Result.failure(Exception("Sadece bekleyen (PENDING) izin talepleri silinebilir."))
+        }
+        workforceRepository.deleteLeaveRequest(leaveRequest)
+        return Result.success(Unit)
+    }
+
     suspend fun approveLeaveRequest(
         requestId: Int,
         adminNote: String?,

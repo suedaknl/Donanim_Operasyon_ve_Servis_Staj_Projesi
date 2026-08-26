@@ -20,10 +20,12 @@ class WorkforceRepository @Inject constructor(
     private val repositoryScope = CoroutineScope(Dispatchers.IO)
 
     init {
-        // Firestore izin talepleri değişikliklerini dinleyip upsert ile senkronize ediyoruz
+        // Firestore izin talepleri değişikliklerini dinleyip upsert ve stale cleanup ile senkronize ediyoruz
         repositoryScope.launch {
             try {
                 firestoreDataSource.observeLeaveRequests().collectLatest { remoteLeaves ->
+                    val remoteFirestoreIds = remoteLeaves.mapNotNull { it.firestoreId }.toSet()
+                    leaveRequestDao.deleteNotInFirestoreIds(remoteFirestoreIds)
                     remoteLeaves.forEach { leave ->
                         leaveRequestDao.upsertByFirestoreId(leave)
                     }
@@ -33,10 +35,12 @@ class WorkforceRepository @Inject constructor(
             }
         }
 
-        // Firestore vardiya değişikliklerini dinleyip upsert ile senkronize ediyoruz (Realtime Sync)
+        // Firestore vardiya değişikliklerini dinleyip upsert ve stale cleanup ile senkronize ediyoruz
         repositoryScope.launch {
             try {
                 firestoreDataSource.observeAllShifts().collectLatest { remoteShifts ->
+                    val remoteFirestoreIds = remoteShifts.mapNotNull { it.firestoreId }.toSet()
+                    shiftDao.deleteNotInFirestoreIds(remoteFirestoreIds)
                     remoteShifts.forEach { shift ->
                         shiftDao.upsertByFirestoreId(shift)
                     }
@@ -69,6 +73,13 @@ class WorkforceRepository @Inject constructor(
         shiftDao.update(shift)
     }
 
+    suspend fun deleteShift(shift: ShiftEntity) {
+        if (!shift.firestoreId.isNullOrBlank()) {
+            firestoreDataSource.deleteShift(shift.firestoreId!!)
+        }
+        shiftDao.delete(shift)
+    }
+
     fun getShiftsByPersonnel(personnelId: Int): Flow<List<ShiftEntity>> {
         return shiftDao.getByPersonnel(personnelId)
     }
@@ -98,6 +109,13 @@ class WorkforceRepository @Inject constructor(
     suspend fun updateLeaveRequest(leaveRequest: LeaveRequestEntity) {
         firestoreDataSource.updateLeaveRequest(leaveRequest)
         leaveRequestDao.update(leaveRequest)
+    }
+
+    suspend fun deleteLeaveRequest(leaveRequest: LeaveRequestEntity) {
+        if (!leaveRequest.firestoreId.isNullOrBlank()) {
+            firestoreDataSource.deleteLeaveRequest(leaveRequest.firestoreId!!)
+        }
+        leaveRequestDao.delete(leaveRequest)
     }
 
     fun getLeaveRequestsByPersonnel(personnelId: Int): Flow<List<LeaveRequestEntity>> =

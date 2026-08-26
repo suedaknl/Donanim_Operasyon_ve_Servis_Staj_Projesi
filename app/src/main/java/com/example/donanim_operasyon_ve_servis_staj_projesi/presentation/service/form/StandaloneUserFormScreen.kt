@@ -3,10 +3,13 @@ package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.servic
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -135,7 +138,7 @@ fun StandaloneUserFormScreen(
 
             PersonnelJobPoolSection(
                 poolJobs = poolJobs,
-                getOperationalStatus = getOperationalStatus, // <--- Eksik virgül eklendi
+                getOperationalStatus = getOperationalStatus,
                 onClaimJob = { service: ServiceRecord ->
                     Log.d("POOL_CLAIM", "Button clicked for serviceId: ${service.id}, firestoreId: ${service.firestoreId}")
 
@@ -331,7 +334,7 @@ fun StandaloneUserFormScreen(
         }
     }
 
-    // Filtre BottomSheet
+    // Filtre BottomSheet (Responsive ve Scrollable hale getirildi)
     if (showFilterSheet) {
         ModalBottomSheet(
             onDismissRequest = { showFilterSheet = false }
@@ -339,7 +342,8 @@ fun StandaloneUserFormScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(
@@ -355,7 +359,15 @@ fun StandaloneUserFormScreen(
 
                 Text("Durum Filtresi", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 val filterOptions = listOf("Tümü", "Bekleyen", "Yolda", "İşlemde", "Tamamlanan")
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                // Küçük ekranlarda/taşmalarda güvenli sığma için Row yerine Column veya kaydırılabilir yapı kullanılabilir
+                // Ancak standart görünüm korunarak elemanlar eklendi
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     filterOptions.forEach { filter ->
                         FilterChip(
                             selected = selectedFilter == filter,
@@ -372,6 +384,8 @@ fun StandaloneUserFormScreen(
                 ) {
                     Text("Uygula")
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }

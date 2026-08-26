@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
@@ -168,7 +169,9 @@ fun AdminMainScreen(
         Scaffold(
             bottomBar = {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = MaterialTheme.colorStorageContainerCompatSafe() // fallback if needed or standard surfaceVariant
+                        ?: MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 3.dp
                 ) {
                     NavigationBarItem(
                         selected = selectedTab == 0,
@@ -177,7 +180,7 @@ fun AdminMainScreen(
                             serviceSubScreen = "list"
                         },
                         icon = { Icon(if (selectedTab == 0) Icons.Filled.Dashboard else Icons.Outlined.Dashboard, contentDescription = "Ana Sayfa") },
-                        label = { Text("Ana Sayfa") }
+                        label = { Text("Ana Sayfa", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall) }
                     )
                     NavigationBarItem(
                         selected = selectedTab == 1,
@@ -186,7 +189,7 @@ fun AdminMainScreen(
                             serviceSubScreen = "list"
                         },
                         icon = { Icon(if (selectedTab == 1) Icons.Filled.ListAlt else Icons.Outlined.ListAlt, contentDescription = "İş Emirleri") },
-                        label = { Text("İş Emirleri") }
+                        label = { Text("İş Emirleri", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall) }
                     )
                     NavigationBarItem(
                         selected = selectedTab == 2,
@@ -195,7 +198,7 @@ fun AdminMainScreen(
                             serviceSubScreen = "list"
                         },
                         icon = { Icon(if (selectedTab == 2) Icons.Filled.People else Icons.Outlined.PeopleOutline, contentDescription = "Personeller") },
-                        label = { Text("Personeller") }
+                        label = { Text("Personeller", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall) }
                     )
                     NavigationBarItem(
                         selected = selectedTab == 3,
@@ -204,7 +207,7 @@ fun AdminMainScreen(
                             serviceSubScreen = "list"
                         },
                         icon = { Icon(if (selectedTab == 3) Icons.Filled.LocationOn else Icons.Outlined.LocationOn, contentDescription = "Konum") },
-                        label = { Text("Konum") }
+                        label = { Text("Konum", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall) }
                     )
                     NavigationBarItem(
                         selected = selectedTab == 4,
@@ -213,7 +216,7 @@ fun AdminMainScreen(
                             serviceSubScreen = "list"
                         },
                         icon = { Icon(if (selectedTab == 4) Icons.Filled.AdminPanelSettings else Icons.Outlined.AdminPanelSettings, contentDescription = "Profil") },
-                        label = { Text("Profil") }
+                        label = { Text("Profil", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall) }
                     )
                 }
             },
@@ -370,6 +373,10 @@ fun AdminMainScreen(
     }
 }
 
+// Güvenli extension / fallback for NavigationBar container color if needed
+@Composable
+private fun androidx.compose.material3.MaterialTheme.colorStorageContainerCompatSafe(): Color? = null
+
 @Composable
 fun AdminDashboardContent(
     serviceViewModel: ServiceViewModel,
@@ -380,7 +387,6 @@ fun AdminDashboardContent(
     onPersonnelCardClick: () -> Unit,
     onServiceClick: (ServiceRecord) -> Unit
 ) {
-    // --- Bildirim Modülü Entegrasyonu (ViewModel & Güvenli Guard Kontrolü) ---
     val currentUserUid = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "" }
     val notificationViewModel: NotificationViewModel = hiltViewModel()
     val unreadCount by notificationViewModel.unreadCount.collectAsState()
@@ -436,7 +442,6 @@ fun AdminDashboardContent(
                     )
                 }
 
-                // --- ADMIN ZİL İKONU VE BADGEDBOX ---
                 BadgedBox(
                     badge = {
                         if (unreadCount > 0) {
@@ -516,7 +521,6 @@ fun AdminDashboardContent(
             }
         }
 
-        // --- HAVUZ TAKİBİ BÖLÜMÜ ---
         item {
             AdminPoolTrackingSection(
                 allServices = allServices,
@@ -538,7 +542,6 @@ fun AdminDashboardContent(
     }
 }
 
-// --- YÖNETİCİ ÖZETİ İÇİN HAVUZ TAKİBİ BİLEŞENİ ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminPoolTrackingSection(
@@ -695,6 +698,7 @@ fun AdminPoolTrackingSection(
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f)
                                 )
                                 Surface(

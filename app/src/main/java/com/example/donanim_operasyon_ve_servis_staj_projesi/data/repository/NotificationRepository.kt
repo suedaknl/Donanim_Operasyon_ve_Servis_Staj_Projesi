@@ -22,7 +22,12 @@ class NotificationRepository @Inject constructor(
     private val repositoryScope = CoroutineScope(Dispatchers.IO)
     private var syncJob: Job? = null
 
-    suspend fun saveToken(uid: String, role: String, personnelId: Int?, token: String): Result<Unit> {
+    suspend fun saveToken(
+        uid: String,
+        role: String,
+        personnelId: Int?,
+        token: String
+    ): Result<Unit> {
         return firestoreTokenDataSource.saveToken(uid, role, personnelId, token)
     }
 
@@ -34,34 +39,66 @@ class NotificationRepository @Inject constructor(
         if (recipientUid.isBlank()) return
 
         stopSync()
+
         syncJob = repositoryScope.launch {
             try {
-                firestoreCenterDataSource.observeNotifications(recipientUid).collectLatest { remoteList ->
-                    android.util.Log.d("NotificationSync", "Firestore'dan gelen bildirim sayısı: ${remoteList.size} (UID: $recipientUid)")
-                    remoteList.forEach { notification ->
-                        notificationDao.upsert(notification)
+                firestoreCenterDataSource
+                    .observeNotifications(recipientUid)
+                    .collectLatest { remoteList ->
+
+                        android.util.Log.d(
+                            "NotificationSync",
+                            "Firestore'dan gelen bildirim sayısı: ${remoteList.size} (UID: $recipientUid)"
+                        )
+
+                        remoteList.forEach { notification ->
+                            notificationDao.upsert(notification)
+                        }
                     }
-                }
             } catch (e: Exception) {
                 e.printStackTrace()
-                android.util.Log.e("NotificationSync", "Sync hatası: ${e.message}")
+                android.util.Log.e(
+                    "NotificationSync",
+                    "Sync hatası: ${e.message}"
+                )
             }
         }
     }
+
     fun stopSync() {
         syncJob?.cancel()
         syncJob = null
     }
 
-    fun getNotifications(recipientUid: String): Flow<List<NotificationEntity>> {
+    fun getNotifications(
+        recipientUid: String
+    ): Flow<List<NotificationEntity>> {
         return notificationDao.getNotificationsForUser(recipientUid)
     }
 
-    fun getUnreadCount(recipientUid: String): Flow<Int> {
+    fun getUnreadCount(
+        recipientUid: String
+    ): Flow<Int> {
         return notificationDao.getUnreadCount(recipientUid)
     }
 
-    suspend fun markAsRead(notificationId: String, recipientUid: String) {
+    suspend fun markAsRead(
+        notificationId: String,
+        recipientUid: String
+    ) {
+        try {
+            firestoreCenterDataSource.markAsRead(
+                notificationId,
+                recipientUid
+            )
+
+            notificationDao.markAsRead(
+                notificationId,
+                recipientUid
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun markAllAsRead(recipientUid: String) {

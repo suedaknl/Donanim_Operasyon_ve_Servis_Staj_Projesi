@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.*
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.admin.map.PersonnelMapScreen
@@ -220,17 +221,6 @@ fun PersonnelMainScreen(
                 )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-                NavigationDrawerItem(
-                    label = { Text("Destek ve Yardım") },
-                    selected = false,
-                    icon = { Icon(Icons.Default.HelpOutline, contentDescription = null) },
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        Toast.makeText(context, "Destek ekibine yönlendiriliyorsunuz.", Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
 
                 NavigationDrawerItem(
                     label = { Text("Çıkış Yap") },
@@ -587,7 +577,7 @@ fun PersonnelHomeContent(
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color.Green))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Mesai İçinde", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("Aktif", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                     }
                 }
@@ -695,10 +685,30 @@ fun PersonnelHomeContent(
 
 @Composable
 fun SummaryCard(modifier: Modifier = Modifier, title: String, count: Int, color: Color) {
-    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), shape = RoundedCornerShape(12.dp)) {
-        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(count.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = color)
-            Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Card(
+        modifier = modifier.height(100.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(12.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = count.toString(),
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

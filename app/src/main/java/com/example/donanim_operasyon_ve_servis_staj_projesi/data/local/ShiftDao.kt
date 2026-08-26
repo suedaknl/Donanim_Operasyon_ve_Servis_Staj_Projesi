@@ -1,6 +1,7 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.data.local
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -17,8 +18,11 @@ interface ShiftDao {
     @Update
     suspend fun update(shift: ShiftEntity)
 
-    @Suppress("FunctionName")
-    suspend fun updateShift(shift: ShiftEntity) = update(shift)
+    @Delete
+    suspend fun delete(shift: ShiftEntity)
+
+    @Query("DELETE FROM shifts WHERE firestoreId NOT IN (:firestoreIds)")
+    suspend fun deleteNotInFirestoreIds(firestoreIds: Set<String>)
 
     @Query("SELECT * FROM shifts WHERE firestoreId = :firestoreId LIMIT 1")
     suspend fun getByFirestoreId(firestoreId: String): ShiftEntity?

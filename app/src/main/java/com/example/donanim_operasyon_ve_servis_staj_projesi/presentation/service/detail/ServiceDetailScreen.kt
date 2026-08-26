@@ -114,6 +114,8 @@ fun ServiceDetailScreen(
     val isCancelled = service?.status == ServiceStatus.IPTAL
     val isRejected = isCancelled && !service?.rejectionReason.isNullOrBlank()
 
+    val finalSignatureData = closingSignature?.signatureData ?: remoteSignatures.firstOrNull()?.get("signatureData") as? String
+
     var currentStep by rememberSaveable { mutableIntStateOf(0) }
 
     LaunchedEffect(service?.status) {
@@ -533,7 +535,7 @@ fun ServiceDetailScreen(
                                     onCreateExtraJob = onCreateExtraJob,
                                     onArchiveClick = { showArchiveDialog = true },
                                     onDeleteClick = { showDeleteDialog = true },
-                                    signatureData = closingSignature?.signatureData,
+                                    signatureData = finalSignatureData, // <-- Güncellendi
                                     onImageClick = { uri -> selectedImageUri = uri }
                                 )
                             }

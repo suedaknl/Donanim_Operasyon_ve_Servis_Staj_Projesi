@@ -73,4 +73,9 @@ class ManageShiftUseCase @Inject constructor(
         workforceRepository.updateShift(cancelledShift)
         return Result.success(Unit)
     }
+
+    suspend fun deleteShift(shift: ShiftEntity): Result<Unit> {
+        workforceRepository.deleteShift(shift)
+        return Result.success(Unit)
+    }
 }
