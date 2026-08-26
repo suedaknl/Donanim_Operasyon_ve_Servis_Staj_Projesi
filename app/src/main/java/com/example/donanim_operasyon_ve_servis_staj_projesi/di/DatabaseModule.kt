@@ -55,4 +55,11 @@ object DatabaseModule {
     ): OvertimeDao {
         return database.overtimeDao()
     }
+
+    @Provides
+    fun provideNotificationDao(
+        database: AppDatabase
+    ): NotificationDao {
+        return database.notificationDao()
+    }
 }

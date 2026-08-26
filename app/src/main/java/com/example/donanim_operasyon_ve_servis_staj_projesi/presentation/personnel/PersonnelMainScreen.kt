@@ -43,13 +43,18 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelV
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import androidx.compose.runtime.saveable.rememberSaveable
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.components.NotificationPermissionHandler // <-- FCM İzin Handler Eklendi
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.components.NotificationPermissionHandler
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
+import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.NotificationViewModel
+import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PersonnelMainScreen(
     personnelId: Int,
     initialTab: Int = 0,
+    navController: NavController,
     serviceViewModel: ServiceViewModel,
     personnelViewModel: PersonnelViewModel,
     onNavigateToServiceDetail: (Int) -> Unit,
@@ -158,13 +163,6 @@ fun PersonnelMainScreen(
         }
     }
 
-    // Bileşen kapatıldığında servisi durdurma emniyeti
-    DisposableEffect(Unit) {
-        onDispose {
-            // İhtiyaç halinde ek temizlik yapılabilir
-        }
-    }
-
     LaunchedEffect(personnelId, currentPersonnel) {
         currentPersonnel?.firebaseUid?.let { uid ->
             serviceViewModel.syncMyServices(uid, personnelId)
@@ -248,7 +246,7 @@ fun PersonnelMainScreen(
         }
     ) {
         Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) }, // <--- SNACKBAR HOST EKLENDİ
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
@@ -376,6 +374,7 @@ fun PersonnelMainScreen(
                         personnel = currentPersonnel,
                         rawServices = allPersonnelRawServices,
                         myServices = filteredPersonnelServices,
+                        navController = navController,
                         onNavigateToServiceDetail = onNavigateToServiceDetail,
                         onGoToAssignments = { filter ->
                             serviceViewModel.updateSearchQuery("")
@@ -550,9 +549,21 @@ fun PersonnelHomeContent(
     personnel: Personnel?,
     rawServices: List<ServiceRecord>,
     myServices: List<ServiceRecord>,
+    navController: NavController,
     onNavigateToServiceDetail: (Int) -> Unit,
     onGoToAssignments: (String) -> Unit
 ) {
+    // --- Bildirim Modülü Entegrasyonu (ViewModel & Güvenli Guard Kontrolü) ---
+    val currentUserUid = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "" }
+    val notificationViewModel: NotificationViewModel = hiltViewModel()
+    val unreadCount by notificationViewModel.unreadCount.collectAsState()
+
+    LaunchedEffect(currentUserUid) {
+        if (currentUserUid.isNotBlank()) {
+            notificationViewModel.startSync(currentUserUid)
+        }
+    }
+
     val assignedCount = rawServices.count { it.status == ServiceStatus.BEKLIYOR }
     val acceptedCount = rawServices.count { it.status == ServiceStatus.YOLDA }
     val inProgressCount = rawServices.count { it.status == ServiceStatus.ISLEME_BASLANDI || it.status == ServiceStatus.PARCA_BEKLENIYOR }
@@ -580,7 +591,27 @@ fun PersonnelHomeContent(
                         }
                     }
                 }
-                IconButton(onClick = { }) { Icon(Icons.Default.Notifications, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
+
+                // --- BADGEDBOX VE ZİL İKONU BAĞLANTISI ---
+                BadgedBox(
+                    badge = {
+                        if (unreadCount > 0) {
+                            Badge {
+                                Text(if (unreadCount > 9) "9+" else unreadCount.toString())
+                            }
+                        }
+                    }
+                ) {
+                    IconButton(
+                        onClick = { navController.navigate("notification_center") }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Bildirimler",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
             }
         }
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize()) {

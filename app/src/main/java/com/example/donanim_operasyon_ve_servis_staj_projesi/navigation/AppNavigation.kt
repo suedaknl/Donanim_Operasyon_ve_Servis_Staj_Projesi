@@ -50,6 +50,9 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.ShiftViewM
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.shift.PersonnelShiftScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.overtime.PersonnelOvertimeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.overtime.AdminOvertimeScreen
+// --- BİLDİRİM MERKEZİ IMPORTLARI ---
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.notification.NotificationCenterScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.NotificationViewModel
 import kotlinx.coroutines.launch
 
 @Composable
@@ -161,6 +164,7 @@ fun AppNavigation(
         composable("home") {
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
             AdminMainScreen(
+                navController = navController, // <--- NavController AdminMainScreen'e aktarıldı (Zil için)
                 serviceViewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
                 adminEmail = authRepository.getCurrentUser()?.email ?: "Sistem Yöneticisi",
@@ -209,6 +213,15 @@ fun AppNavigation(
                         }
                     }
                 }
+            )
+        }
+        // --- ORTAK BİLDİRİM MERKEZİ ROTA TANIMI ---
+        composable("notification_center") {
+            val notificationViewModel: NotificationViewModel = hiltViewModel()
+
+            NotificationCenterScreen(
+                notificationViewModel = notificationViewModel,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -506,6 +519,7 @@ fun AppNavigation(
             PersonnelMainScreen(
                 personnelId = personnelId,
                 initialTab = initialTab,
+                navController = navController, // <--- NavController PersonnelMainScreen'e aktarıldı (Zil için)
                 serviceViewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
 

@@ -45,11 +45,16 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.domain.usecase.servi
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.nativeCanvas
 import kotlinx.coroutines.launch
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.components.NotificationPermissionHandler // <-- FCM İzin Handler Eklendi
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.components.NotificationPermissionHandler
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
+import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.NotificationViewModel
+import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminMainScreen(
+    navController: NavController,
     serviceViewModel: ServiceViewModel,
     personnelViewModel: PersonnelViewModel,
     onNavigateToAddService: () -> Unit,
@@ -288,6 +293,7 @@ fun AdminMainScreen(
                     0 -> AdminDashboardContent(
                         serviceViewModel = serviceViewModel,
                         personnelViewModel = personnelViewModel,
+                        navController = navController,
                         onOpenDrawer = {
                             coroutineScope.launch { drawerState.open() }
                         },
@@ -368,11 +374,23 @@ fun AdminMainScreen(
 fun AdminDashboardContent(
     serviceViewModel: ServiceViewModel,
     personnelViewModel: PersonnelViewModel,
+    navController: NavController,
     onOpenDrawer: () -> Unit,
     onCardClick: (String) -> Unit,
     onPersonnelCardClick: () -> Unit,
     onServiceClick: (ServiceRecord) -> Unit
 ) {
+    // --- Bildirim Modülü Entegrasyonu (ViewModel & Güvenli Guard Kontrolü) ---
+    val currentUserUid = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "" }
+    val notificationViewModel: NotificationViewModel = hiltViewModel()
+    val unreadCount by notificationViewModel.unreadCount.collectAsState()
+
+    LaunchedEffect(currentUserUid) {
+        if (currentUserUid.isNotBlank()) {
+            notificationViewModel.startSync(currentUserUid)
+        }
+    }
+
     val allServices by serviceViewModel.serviceRecords.collectAsState(initial = emptyList())
     val allPersonnel by personnelViewModel.personnelList.collectAsState(initial = emptyList())
 
@@ -397,21 +415,47 @@ fun AdminDashboardContent(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                IconButton(onClick = onOpenDrawer) {
-                    Icon(
-                        imageVector = Icons.Default.Menu,
-                        contentDescription = "Menüyü Aç",
-                        tint = MaterialTheme.colorScheme.onBackground
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    IconButton(onClick = onOpenDrawer) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Menüyü Aç",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    Text(
+                        text = "Yönetici Özeti",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                 }
-                Text(
-                    text = "Yönetici Özeti",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+
+                // --- ADMIN ZİL İKONU VE BADGEDBOX ---
+                BadgedBox(
+                    badge = {
+                        if (unreadCount > 0) {
+                            Badge {
+                                Text(if (unreadCount > 9) "9+" else unreadCount.toString())
+                            }
+                        }
+                    }
+                ) {
+                    IconButton(
+                        onClick = { navController.navigate("notification_center") }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Bildirimler",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
         }

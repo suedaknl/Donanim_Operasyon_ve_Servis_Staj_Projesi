@@ -16,9 +16,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ServiceClosingSignature::class,
         ShiftEntity::class,
         LeaveRequestEntity::class,
-        OvertimeEntity::class
+        OvertimeEntity::class,
+        NotificationEntity::class
     ],
-    version = 20,
+    version = 22,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,6 +30,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun shiftDao(): ShiftDao
     abstract fun leaveRequestDao(): LeaveRequestDao
     abstract fun overtimeDao(): OvertimeDao
+    abstract fun notificationDao(): NotificationDao
 
     companion object {
         @Volatile
@@ -146,14 +148,37 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        // İŞ HAVUZU İÇİN GÜNCELLENMİŞ MİGRASYON (19 -> 20)
         val MIGRATION_19_20 = object : Migration(19, 20) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE service_records ADD COLUMN assignmentType TEXT NOT NULL DEFAULT 'DIRECT'")
-                db.execSQL("ALTER TABLE service_records ADD COLUMN poolAssignmentDeadline INTEGER DEFAULT NULL") // <--- Eksik alan eklendi
+                db.execSQL("ALTER TABLE service_records ADD COLUMN poolAssignmentDeadline INTEGER DEFAULT NULL")
                 db.execSQL("ALTER TABLE shifts ADD COLUMN firestoreId TEXT")
                 db.execSQL("ALTER TABLE leave_requests ADD COLUMN firestoreId TEXT")
                 db.execSQL("ALTER TABLE overtimes ADD COLUMN firestoreId TEXT")
+            }
+        }
+
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS notifications (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        recipientUid TEXT NOT NULL,
+                        role TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        body TEXT NOT NULL,
+                        targetId TEXT,
+                        createdAt INTEGER NOT NULL,
+                        isRead INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+            }
+        }
+
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_leave_requests_firestoreId ON leave_requests(firestoreId)")
             }
         }
 
@@ -176,7 +201,9 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase.MIGRATION_16_17,
                         AppDatabase.MIGRATION_17_18,
                         AppDatabase.MIGRATION_18_19,
-                        AppDatabase.MIGRATION_19_20
+                        AppDatabase.MIGRATION_19_20,
+                        AppDatabase.MIGRATION_20_21,
+                        AppDatabase.MIGRATION_21_22
                     )
                     .build()
                 INSTANCE = instance
