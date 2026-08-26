@@ -7,22 +7,36 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.PersonnelRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.WorkforceRepository
 
 @HiltViewModel
 class AiViewModel @Inject constructor(
     private val repository: AiRepository,
     private val serviceRepository: ServiceRepository,
-    private val personnelRepository: PersonnelRepository
+    private val personnelRepository: PersonnelRepository,
+    private val workforceRepository: WorkforceRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AiUiState())
     val uiState: StateFlow<AiUiState> = _uiState.asStateFlow()
+
+    fun clearConversation() {
+        Log.d("AiViewModel", "clearConversation invoked. Resetting messages.")
+        _uiState.update { state ->
+            state.copy(
+                messages = emptyList(),
+                errorMessage = null,
+                isLoading = false
+            )
+        }
+    }
 
     fun sendMessage(text: String, role: String, contextOverride: String? = null) {
         if (text.isBlank()) return
@@ -45,7 +59,6 @@ class AiViewModel @Inject constructor(
                 var finalContext = ""
 
                 if (role.equals("ADMIN", ignoreCase = true)) {
-                    // Repository source-of-truth üzerinden güncel servis ve personel verilerini çekiyoruz
                     val allServices = try {
                         serviceRepository.getAllRecords()
                     } catch (e: Exception) {
@@ -58,12 +71,10 @@ class AiViewModel @Inject constructor(
                         emptyList()
                     }
 
-                    Log.d("AdminAiContext", "Repository services count=${allServices.size}")
-                    Log.d("AdminAiContext", "Repository personnel count=${personnelList.size}")
-
-                    // Log ilk 10 kayıt için
-                    allServices.take(10).forEach { s ->
-                        Log.d("AdminAiContext", "Record id=${s.id}, company=${s.companyName}, status=${s.status}, priority=${s.priority}")
+                    val allLeaveRequests = try {
+                        workforceRepository.getAllLeaveRequests().first()
+                    } catch (e: Exception) {
+                        emptyList()
                     }
 
                     val activeJobs = allServices.filter {
@@ -75,8 +86,6 @@ class AiViewModel @Inject constructor(
                                 !st.equals("İptal", ignoreCase = true) &&
                                 !it.isArchived
                     }.sortedByDescending { it.id }.take(30)
-
-                    Log.d("AdminAiContext", "Context active jobs=${activeJobs.size}")
 
                     val totalOpen = activeJobs.size
                     val pending = activeJobs.count { it.status == ServiceStatus.BEKLIYOR || it.status.equals("Bekliyor", ignoreCase = true) }
@@ -98,6 +107,17 @@ class AiViewModel @Inject constructor(
                         "- #${j.id} | Firma: ${j.companyName} | Öncelik: ${j.priority} | Durum: ${j.status} | Cihaz: ${j.deviceType} | Atanan: $personnelName"
                     }
 
+                    val leaveDetails = allLeaveRequests.joinToString("\n") { l ->
+                        val pName = personnelList.find { it.id == l.personnelId }?.fullName ?: "Personel #${l.personnelId}"
+                        val statusTr = when(l.status.uppercase()) {
+                            "APPROVED" -> "Onaylandı"
+                            "REJECTED" -> "Reddedildi"
+                            "PENDING" -> "Bekliyor"
+                            else -> l.status
+                        }
+                        "- $pName | Tür: ${l.leaveType} | Başlangıç: ${l.startDate} | Bitiş: ${l.endDate} | Durum: $statusTr"
+                    }.ifEmpty { "Kayıtlı izin talebi bulunmuyor." }
+
                     finalContext = """
 OPERASYON ÖZETİ:
 Toplam aktif iş: $totalOpen
@@ -110,6 +130,9 @@ $workloads
 
 AKTİF İŞLER:
 $jobDetails
+
+İZİN TALEPLERİ VE DURUMLARI:
+$leaveDetails
                     """.trimIndent()
                 }
 

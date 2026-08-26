@@ -12,7 +12,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,11 +30,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun AiScreen(
     role: String,
     onNavigateBack: () -> Unit,
+    onNavigateToVoice: () -> Unit,
     viewModel: AiViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+
+    var showMenu by remember { mutableStateOf(false) }
 
     val isAdmin = role.equals("ADMIN", ignoreCase = true)
 
@@ -68,6 +73,30 @@ fun AiScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                    }
+                },
+                actions = {
+                    // Sesli Sohbet Moduna Geçiş Butonu
+                    IconButton(onClick = onNavigateToVoice) {
+                        Icon(Icons.Default.Mic, contentDescription = "Sesli Sohbet")
+                    }
+
+                    // Menü (Sohbeti Temizle)
+                    IconButton(onClick = { showMenu = !showMenu }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Seçenekler")
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Sohbeti Temizle") },
+                            onClick = {
+                                showMenu = false
+                                viewModel.clearConversation()
+                            }
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

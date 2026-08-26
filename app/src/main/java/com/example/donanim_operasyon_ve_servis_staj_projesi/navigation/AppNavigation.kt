@@ -53,8 +53,10 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.overtim
 // --- BİLDİRİM MERKEZİ IMPORTLARI ---
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.notification.NotificationCenterScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.NotificationViewModel
-// --- AI ASİSTAN IMPORT ---
+// --- AI ASİSTAN IMPORTLARI ---
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ai.AiScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ai.AiVoiceScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ai.AiViewModel
 import kotlinx.coroutines.launch
 
 @Composable
@@ -236,7 +238,24 @@ fun AppNavigation(
             val role = backStackEntry.arguments?.getString("role") ?: "PERSONEL"
             AiScreen(
                 role = role,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToVoice = {
+                    navController.navigate("ai_voice/$role")
+                }
+            )
+        }
+
+        // --- AI SESLİ SOHBET ROTA TANIMI ---
+        composable(
+            route = "ai_voice/{role}",
+            arguments = listOf(navArgument("role") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val role = backStackEntry.arguments?.getString("role") ?: "PERSONEL"
+            val aiViewModel: AiViewModel = hiltViewModel()
+            AiVoiceScreen(
+                role = role,
+                onNavigateBack = { navController.popBackStack() },
+                viewModel = aiViewModel
             )
         }
 
