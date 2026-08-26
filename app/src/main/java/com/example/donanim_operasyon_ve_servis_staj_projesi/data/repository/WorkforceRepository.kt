@@ -5,7 +5,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,26 +19,57 @@ class WorkforceRepository @Inject constructor(
 ) {
     private val repositoryScope = CoroutineScope(Dispatchers.IO)
 
+    init {
+        // Firestore izin talepleri değişikliklerini dinleyip upsert ile senkronize ediyoruz
+        repositoryScope.launch {
+            try {
+                firestoreDataSource.observeLeaveRequests().collectLatest { remoteLeaves ->
+                    remoteLeaves.forEach { leave ->
+                        leaveRequestDao.upsertByFirestoreId(leave)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // Firestore vardiya değişikliklerini dinleyip upsert ile senkronize ediyoruz (Realtime Sync)
+        repositoryScope.launch {
+            try {
+                firestoreDataSource.observeAllShifts().collectLatest { remoteShifts ->
+                    remoteShifts.forEach { shift ->
+                        shiftDao.upsertByFirestoreId(shift)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     // --- Shift Operations ---
     suspend fun insertShift(shift: ShiftEntity) {
-        val firestoreId = firestoreDataSource.saveShift(shift)
-        shiftDao.insertShift(shift.copy(firestoreId = firestoreId))
+        val tempFirestoreId = if (shift.firestoreId.isNullOrBlank()) {
+            java.util.UUID.randomUUID().toString()
+        } else {
+            shift.firestoreId!!
+        }
+        val preAssignedShift = shift.copy(firestoreId = tempFirestoreId)
+
+        shiftDao.upsertByFirestoreId(preAssignedShift)
+
+        val firestoreId = firestoreDataSource.saveShift(preAssignedShift)
+        if (firestoreId != tempFirestoreId) {
+            shiftDao.upsertByFirestoreId(preAssignedShift.copy(firestoreId = firestoreId))
+        }
     }
 
     suspend fun updateShift(shift: ShiftEntity) {
         firestoreDataSource.updateShift(shift)
-        shiftDao.updateShift(shift)
+        shiftDao.update(shift)
     }
 
     fun getShiftsByPersonnel(personnelId: Int): Flow<List<ShiftEntity>> {
-        // Firestore source of truth akışını dinleyip Room cache'i güncelliyoruz
-        return firestoreDataSource.observePersonnelShifts(personnelId)
-            .onEach { remoteList ->
-                repositoryScope.launch {
-                    // İsteğe bağlı cache senkronizasyonu
-                }
-            }
-        // Fallback olarak Room cache de kullanılabilir veya doğrudan Firestore flow dönebilir
         return shiftDao.getByPersonnel(personnelId)
     }
 
@@ -49,8 +80,19 @@ class WorkforceRepository @Inject constructor(
 
     // --- Leave Request Operations ---
     suspend fun insertLeaveRequest(leaveRequest: LeaveRequestEntity) {
-        val firestoreId = firestoreDataSource.createLeaveRequest(leaveRequest)
-        leaveRequestDao.insert(leaveRequest.copy(firestoreId = firestoreId))
+        val tempFirestoreId = if (leaveRequest.firestoreId.isNullOrBlank()) {
+            java.util.UUID.randomUUID().toString()
+        } else {
+            leaveRequest.firestoreId!!
+        }
+
+        val preAssignedLeave = leaveRequest.copy(firestoreId = tempFirestoreId)
+        leaveRequestDao.upsertByFirestoreId(preAssignedLeave)
+
+        val firestoreId = firestoreDataSource.createLeaveRequest(preAssignedLeave)
+        if (firestoreId != tempFirestoreId) {
+            leaveRequestDao.upsertByFirestoreId(preAssignedLeave.copy(firestoreId = firestoreId))
+        }
     }
 
     suspend fun updateLeaveRequest(leaveRequest: LeaveRequestEntity) {

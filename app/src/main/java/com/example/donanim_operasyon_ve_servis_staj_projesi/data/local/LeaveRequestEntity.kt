@@ -1,9 +1,15 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.data.local
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "leave_requests")
+@Entity(
+    tableName = "leave_requests",
+    indices = [
+        Index(value = ["firestoreId"], unique = true)
+    ]
+)
 data class LeaveRequestEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val firestoreId: String? = null,

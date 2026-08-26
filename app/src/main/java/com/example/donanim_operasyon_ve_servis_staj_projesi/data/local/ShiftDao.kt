@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -11,20 +12,36 @@ import kotlinx.coroutines.flow.Flow
 interface ShiftDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertShift(shift: ShiftEntity)
+    suspend fun insertShift(shift: ShiftEntity): Long
 
     @Update
-    suspend fun updateShift(shift: ShiftEntity)
+    suspend fun update(shift: ShiftEntity)
 
-    @Query("SELECT * FROM shifts WHERE personnelId = :personnelId ORDER BY shiftDate DESC")
+    @Suppress("FunctionName")
+    suspend fun updateShift(shift: ShiftEntity) = update(shift)
+
+    @Query("SELECT * FROM shifts WHERE firestoreId = :firestoreId LIMIT 1")
+    suspend fun getByFirestoreId(firestoreId: String): ShiftEntity?
+
+    @Transaction
+    suspend fun upsertByFirestoreId(shift: ShiftEntity) {
+        if (!shift.firestoreId.isNullOrBlank()) {
+            val existing = getByFirestoreId(shift.firestoreId!!)
+            if (existing != null) {
+                val updated = shift.copy(id = existing.id)
+                update(updated)
+                return
+            }
+        }
+        insertShift(shift)
+    }
+
+    @Query("SELECT * FROM shifts WHERE personnelId = :personnelId ORDER BY id DESC")
     fun getByPersonnel(personnelId: Int): Flow<List<ShiftEntity>>
 
-    @Query("SELECT * FROM shifts WHERE shiftDate = :date ORDER BY startTime ASC")
+    @Query("SELECT * FROM shifts WHERE shiftDate = :date")
     fun getByDate(date: String): Flow<List<ShiftEntity>>
 
     @Query("SELECT * FROM shifts WHERE personnelId = :personnelId AND shiftDate = :date LIMIT 1")
     suspend fun getTodayShiftForPersonnel(personnelId: Int, date: String): ShiftEntity?
-
-    @Query("SELECT * FROM shifts WHERE shiftDate = :date")
-    suspend fun getAllForDate(date: String): List<ShiftEntity>
 }
