@@ -853,6 +853,17 @@ Bağlamda olmayan bilgileri uydurma.
 `;
   }
 
+  prompt += `
+
+Yanıt kuralı:
+Yanıtı tamamlamadan kesme.
+Gereksiz uzun girişlerden kaçın.
+Önce doğrudan sonucu ver, ardından kısa gerekçeler sun.
+Ağır markdown biçimlendirmesi kullanma.
+Başlıkları sade metin olarak yaz.
+### ve ** gibi markdown işaretlerini kullanma.
+`;
+
   return prompt.trim();
 }
 
@@ -915,7 +926,10 @@ async function askGemini(systemPrompt, history, message) {
           contents,
           generationConfig: {
             temperature: 0.4,
-            maxOutputTokens: 1000,
+            maxOutputTokens: 2500,
+            thinkingConfig: {
+              thinkingLevel: "low",
+            },
           },
         }),
       },
@@ -930,6 +944,17 @@ async function askGemini(systemPrompt, history, message) {
   }
 
   const data = await response.json();
+
+  let finishReason = "UNKNOWN";
+  if (
+    data &&
+    data.candidates &&
+    data.candidates[0] &&
+    data.candidates[0].finishReason
+  ) {
+    finishReason = data.candidates[0].finishReason;
+  }
+  logger.info(`GEMINI finishReason=${finishReason}`);
 
   const parts =
     data &&
@@ -1004,7 +1029,7 @@ async function askGroq(systemPrompt, history, message) {
           model: "openai/gpt-oss-20b",
           messages,
           temperature: 0.4,
-          max_tokens: 1000,
+          max_tokens: 2000,
         }),
       },
   );
@@ -1018,6 +1043,17 @@ async function askGroq(systemPrompt, history, message) {
   }
 
   const data = await response.json();
+
+  let finishReason = "UNKNOWN";
+  if (
+    data &&
+    data.choices &&
+    data.choices[0] &&
+    data.choices[0].finish_reason
+  ) {
+    finishReason = data.choices[0].finish_reason;
+  }
+  logger.info(`GROQ finishReason=${finishReason}`);
 
   const answer =
     data &&

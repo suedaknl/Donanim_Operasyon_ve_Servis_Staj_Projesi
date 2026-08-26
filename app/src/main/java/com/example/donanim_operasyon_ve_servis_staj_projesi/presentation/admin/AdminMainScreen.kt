@@ -72,7 +72,6 @@ fun AdminMainScreen(
     onEditServiceClick: (Int) -> Unit,
     onLogOut: () -> Unit
 ) {
-    // Android 13+ Bildirim İzni Kontrolü / İsteme Bileşeni
     NotificationPermissionHandler()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -163,13 +162,23 @@ fun AdminMainScreen(
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
+                NavigationDrawerItem(
+                    label = { Text("AI Asistan", fontWeight = FontWeight.Medium) },
+                    selected = false,
+                    icon = { Icon(Icons.Default.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate("ai_assistant/ADMIN")
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
             }
         }
     ) {
         Scaffold(
             bottomBar = {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorStorageContainerCompatSafe() // fallback if needed or standard surfaceVariant
+                    containerColor = MaterialTheme.colorStorageContainerCompatSafe()
                         ?: MaterialTheme.colorScheme.surfaceVariant,
                     tonalElevation = 3.dp
                 ) {
@@ -220,6 +229,7 @@ fun AdminMainScreen(
                     )
                 }
             },
+            // floatingActionButton kısmının ilgili bölümü:
             floatingActionButton = {
                 if ((selectedTab == 0 || selectedTab == 1) && serviceSubScreen == "list") {
                     Box(
@@ -235,42 +245,67 @@ fun AdminMainScreen(
                             }
                     ) {
                         if (selectedTab == 0) {
-                            DropdownMenu(
-                                expanded = showFabMenu,
-                                onDismissRequest = { showFabMenu = false },
-                                modifier = Modifier.width(220.dp)
+                            Column(
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("Yeni İş Emri Ekle", fontWeight = FontWeight.Medium) },
-                                    leadingIcon = { Icon(Icons.Default.AddCircle, null, tint = MaterialTheme.colorScheme.primary) },
-                                    onClick = {
-                                        showFabMenu = false
-                                        onNavigateToAddService()
+                                if (showFabMenu) {
+                                    ExtendedFloatingActionButton(
+                                        onClick = {
+                                            showFabMenu = false
+                                            onNavigateToAddService()
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(Icons.Default.AddCircle, null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Yeni İş Emri Ekle", fontWeight = FontWeight.Medium)
                                     }
-                                )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text("Personel Ekle", fontWeight = FontWeight.Medium) },
-                                    leadingIcon = { Icon(Icons.Default.PersonAdd, null, tint = MaterialTheme.colorScheme.primary) },
-                                    onClick = {
-                                        showFabMenu = false
-                                        onNavigateToAddPersonnel()
-                                    }
-                                )
-                            }
 
-                            FloatingActionButton(
-                                onClick = { showFabMenu = !showFabMenu },
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary,
-                                shape = RoundedCornerShape(16.dp),
-                                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
-                                    contentDescription = "Hızlı İşlem Menüsü",
-                                    modifier = Modifier.size(28.dp)
-                                )
+                                    ExtendedFloatingActionButton(
+                                        onClick = {
+                                            showFabMenu = false
+                                            onNavigateToAddPersonnel()
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(Icons.Default.PersonAdd, null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Personel Ekle", fontWeight = FontWeight.Medium)
+                                    }
+
+                                    ExtendedFloatingActionButton(
+                                        onClick = {
+                                            showFabMenu = false
+                                            navController.navigate("ai_assistant/ADMIN")
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(Icons.Default.SmartToy, null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("AI Asistan", fontWeight = FontWeight.Medium)
+                                    }
+                                }
+
+                                FloatingActionButton(
+                                    onClick = { showFabMenu = !showFabMenu },
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    shape = RoundedCornerShape(16.dp),
+                                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
+                                        contentDescription = "Hızlı İşlem Menüsü",
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
                             }
                         } else if (selectedTab == 1) {
                             FloatingActionButton(
@@ -373,7 +408,6 @@ fun AdminMainScreen(
     }
 }
 
-// Güvenli extension / fallback for NavigationBar container color if needed
 @Composable
 private fun androidx.compose.material3.MaterialTheme.colorStorageContainerCompatSafe(): Color? = null
 

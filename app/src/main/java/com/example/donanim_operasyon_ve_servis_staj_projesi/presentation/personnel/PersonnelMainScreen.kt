@@ -66,7 +66,6 @@ fun PersonnelMainScreen(
     onNavigateToOvertime: () -> Unit,
     onNavigateToCameraForService: (Int, String) -> Unit = { _, _ -> }
 ) {
-    // Android 13+ Bildirim İzni Kontrolü / İsteme Bileşeni
     NotificationPermissionHandler()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
@@ -74,11 +73,9 @@ fun PersonnelMainScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    // --- SNACKBAR STATE TANIMLAMASI ---
     val snackbarHostState = remember { SnackbarHostState() }
     val errorMessage by serviceViewModel.errorMessage.collectAsState()
 
-    // ViewModel'den gelen hata mesajlarını (Geçmiş tarih, deadline dolması vb.) Snackbar ile gösterir
     LaunchedEffect(errorMessage) {
         errorMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
@@ -105,7 +102,6 @@ fun PersonnelMainScreen(
     val filteredPersonnelServices by serviceViewModel.filteredPersonnelServiceRecords.collectAsState()
     val allPersonnelRawServices by serviceViewModel.personnelServiceRecords.collectAsState()
 
-    // Aktif saha işi kontrolü: Sadece ISLEME_BASLANDI durumundaki iş Foreground Service'i tetikler
     val activeService = remember(allPersonnelRawServices, personnelId) {
         allPersonnelRawServices.find {
             it.assignedPersonnelId == personnelId && it.status == ServiceStatus.ISLEME_BASLANDI
@@ -141,7 +137,6 @@ fun PersonnelMainScreen(
         }
     }
 
-    // Aktif iş (ISLEME_BASLANDI) durumuna göre Foreground Service'i başlatma veya durdurma
     LaunchedEffect(activeService, permissionGranted) {
         if (permissionGranted) {
             val serviceIntent = Intent(context, ActiveJobLocationService::class.java)
@@ -216,6 +211,17 @@ fun PersonnelMainScreen(
                     onClick = {
                         scope.launch { drawerState.close() }
                         onNavigateToOvertime()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
+                NavigationDrawerItem(
+                    label = { Text("AI Asistan") },
+                    selected = false,
+                    icon = { Icon(Icons.Default.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate("ai_assistant/PERSONNEL")
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -295,64 +301,75 @@ fun PersonnelMainScreen(
                                 )
                             }
                     ) {
-                        DropdownMenu(
-                            expanded = showFabMenu,
-                            onDismissRequest = { showFabMenu = false },
-                            modifier = Modifier.width(260.dp)
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text("Hızlı Not Ekle", fontWeight = FontWeight.Medium, color = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified)
+                            if (showFabMenu) {
+                                ExtendedFloatingActionButton(
+                                    onClick = {
+                                        showFabMenu = false
                                         if (activeServicesForFab.isEmpty()) {
-                                            Text("İşleme başladıktan sonra kullanılabilir", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                            Toast.makeText(context, "Not eklemek için önce bir iş emrinde işleme başlamalısınız.", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            showNoteDialog = true
                                         }
-                                    }
-                                },
-                                leadingIcon = { Icon(Icons.Default.EditNote, null, tint = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary) },
-                                onClick = {
-                                    showFabMenu = false
-                                    if (activeServicesForFab.isEmpty()) {
-                                        Toast.makeText(context, "Not eklemek için önce bir iş emrinde işleme başlamalısınız.", Toast.LENGTH_LONG).show()
-                                    } else {
-                                        showNoteDialog = true
-                                    }
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Default.EditNote, null, tint = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Hızlı Not Ekle", fontWeight = FontWeight.Medium)
                                 }
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text("Fotoğraf Çek", fontWeight = FontWeight.Medium, color = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified)
-                                        if (activeServicesForFab.isEmpty()) {
-                                            Text("İşleme başladıktan sonra kullanılabilir", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                                        }
-                                    }
-                                },
-                                leadingIcon = { Icon(Icons.Default.PhotoCamera, null, tint = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary) },
-                                onClick = {
-                                    showFabMenu = false
-                                    if (activeServicesForFab.isEmpty()) {
-                                        Toast.makeText(context, "Fotoğraf eklemek için önce bir iş emrinde işleme başlamalısınız.", Toast.LENGTH_LONG).show()
-                                    } else {
-                                        showPhotoDialog = true
-                                    }
-                                }
-                            )
-                        }
 
-                        FloatingActionButton(
-                            onClick = { showFabMenu = !showFabMenu },
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            shape = RoundedCornerShape(16.dp),
-                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
-                                contentDescription = "Hızlı İşlem Menüsü",
-                                modifier = Modifier.size(28.dp)
-                            )
+                                ExtendedFloatingActionButton(
+                                    onClick = {
+                                        showFabMenu = false
+                                        if (activeServicesForFab.isEmpty()) {
+                                            Toast.makeText(context, "Fotoğraf eklemek için önce bir iş emrinde işleme başlamalısınız.", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            showPhotoDialog = true
+                                        }
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Default.PhotoCamera, null, tint = if (activeServicesForFab.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Fotoğraf Çek", fontWeight = FontWeight.Medium)
+                                }
+
+                                ExtendedFloatingActionButton(
+                                    onClick = {
+                                        showFabMenu = false
+                                        navController.navigate("ai_assistant/PERSONNEL")
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Default.SmartToy, null, tint = MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("AI Asistan", fontWeight = FontWeight.Medium)
+                                }
+                            }
+
+                            FloatingActionButton(
+                                onClick = { showFabMenu = !showFabMenu },
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (showFabMenu) Icons.Default.Close else Icons.Default.Add,
+                                    contentDescription = "Hızlı İşlem Menüsü",
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -543,7 +560,6 @@ fun PersonnelHomeContent(
     onNavigateToServiceDetail: (Int) -> Unit,
     onGoToAssignments: (String) -> Unit
 ) {
-    // --- Bildirim Modülü Entegrasyonu (ViewModel & Güvenli Guard Kontrolü) ---
     val currentUserUid = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "" }
     val notificationViewModel: NotificationViewModel = hiltViewModel()
     val unreadCount by notificationViewModel.unreadCount.collectAsState()
@@ -582,7 +598,6 @@ fun PersonnelHomeContent(
                     }
                 }
 
-                // --- BADGEDBOX VE ZİL İKONU BAĞLANTISI ---
                 BadgedBox(
                     badge = {
                         if (unreadCount > 0) {

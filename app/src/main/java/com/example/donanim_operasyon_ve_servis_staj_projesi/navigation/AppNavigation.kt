@@ -53,6 +53,8 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.overtim
 // --- BİLDİRİM MERKEZİ IMPORTLARI ---
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.notification.NotificationCenterScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.NotificationViewModel
+// --- AI ASİSTAN IMPORT ---
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ai.AiScreen
 import kotlinx.coroutines.launch
 
 @Composable
@@ -164,7 +166,7 @@ fun AppNavigation(
         composable("home") {
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
             AdminMainScreen(
-                navController = navController, // <--- NavController AdminMainScreen'e aktarıldı (Zil için)
+                navController = navController,
                 serviceViewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
                 adminEmail = authRepository.getCurrentUser()?.email ?: "Sistem Yöneticisi",
@@ -215,12 +217,25 @@ fun AppNavigation(
                 }
             )
         }
+
         // --- ORTAK BİLDİRİM MERKEZİ ROTA TANIMI ---
         composable("notification_center") {
             val notificationViewModel: NotificationViewModel = hiltViewModel()
 
             NotificationCenterScreen(
                 notificationViewModel = notificationViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // --- AI ASİSTAN ROTA TANIMI ---
+        composable(
+            route = "ai_assistant/{role}",
+            arguments = listOf(navArgument("role") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val role = backStackEntry.arguments?.getString("role") ?: "PERSONEL"
+            AiScreen(
+                role = role,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -519,7 +534,7 @@ fun AppNavigation(
             PersonnelMainScreen(
                 personnelId = personnelId,
                 initialTab = initialTab,
-                navController = navController, // <--- NavController PersonnelMainScreen'e aktarıldı (Zil için)
+                navController = navController,
                 serviceViewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
 

@@ -1,5 +1,6 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ai
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -9,17 +10,24 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.ServiceRepository
+import com.example.donanim_operasyon_ve_servis_staj_projesi.repository.PersonnelRepository
 
 @HiltViewModel
 class AiViewModel @Inject constructor(
-    private val aiRepository: AiRepository
+    private val repository: AiRepository,
+    private val serviceRepository: ServiceRepository,
+    private val personnelRepository: PersonnelRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AiUiState())
     val uiState: StateFlow<AiUiState> = _uiState.asStateFlow()
 
-    fun sendMessage(text: String, role: String) {
+    fun sendMessage(text: String, role: String, contextOverride: String? = null) {
         if (text.isBlank()) return
+
+        Log.d("AiViewModel", "sendMessage started with text: $text, role: $role")
 
         val userMessage = AiMessage(text = text, sender = AiSender.USER)
 
@@ -33,8 +41,81 @@ class AiViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val currentHistory = _uiState.value.messages
-                val responseText = aiRepository.sendMessage(text, role, currentHistory)
+                val history = _uiState.value.messages.dropLast(1)
+                var finalContext = ""
+
+                if (role.equals("ADMIN", ignoreCase = true)) {
+                    // Repository source-of-truth üzerinden güncel servis ve personel verilerini çekiyoruz
+                    val allServices = try {
+                        serviceRepository.getAllRecords()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+
+                    val personnelList = try {
+                        personnelRepository.getAllPersonnelList()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+
+                    Log.d("AdminAiContext", "Repository services count=${allServices.size}")
+                    Log.d("AdminAiContext", "Repository personnel count=${personnelList.size}")
+
+                    // Log ilk 10 kayıt için
+                    allServices.take(10).forEach { s ->
+                        Log.d("AdminAiContext", "Record id=${s.id}, company=${s.companyName}, status=${s.status}, priority=${s.priority}")
+                    }
+
+                    val activeJobs = allServices.filter {
+                        val st = it.status.trim()
+                        st.isNotEmpty() &&
+                                st != ServiceStatus.TAMAMLANDI &&
+                                st != ServiceStatus.IPTAL &&
+                                !st.equals("Tamamlandı", ignoreCase = true) &&
+                                !st.equals("İptal", ignoreCase = true) &&
+                                !it.isArchived
+                    }.sortedByDescending { it.id }.take(30)
+
+                    Log.d("AdminAiContext", "Context active jobs=${activeJobs.size}")
+
+                    val totalOpen = activeJobs.size
+                    val pending = activeJobs.count { it.status == ServiceStatus.BEKLIYOR || it.status.equals("Bekliyor", ignoreCase = true) }
+                    val inProgress = activeJobs.count {
+                        it.status == ServiceStatus.ISLEME_BASLANDI ||
+                                it.status == ServiceStatus.PARCA_BEKLENIYOR ||
+                                it.status.equals("İşleme Başlandı", ignoreCase = true) ||
+                                it.status.equals("Parça Bekleniyor", ignoreCase = true)
+                    }
+                    val onTheWay = activeJobs.count { it.status == ServiceStatus.YOLDA || it.status.equals("Yolda", ignoreCase = true) }
+
+                    val workloads = personnelList.joinToString("\n") { p ->
+                        val count = activeJobs.count { it.assignedPersonnelId == p.id }
+                        "- ${p.fullName}: $count aktif iş"
+                    }
+
+                    val jobDetails = activeJobs.joinToString("\n") { j ->
+                        val personnelName = personnelList.find { it.id == j.assignedPersonnelId }?.fullName ?: "Atanmamış"
+                        "- #${j.id} | Firma: ${j.companyName} | Öncelik: ${j.priority} | Durum: ${j.status} | Cihaz: ${j.deviceType} | Atanan: $personnelName"
+                    }
+
+                    finalContext = """
+OPERASYON ÖZETİ:
+Toplam aktif iş: $totalOpen
+Bekleyen: $pending
+İşlemde: $inProgress
+Yolda: $onTheWay
+
+PERSONEL İŞ YÜKÜ:
+$workloads
+
+AKTİF İŞLER:
+$jobDetails
+                    """.trimIndent()
+                }
+
+                val responseText = repository.sendMessage(text, role, history, finalContext)
+
+                Log.d("AiViewModel", "sendMessage succeeded response received")
 
                 val assistantMessage = AiMessage(text = responseText, sender = AiSender.ASSISTANT)
 
@@ -45,10 +126,11 @@ class AiViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
+                Log.e("AiViewModel", "sendMessage failed: ${e.message}", e)
                 _uiState.update { state ->
                     state.copy(
                         isLoading = false,
-                        errorMessage = e.localizedMessage ?: "Bir hata oluştu."
+                        errorMessage = e.localizedMessage ?: "AI servisine ulaşılamadı."
                     )
                 }
             }
