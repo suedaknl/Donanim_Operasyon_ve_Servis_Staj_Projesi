@@ -297,8 +297,20 @@ class ServiceViewModel @Inject constructor(
         return serviceFeedbackDao.getFeedbackFlowForService(serviceId)
     }
 
-    fun getFeedbackFlow(serviceId: Int, firestoreId: String?): Flow<ServiceFeedback?> {
-        return serviceFeedbackDao.getFeedbackForServiceFlow(serviceId, firestoreId ?: "")
+    fun getFeedbackForServiceFlow(serviceId: Int, firestoreId: String): Flow<ServiceFeedback?> {
+        return serviceFeedbackDao.getFeedbackForServiceFlow(serviceId, firestoreId)
+    }
+
+    fun syncFeedbackForService(serviceId: Int, firestoreId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.syncServiceFeedback(serviceId, firestoreId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     private var notesJob: Job? = null
@@ -446,6 +458,8 @@ class ServiceViewModel @Inject constructor(
                         repository.syncServiceFeedback(record.id, record.firestoreId!!)
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
             }

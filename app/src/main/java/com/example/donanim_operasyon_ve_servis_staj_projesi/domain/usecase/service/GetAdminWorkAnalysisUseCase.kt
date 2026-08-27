@@ -26,14 +26,18 @@ data class AdminWorkAnalysis(
 
 class GetAdminWorkAnalysisUseCase @Inject constructor() {
 
-    private val parseFormats = listOf(
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()),
-        SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()),
-        SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()),
-        SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()),
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()),
-        SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
-    )
+    // Thread-safe olması için parse işlemlerini her çağrıda veya local scope'da yönetiyoruz
+    private fun getParseFormats(): List<SimpleDateFormat> {
+        val trLocale = Locale("tr", "TR")
+        return listOf(
+            SimpleDateFormat("yyyy-MM-dd", Locale.US),
+            SimpleDateFormat("dd.MM.yyyy", trLocale),
+            SimpleDateFormat("yyyy/MM/dd", Locale.US),
+            SimpleDateFormat("dd-MM-yyyy", trLocale),
+            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
+            SimpleDateFormat("dd.MM.yyyy HH:mm", trLocale)
+        )
+    }
 
     operator fun invoke(records: List<ServiceRecord>, period: AnalysisPeriod): AdminWorkAnalysis {
         return when (period) {
@@ -45,9 +49,10 @@ class GetAdminWorkAnalysisUseCase @Inject constructor() {
 
     private fun parseRecordDate(dateStr: String?): Date? {
         if (dateStr.isNullOrBlank()) return null
-        for (fmt in parseFormats) {
+        val trimmed = dateStr.trim()
+        for (fmt in getParseFormats()) {
             try {
-                val parsed = fmt.parse(dateStr.trim())
+                val parsed = fmt.parse(trimmed)
                 if (parsed != null) return parsed
             } catch (_: Exception) {}
         }
@@ -88,7 +93,6 @@ class GetAdminWorkAnalysisUseCase @Inject constructor() {
             }
         }
 
-        // Eğer doğrudan tarih eşleşmesi olmazsa ama kayıtlar varsa, günün son dilimine yansıtarak grafiği dolduruyoruz
         if (matchedCount == 0 && records.isNotEmpty()) {
             records.forEach { record ->
                 createdCounts[4]++
@@ -139,7 +143,6 @@ class GetAdminWorkAnalysisUseCase @Inject constructor() {
             }
         }
 
-        // Eğer tarih aralığı eşleşmezse (geçmiş/farklı test tarihleri vb.), kayıtların grafikte görünmesi için son güne dağıtıyoruz
         if (matchedCount == 0 && records.isNotEmpty()) {
             records.forEach { record ->
                 createdCounts[6]++

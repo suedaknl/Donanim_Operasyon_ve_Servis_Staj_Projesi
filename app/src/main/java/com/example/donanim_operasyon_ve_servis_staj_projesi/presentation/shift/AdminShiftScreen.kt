@@ -21,7 +21,8 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.Personnel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ShiftEntity
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.ShiftViewModel
-import java.util.*
+import java.util.Calendar
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,15 +42,20 @@ fun AdminShiftScreen(
 
     val context = LocalContext.current
 
-    LaunchedEffect(selectedPersonnel) {
-        selectedPersonnel?.let {
-            shiftViewModel.loadPersonnelShifts(it.id)
+    LaunchedEffect(selectedPersonnel?.id) {
+        selectedPersonnel?.let { personnel ->
+            shiftViewModel.loadPersonnelShifts(personnel.id)
         }
     }
 
-    errorMessage?.let { msg ->
-        LaunchedEffect(msg) {
-            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+    errorMessage?.let { message ->
+        LaunchedEffect(message) {
+            android.widget.Toast.makeText(
+                context,
+                message,
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+
             shiftViewModel.clearError()
         }
     }
@@ -57,13 +63,25 @@ fun AdminShiftScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Vardiya Yönetimi", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        text = "Vardiya Yönetimi",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                    IconButton(
+                        onClick = onNavigateBack
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Geri"
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         },
         floatingActionButton = {
@@ -75,11 +93,15 @@ fun AdminShiftScreen(
                     },
                     containerColor = MaterialTheme.colorScheme.primary
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Vardiya Ekle")
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Vardiya Ekle"
+                    )
                 }
             }
         }
     ) { paddingValues ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -87,37 +109,76 @@ fun AdminShiftScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Personel Seçin", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
+            Text(
+                text = "Personel Seçin",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
 
             if (personnelList.isEmpty()) {
-                Text("Kayıtlı personel bulunamadı.", style = MaterialTheme.typography.bodyMedium)
+
+                Text(
+                    text = "Kayıtlı personel bulunamadı.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
             } else {
+
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(130.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    items(personnelList) { personnel ->
-                        val isSelected = selectedPersonnel?.id == personnel.id
+
+                    items(
+                        items = personnelList,
+                        key = { personnel -> personnel.id }
+                    ) { personnel ->
+
+                        val isSelected =
+                            selectedPersonnel?.id == personnel.id
+
                         ElevatedCard(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedPersonnel = personnel },
+                                .clickable {
+                                    selectedPersonnel = personnel
+                                },
                             shape = RoundedCornerShape(10.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                                containerColor =
+                                    if (isSelected) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surface
+                                    }
                             )
                         ) {
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                horizontalArrangement =
+                                    Arrangement.SpaceBetween,
+                                verticalAlignment =
+                                    Alignment.CenterVertically
                             ) {
-                                Text(text = personnel.fullName, fontWeight = FontWeight.SemiBold)
-                                Text(text = personnel.role, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                                Text(
+                                    text = personnel.fullName,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+
+                                Text(
+                                    text = personnel.role,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color =
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -127,26 +188,60 @@ fun AdminShiftScreen(
             HorizontalDivider()
 
             if (selectedPersonnel == null) {
-                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    Text("Vardiyalarını görmek için lütfen yukarıdan bir personel seçin.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text =
+                            "Vardiyalarını görmek için lütfen yukarıdan bir personel seçin.",
+                        color =
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
+
             } else {
+
                 Text(
-                    text = "${selectedPersonnel?.fullName} - Vardiya Listesi",
+                    text =
+                        "${selectedPersonnel?.fullName} - Vardiya Listesi",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
 
                 if (shifts.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        Text("Bu personele ait kayıtlı vardiya bulunmuyor.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text =
+                                "Bu personele ait kayıtlı vardiya bulunmuyor.",
+                            color =
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
+
                 } else {
+
                     LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(shifts) { shift ->
+
+                        items(
+                            items = shifts,
+                            key = { shift -> shift.id }
+                        ) { shift ->
+
                             ShiftItemCard(
                                 shift = shift,
                                 onEdit = {
@@ -167,50 +262,105 @@ fun AdminShiftScreen(
         }
     }
 
-    if (showAddDialog && selectedPersonnel != null) {
+    if (
+        showAddDialog &&
+        selectedPersonnel != null
+    ) {
         ShiftFormDialog(
             initialShift = editingShift,
-            onDismiss = { showAddDialog = false },
+            onDismiss = {
+                showAddDialog = false
+            },
             onSave = { date, start, end ->
+
                 if (editingShift == null) {
-                    shiftViewModel.createShift(selectedPersonnel!!.id, date, start, end) { success ->
-                        if (success) showAddDialog = false
+
+                    shiftViewModel.createShift(
+                        personnelId = selectedPersonnel!!.id,
+                        shiftDate = date,
+                        startTime = start,
+                        endTime = end
+                    ) { success ->
+                        if (success) {
+                            showAddDialog = false
+                        }
                     }
+
                 } else {
-                    val updated = editingShift!!.copy(shiftDate = date, startTime = start, endTime = end)
-                    shiftViewModel.updateShift(updated) { success ->
-                        if (success) showAddDialog = false
+
+                    val updated =
+                        editingShift!!.copy(
+                            shiftDate = date,
+                            startTime = start,
+                            endTime = end
+                        )
+
+                    shiftViewModel.updateShift(
+                        updated
+                    ) { success ->
+                        if (success) {
+                            showAddDialog = false
+                        }
                     }
                 }
             }
         )
     }
 
-    // Vardiya Silme Onay Diyaloğu
     if (deletingShift != null) {
+
         AlertDialog(
-            onDismissRequest = { deletingShift = null },
-            title = { Text("Vardiyayı Sil", fontWeight = FontWeight.Bold) },
-            text = { Text("Bu vardiyayı kalıcı olarak silmek istediğinize emin misiniz?") },
+            onDismissRequest = {
+                deletingShift = null
+            },
+            title = {
+                Text(
+                    text = "Vardiyayı Sil",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text =
+                        "Bu vardiyayı kalıcı olarak silmek istediğinize emin misiniz?"
+                )
+            },
             confirmButton = {
                 Button(
                     onClick = {
                         deletingShift?.let { shift ->
-                            shiftViewModel.deleteShift(shift) { success ->
+
+                            shiftViewModel.deleteShift(
+                                shift
+                            ) { success ->
+
                                 if (success) {
                                     deletingShift = null
-                                    selectedPersonnel?.let { shiftViewModel.loadPersonnelShifts(it.id) }
+
+                                    // Burada tekrar
+                                    // loadPersonnelShifts()
+                                    // çağırmıyoruz.
+                                    // Mevcut Flow zaten değişikliği
+                                    // otomatik yayınlamalı.
                                 }
                             }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor =
+                                MaterialTheme.colorScheme.error
+                        )
                 ) {
                     Text("Sil")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deletingShift = null }) {
+                TextButton(
+                    onClick = {
+                        deletingShift = null
+                    }
+                ) {
                     Text("Vazgeç")
                 }
             }
@@ -219,11 +369,17 @@ fun AdminShiftScreen(
 }
 
 @Composable
-fun ShiftItemCard(shift: ShiftEntity, onEdit: () -> Unit, onCancel: () -> Unit, onDelete: () -> Unit) {
+fun ShiftItemCard(
+    shift: ShiftEntity,
+    onEdit: () -> Unit,
+    onCancel: () -> Unit,
+    onDelete: () -> Unit
+) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp)
     ) {
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -231,38 +387,88 @@ fun ShiftItemCard(shift: ShiftEntity, onEdit: () -> Unit, onCancel: () -> Unit, 
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(text = "Tarih: ${shift.shiftDate}", fontWeight = FontWeight.Bold)
-                Text(text = "Saat: ${shift.startTime} - ${shift.endTime}", style = MaterialTheme.typography.bodyMedium)
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+
+                Text(
+                    text = "Tarih: ${shift.shiftDate}",
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text =
+                        "Saat: ${shift.startTime} - ${shift.endTime}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
                 Surface(
                     shape = RoundedCornerShape(6.dp),
                     color = when (shift.status) {
-                        "ACTIVE" -> MaterialTheme.colorScheme.primaryContainer
-                        "COMPLETED" -> MaterialTheme.colorScheme.secondaryContainer
-                        "CANCELLED" -> MaterialTheme.colorScheme.errorContainer
-                        else -> MaterialTheme.colorScheme.surfaceVariant
+                        "ACTIVE" ->
+                            MaterialTheme.colorScheme.primaryContainer
+
+                        "COMPLETED" ->
+                            MaterialTheme.colorScheme.secondaryContainer
+
+                        "CANCELLED" ->
+                            MaterialTheme.colorScheme.errorContainer
+
+                        else ->
+                            MaterialTheme.colorScheme.surfaceVariant
                     }
                 ) {
+
                     Text(
                         text = shift.status,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(
+                            horizontal = 8.dp,
+                            vertical = 2.dp
+                        ),
+                        style =
+                            MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
             Row {
-                if (shift.status != "CANCELLED" && shift.status != "COMPLETED") {
-                    IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = "Düzenle", tint = MaterialTheme.colorScheme.primary)
+
+                if (
+                    shift.status != "CANCELLED" &&
+                    shift.status != "COMPLETED"
+                ) {
+
+                    IconButton(
+                        onClick = onEdit
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Düzenle",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
-                    IconButton(onClick = onCancel) {
-                        Icon(Icons.Default.Cancel, contentDescription = "İptal Et", tint = MaterialTheme.colorScheme.error)
+
+                    IconButton(
+                        onClick = onCancel
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Cancel,
+                            contentDescription = "İptal Et",
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.DeleteForever, contentDescription = "Kalıcı Sil", tint = MaterialTheme.colorScheme.error)
+
+                IconButton(
+                    onClick = onDelete
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteForever,
+                        contentDescription = "Kalıcı Sil",
+                        tint = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
@@ -276,28 +482,67 @@ fun ShiftFormDialog(
     onSave: (String, String, String) -> Unit
 ) {
     val context = LocalContext.current
-    val calendar = Calendar.getInstance()
+    val calendar = remember {
+        Calendar.getInstance()
+    }
 
-    var dateStr by remember { mutableStateOf(initialShift?.shiftDate ?: "") }
-    var startTimeStr by remember { mutableStateOf(initialShift?.startTime ?: "08:00") }
-    var endTimeStr by remember { mutableStateOf(initialShift?.endTime ?: "17:00") }
-    var validationError by remember { mutableStateOf<String?>(null) }
+    var dateStr by remember(initialShift?.id) {
+        mutableStateOf(
+            initialShift?.shiftDate ?: ""
+        )
+    }
+
+    var startTimeStr by remember(initialShift?.id) {
+        mutableStateOf(
+            initialShift?.startTime ?: "08:00"
+        )
+    }
+
+    var endTimeStr by remember(initialShift?.id) {
+        mutableStateOf(
+            initialShift?.endTime ?: "17:00"
+        )
+    }
+
+    var validationError by remember {
+        mutableStateOf<String?>(null)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initialShift == null) "Yeni Vardiya Ekle" else "Vardiya Düzenle", fontWeight = FontWeight.Bold) },
+        title = {
+            Text(
+                text =
+                    if (initialShift == null) {
+                        "Yeni Vardiya Ekle"
+                    } else {
+                        "Vardiya Düzenle"
+                    },
+                fontWeight = FontWeight.Bold
+            )
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+            Column(
+                verticalArrangement =
+                    Arrangement.spacedBy(12.dp)
+            ) {
+
                 if (validationError != null) {
+
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.errorContainer
+                        color =
+                            MaterialTheme.colorScheme.errorContainer
                     ) {
+
                         Text(
                             text = validationError!!,
                             modifier = Modifier.padding(8.dp),
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodySmall
+                            color =
+                                MaterialTheme.colorScheme.onErrorContainer,
+                            style =
+                                MaterialTheme.typography.bodySmall
                         )
                     }
                 }
@@ -306,111 +551,220 @@ fun ShiftFormDialog(
                     value = dateStr,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Tarih (YYYY-MM-DD)") },
-                    trailingIcon = { Icon(Icons.Default.DateRange, contentDescription = "Tarih Seç") },
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        DatePickerDialog(
-                            context,
-                            { _, y, m, d ->
-                                dateStr = String.format(Locale.getDefault(), "%04d-%02d-%02d", y, m + 1, d)
-                            },
-                            calendar.get(Calendar.YEAR),
-                            calendar.get(Calendar.MONTH),
-                            calendar.get(Calendar.DAY_OF_MONTH)
-                        ).show()
+                    label = {
+                        Text("Tarih (YYYY-MM-DD)")
                     },
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.DateRange,
+                            contentDescription = "Tarih Seç"
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+
+                            DatePickerDialog(
+                                context,
+                                { _, year, month, day ->
+
+                                    dateStr =
+                                        String.format(
+                                            Locale.getDefault(),
+                                            "%04d-%02d-%02d",
+                                            year,
+                                            month + 1,
+                                            day
+                                        )
+                                },
+                                calendar.get(Calendar.YEAR),
+                                calendar.get(Calendar.MONTH),
+                                calendar.get(Calendar.DAY_OF_MONTH)
+                            ).show()
+                        },
                     enabled = false,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                        disabledBorderColor = MaterialTheme.colorScheme.outline,
-                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    colors =
+                        OutlinedTextFieldDefaults.colors(
+                            disabledTextColor =
+                                MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor =
+                                MaterialTheme.colorScheme.outline,
+                            disabledLabelColor =
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor =
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                 )
 
                 OutlinedTextField(
                     value = startTimeStr,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Başlangıç Saati (HH:mm)") },
-                    trailingIcon = { Icon(Icons.Default.Schedule, contentDescription = "Saat Seç") },
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        val parts = startTimeStr.split(":")
-                        val initHour = parts.getOrNull(0)?.toIntOrNull() ?: 8
-                        val initMinute = parts.getOrNull(1)?.toIntOrNull() ?: 0
-
-                        TimePickerDialog(
-                            context,
-                            { _, hour, minute ->
-                                startTimeStr = String.format(Locale.getDefault(), "%02d:%02d", hour, minute)
-                            },
-                            initHour,
-                            initMinute,
-                            true
-                        ).show()
+                    label = {
+                        Text("Başlangıç Saati (HH:mm)")
                     },
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = "Saat Seç"
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+
+                            val parts =
+                                startTimeStr.split(":")
+
+                            val initHour =
+                                parts
+                                    .getOrNull(0)
+                                    ?.toIntOrNull()
+                                    ?: 8
+
+                            val initMinute =
+                                parts
+                                    .getOrNull(1)
+                                    ?.toIntOrNull()
+                                    ?: 0
+
+                            TimePickerDialog(
+                                context,
+                                { _, hour, minute ->
+
+                                    startTimeStr =
+                                        String.format(
+                                            Locale.getDefault(),
+                                            "%02d:%02d",
+                                            hour,
+                                            minute
+                                        )
+                                },
+                                initHour,
+                                initMinute,
+                                true
+                            ).show()
+                        },
                     enabled = false,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                        disabledBorderColor = MaterialTheme.colorScheme.outline,
-                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    colors =
+                        OutlinedTextFieldDefaults.colors(
+                            disabledTextColor =
+                                MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor =
+                                MaterialTheme.colorScheme.outline,
+                            disabledLabelColor =
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor =
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                 )
 
                 OutlinedTextField(
                     value = endTimeStr,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Bitiş Saati (HH:mm)") },
-                    trailingIcon = { Icon(Icons.Default.Schedule, contentDescription = "Saat Seç") },
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        val parts = endTimeStr.split(":")
-                        val initHour = parts.getOrNull(0)?.toIntOrNull() ?: 17
-                        val initMinute = parts.getOrNull(1)?.toIntOrNull() ?: 0
-
-                        TimePickerDialog(
-                            context,
-                            { _, hour, minute ->
-                                endTimeStr = String.format(Locale.getDefault(), "%02d:%02d", hour, minute)
-                            },
-                            initHour,
-                            initMinute,
-                            true
-                        ).show()
+                    label = {
+                        Text("Bitiş Saati (HH:mm)")
                     },
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = "Saat Seç"
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+
+                            val parts =
+                                endTimeStr.split(":")
+
+                            val initHour =
+                                parts
+                                    .getOrNull(0)
+                                    ?.toIntOrNull()
+                                    ?: 17
+
+                            val initMinute =
+                                parts
+                                    .getOrNull(1)
+                                    ?.toIntOrNull()
+                                    ?: 0
+
+                            TimePickerDialog(
+                                context,
+                                { _, hour, minute ->
+
+                                    endTimeStr =
+                                        String.format(
+                                            Locale.getDefault(),
+                                            "%02d:%02d",
+                                            hour,
+                                            minute
+                                        )
+                                },
+                                initHour,
+                                initMinute,
+                                true
+                            ).show()
+                        },
                     enabled = false,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                        disabledBorderColor = MaterialTheme.colorScheme.outline,
-                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    colors =
+                        OutlinedTextFieldDefaults.colors(
+                            disabledTextColor =
+                                MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor =
+                                MaterialTheme.colorScheme.outline,
+                            disabledLabelColor =
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor =
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                 )
             }
         },
         confirmButton = {
-            Button(onClick = {
-                if (dateStr.isBlank()) {
-                    validationError = "Lütfen bir tarih seçin."
-                    return@Button
+
+            Button(
+                onClick = {
+
+                    if (dateStr.isBlank()) {
+                        validationError =
+                            "Lütfen bir tarih seçin."
+                        return@Button
+                    }
+
+                    if (
+                        startTimeStr.isBlank() ||
+                        endTimeStr.isBlank()
+                    ) {
+                        validationError =
+                            "Başlangıç ve bitiş saatleri boş olamaz."
+                        return@Button
+                    }
+
+                    if (endTimeStr <= startTimeStr) {
+                        validationError =
+                            "Bitiş saati başlangıç saatinden büyük olmalıdır."
+                        return@Button
+                    }
+
+                    validationError = null
+
+                    onSave(
+                        dateStr,
+                        startTimeStr,
+                        endTimeStr
+                    )
                 }
-                if (startTimeStr.isBlank() || endTimeStr.isBlank()) {
-                    validationError = "Başlangıç ve bitiş saatleri boş olamaz."
-                    return@Button
-                }
-                if (endTimeStr <= startTimeStr) {
-                    validationError = "Bitiş saati başlangıç saatinden büyük olmalıdır."
-                    return@Button
-                }
-                validationError = null
-                onSave(dateStr, startTimeStr, endTimeStr)
-            }) {
+            ) {
                 Text("Kaydet")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss
+            ) {
                 Text("İptal")
             }
         }

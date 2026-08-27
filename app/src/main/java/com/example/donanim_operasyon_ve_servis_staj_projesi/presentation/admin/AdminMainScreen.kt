@@ -117,10 +117,7 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.People, contentDescription = null) },
                     onClick = {
-                        coroutineScope.launch {
-                            drawerState.close()
-                            onNavigateToPersonnel()
-                        }
+                        onNavigateToPersonnel()
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -129,10 +126,7 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.Schedule, contentDescription = null) },
                     onClick = {
-                        coroutineScope.launch {
-                            drawerState.close()
-                            onNavigateToShift()
-                        }
+                        onNavigateToShift()
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -141,10 +135,7 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.EventBusy, contentDescription = null) },
                     onClick = {
-                        coroutineScope.launch {
-                            drawerState.close()
-                            onNavigateToLeave()
-                        }
+                        onNavigateToLeave()
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -153,10 +144,7 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.MoreTime, contentDescription = null) },
                     onClick = {
-                        coroutineScope.launch {
-                            drawerState.close()
-                            onNavigateToOvertime()
-                        }
+                        onNavigateToOvertime()
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -165,10 +153,7 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.History, contentDescription = null) },
                     onClick = {
-                        coroutineScope.launch {
-                            drawerState.close()
-                            onNavigateToServiceRegistry()
-                        }
+                        onNavigateToServiceRegistry()
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -177,11 +162,8 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                     onClick = {
-                        coroutineScope.launch {
-                            drawerState.close()
-                            navController.navigate("ai_assistant/ADMIN") {
-                                launchSingleTop = true
-                            }
+                        navController.navigate("ai_assistant/ADMIN") {
+                            launchSingleTop = true
                         }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
@@ -263,6 +245,20 @@ fun AdminMainScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 if (showFabMenu) {
+                                    ExtendedFloatingActionButton(
+                                        onClick = {
+                                            showFabMenu = false
+                                            onNavigateToAddService()
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(Icons.Default.AddCircle, null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Yeni İş Emri Ekle", fontWeight = FontWeight.Medium)
+                                    }
+
                                     ExtendedFloatingActionButton(
                                         onClick = {
                                             showFabMenu = false

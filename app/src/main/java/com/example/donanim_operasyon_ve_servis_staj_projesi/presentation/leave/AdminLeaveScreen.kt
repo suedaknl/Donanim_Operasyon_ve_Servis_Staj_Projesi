@@ -49,10 +49,6 @@ fun AdminLeaveScreen(
     val context = LocalContext.current
     val today = Calendar.getInstance()
 
-    LaunchedEffect(Unit) {
-        leaveViewModel.loadData()
-    }
-
     val filteredApproved = approvedRequests.filter { leave ->
         val start = parseDate(leave.startDate)
         val end = parseDate(leave.endDate)
@@ -424,7 +420,6 @@ fun AdminLeaveScreen(
         LaunchedEffect(it) {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
             leaveViewModel.clearMessages()
-            leaveViewModel.loadData()
         }
     }
 

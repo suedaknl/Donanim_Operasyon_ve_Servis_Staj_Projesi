@@ -1,7 +1,9 @@
 package com.example.donanim_operasyon_ve_servis_staj_projesi.navigation
 
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -30,7 +32,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelV
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.camera.CameraScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.ClosingFormScreen
-import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.CustomerFeedbackWebScreen // <-- Eklendi
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.CustomerFeedbackWebScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.NotificationRepository
@@ -51,14 +53,14 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.ShiftViewM
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.shift.PersonnelShiftScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.overtime.PersonnelOvertimeScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.overtime.AdminOvertimeScreen
-// --- BİLDİRİM MERKEZİ IMPORTLARI ---
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.notification.NotificationCenterScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.NotificationViewModel
-// --- AI ASİSTAN IMPORTLARI ---
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ai.AiScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ai.AiVoiceScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ai.AiViewModel
 import kotlinx.coroutines.launch
+
+private const val TAG = "NavigationDebug"
 
 @Composable
 fun AppNavigation(
@@ -75,10 +77,15 @@ fun AppNavigation(
     NavHost(navController = navController, startDestination = "splash") {
 
         composable("splash") {
+            DisposableEffect(Unit) {
+                Log.d(TAG, "SplashScreen ENTER")
+                onDispose { Log.d(TAG, "SplashScreen DISPOSE") }
+            }
             SplashScreen(
                 authRepository = authRepository,
                 notificationRepository = notificationRepository,
                 onSplashFinished = { destination ->
+                    Log.d(TAG, "NavigationDebug: Current route before navigate = splash, target = $destination")
                     navController.navigate(destination) {
                         popUpTo("splash") { inclusive = true }
                     }
@@ -87,17 +94,32 @@ fun AppNavigation(
         }
 
         composable("welcome") {
+            DisposableEffect(Unit) {
+                Log.d(TAG, "WelcomeScreen ENTER")
+                onDispose { Log.d(TAG, "WelcomeScreen DISPOSE") }
+            }
             WelcomeScreen(
-                onAdminClick = { navController.navigate("admin_login") },
-                onPersonnelClick = { navController.navigate("personnel_login") }
+                onAdminClick = {
+                    Log.d(TAG, "NavigationDebug: Drawer -> admin_login")
+                    navController.navigate("admin_login")
+                },
+                onPersonnelClick = {
+                    Log.d(TAG, "NavigationDebug: Drawer -> personnel_login")
+                    navController.navigate("personnel_login")
+                }
             )
         }
 
         composable("admin_login") {
+            DisposableEffect(Unit) {
+                Log.d(TAG, "AdminLoginScreen ENTER")
+                onDispose { Log.d(TAG, "AdminLoginScreen DISPOSE") }
+            }
             AdminLoginScreen(
                 authRepository = authRepository,
                 notificationRepository = notificationRepository,
                 onLoginSuccess = {
+                    Log.d(TAG, "NavigationDebug: AdminLogin -> home")
                     navController.navigate("home") {
                         popUpTo("welcome") { inclusive = true }
                     }
@@ -106,12 +128,17 @@ fun AppNavigation(
         }
 
         composable("personnel_login") {
+            DisposableEffect(Unit) {
+                Log.d(TAG, "PersonnelLoginScreen ENTER")
+                onDispose { Log.d(TAG, "PersonnelLoginScreen DISPOSE") }
+            }
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
             PersonnelLoginScreen(
                 authRepository = authRepository,
                 notificationRepository = notificationRepository,
                 viewModel = personnelViewModel,
                 onLoginSuccess = { personnelId ->
+                    Log.d(TAG, "NavigationDebug: PersonnelLogin -> personnel_welcome/$personnelId")
                     navController.navigate("personnel_welcome/$personnelId") {
                         popUpTo("welcome") { inclusive = true }
                     }
@@ -124,6 +151,10 @@ fun AppNavigation(
             route = "personnel_welcome/{personnelId}",
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "PersonnelWelcomeScreen ENTER")
+                onDispose { Log.d(TAG, "PersonnelWelcomeScreen DISPOSE") }
+            }
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
@@ -140,6 +171,10 @@ fun AppNavigation(
         }
 
         composable("closing_form/{serviceId}/{personnelId}") { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "ClosingFormScreen ENTER")
+                onDispose { Log.d(TAG, "ClosingFormScreen DISPOSE") }
+            }
             val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
             val personnelId = backStackEntry.arguments?.getString("personnelId")?.toIntOrNull() ?: 0
 
@@ -166,11 +201,14 @@ fun AppNavigation(
             )
         }
 
-        // --- MÜŞTERİ DEĞERLENDİRME WEB EKRANI ROTA TANIMI ---
         composable(
             route = "customer_feedback/{serviceId}",
             arguments = listOf(navArgument("serviceId") { type = NavType.IntType })
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "CustomerFeedbackWebScreen ENTER")
+                onDispose { Log.d(TAG, "CustomerFeedbackWebScreen DISPOSE") }
+            }
             val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: 0
 
             CustomerFeedbackWebScreen(
@@ -182,14 +220,22 @@ fun AppNavigation(
         }
 
         composable("home") {
+            DisposableEffect(Unit) {
+                Log.d(TAG, "AdminMainScreen ENTER")
+                onDispose { Log.d(TAG, "AdminMainScreen DISPOSE") }
+            }
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
             AdminMainScreen(
                 navController = navController,
                 serviceViewModel = sharedServiceViewModel,
                 personnelViewModel = personnelViewModel,
                 adminEmail = authRepository.getCurrentUser()?.email ?: "Sistem Yöneticisi",
-                onNavigateToAddService = { navController.navigate(route = "add_service") },
+                onNavigateToAddService = {
+                    Log.d(TAG, "NavigationDebug: AdminMain -> add_service")
+                    navController.navigate(route = "add_service")
+                },
                 onServiceClick = { clickedService ->
+                    Log.d(TAG, "NavigationDebug: AdminMain -> service_detail/${clickedService.id}")
                     navController.navigate(route = "service_detail/${clickedService.id}")
                 },
                 onNavigateToAddPersonnel = { navController.navigate(route = "add_personnel") },
@@ -200,18 +246,23 @@ fun AppNavigation(
                     navController.navigate(route = "personnel_detail/$id")
                 },
                 onNavigateToPersonnel = {
+                    Log.d(TAG, "NavigationDebug: Drawer -> personnel_management")
                     navController.navigate("personnel_management")
                 },
                 onNavigateToShift = {
+                    Log.d(TAG, "NavigationDebug: Drawer -> admin_shift")
                     navController.navigate("admin_shift")
                 },
                 onNavigateToLeave = {
+                    Log.d(TAG, "NavigationDebug: Drawer -> admin_leave")
                     navController.navigate("admin_leave")
                 },
                 onNavigateToOvertime = {
+                    Log.d(TAG, "NavigationDebug: Drawer -> admin_overtime")
                     navController.navigate("admin_overtime")
                 },
                 onNavigateToServiceRegistry = {
+                    Log.d(TAG, "NavigationDebug: Drawer -> service_registry")
                     navController.navigate("service_registry")
                 },
                 onEditServiceClick = { serviceId: Int ->
@@ -236,8 +287,11 @@ fun AppNavigation(
             )
         }
 
-        // --- ORTAK BİLDİRİM MERKEZİ ROTA TANIMI ---
         composable("notification_center") {
+            DisposableEffect(Unit) {
+                Log.d(TAG, "NotificationCenterScreen ENTER")
+                onDispose { Log.d(TAG, "NotificationCenterScreen DISPOSE") }
+            }
             val notificationViewModel: NotificationViewModel = hiltViewModel()
 
             NotificationCenterScreen(
@@ -246,11 +300,14 @@ fun AppNavigation(
             )
         }
 
-        // --- AI ASİSTAN ROTA TANIMI ---
         composable(
             route = "ai_assistant/{role}",
             arguments = listOf(navArgument("role") { type = NavType.StringType })
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "AiScreen ENTER")
+                onDispose { Log.d(TAG, "AiScreen DISPOSE") }
+            }
             val role = backStackEntry.arguments?.getString("role") ?: "PERSONEL"
             AiScreen(
                 role = role,
@@ -261,11 +318,14 @@ fun AppNavigation(
             )
         }
 
-        // --- AI SESLİ SOHBET ROTA TANIMI ---
         composable(
             route = "ai_voice/{role}",
             arguments = listOf(navArgument("role") { type = NavType.StringType })
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "AiVoiceScreen ENTER")
+                onDispose { Log.d(TAG, "AiVoiceScreen DISPOSE") }
+            }
             val role = backStackEntry.arguments?.getString("role") ?: "PERSONEL"
             val aiViewModel: AiViewModel = hiltViewModel()
             AiVoiceScreen(
@@ -276,6 +336,10 @@ fun AppNavigation(
         }
 
         composable("personnel_management") {
+            DisposableEffect(Unit) {
+                Log.d(TAG, "PersonnelManagementScreen ENTER")
+                onDispose { Log.d(TAG, "PersonnelManagementScreen DISPOSE") }
+            }
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
             PersonnelManagementScreen(
                 personnelViewModel = personnelViewModel,
@@ -290,6 +354,10 @@ fun AppNavigation(
             route = "personnel_work_detail/{personnelId}",
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "PersonnelWorkDetailScreen ENTER")
+                onDispose { Log.d(TAG, "PersonnelWorkDetailScreen DISPOSE") }
+            }
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val detailViewModel: PersonnelDetailViewModel = hiltViewModel()
 
@@ -318,6 +386,10 @@ fun AppNavigation(
         }
 
         composable(route = "admin_overtime") {
+            DisposableEffect(Unit) {
+                Log.d(TAG, "AdminOvertimeScreen ENTER")
+                onDispose { Log.d(TAG, "AdminOvertimeScreen DISPOSE") }
+            }
             val overtimeViewModel: OvertimeViewModel = hiltViewModel()
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
@@ -337,6 +409,10 @@ fun AppNavigation(
                 navArgument("serialNumber") { type = NavType.StringType; nullable = true; defaultValue = null }
             )
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "ServiceRegistryScreen ENTER")
+                onDispose { Log.d(TAG, "ServiceRegistryScreen DISPOSE") }
+            }
             val registryViewModel: ServiceRegistryViewModel = hiltViewModel()
             val companyName = backStackEntry.arguments?.getString("companyName")
             val serialNumber = backStackEntry.arguments?.getString("serialNumber")
@@ -353,6 +429,10 @@ fun AppNavigation(
         }
 
         composable("personnel_service_detail/{serviceId}/{personnelId}") { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "PersonnelServiceDetailScreen ENTER")
+                onDispose { Log.d(TAG, "PersonnelServiceDetailScreen DISPOSE") }
+            }
             val serviceId = backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
             val pId = backStackEntry.arguments?.getString("personnelId")?.toIntOrNull()
             val returnedPhotoUri by backStackEntry.savedStateHandle.getStateFlow<String?>(
@@ -390,6 +470,10 @@ fun AppNavigation(
             route = "personnel_detail/{personnelId}",
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "PersonnelDetailScreen ENTER")
+                onDispose { Log.d(TAG, "PersonnelDetailScreen DISPOSE") }
+            }
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
             val personnelList by personnelViewModel.personnelList.collectAsState()
@@ -427,6 +511,10 @@ fun AppNavigation(
                 }
             )
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "AddServiceScreen ENTER")
+                onDispose { Log.d(TAG, "AddServiceScreen DISPOSE") }
+            }
             val serviceIdStr = backStackEntry.arguments?.getString("serviceId")
             val actualServiceId = serviceIdStr?.toIntOrNull()
 
@@ -469,6 +557,10 @@ fun AppNavigation(
                 navArgument("hasLoc") { type = NavType.StringType; defaultValue = "false" }
             )
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "LocationPickerScreen ENTER")
+                onDispose { Log.d(TAG, "LocationPickerScreen DISPOSE") }
+            }
             val hasLoc = backStackEntry.arguments?.getString("hasLoc") == "true"
             val lat = if (hasLoc) backStackEntry.arguments?.getFloat("lat")?.toDouble() else null
             val lon = if (hasLoc) backStackEntry.arguments?.getFloat("lon")?.toDouble() else null
@@ -500,6 +592,10 @@ fun AppNavigation(
                 }
             )
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "AddPersonnelScreen ENTER")
+                onDispose { Log.d(TAG, "AddPersonnelScreen DISPOSE") }
+            }
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
             val personnelIdStr = backStackEntry.arguments?.getString("personnelId")
             val actualId = personnelIdStr?.toIntOrNull()
@@ -515,6 +611,10 @@ fun AppNavigation(
             route = "edit_profile/{personnelId}",
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "EditProfileScreen ENTER")
+                onDispose { Log.d(TAG, "EditProfileScreen DISPOSE") }
+            }
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
@@ -532,6 +632,10 @@ fun AppNavigation(
             route = "personnel_main/{personnelId}",
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "PersonnelMainScreen ENTER")
+                onDispose { Log.d(TAG, "PersonnelMainScreen DISPOSE") }
+            }
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
@@ -618,6 +722,10 @@ fun AppNavigation(
         }
 
         composable("camera") {
+            DisposableEffect(Unit) {
+                Log.d(TAG, "CameraScreen ENTER")
+                onDispose { Log.d(TAG, "CameraScreen DISPOSE") }
+            }
             CameraScreen(
                 onPhotoCaptured = { uri ->
                     navController.previousBackStackEntry?.savedStateHandle?.set(
@@ -633,6 +741,10 @@ fun AppNavigation(
         }
 
         composable("service_detail/{serviceId}") { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "ServiceDetailScreen ENTER")
+                onDispose { Log.d(TAG, "ServiceDetailScreen DISPOSE") }
+            }
             val serviceId =
                 backStackEntry.arguments?.getString("serviceId")?.toIntOrNull() ?: 0
 
@@ -680,6 +792,10 @@ fun AppNavigation(
         }
 
         composable("admin_shift") {
+            DisposableEffect(Unit) {
+                Log.d(TAG, "AdminShiftScreen ENTER")
+                onDispose { Log.d(TAG, "AdminShiftScreen DISPOSE") }
+            }
             val shiftViewModel: ShiftViewModel = hiltViewModel()
             val personnelViewModel: PersonnelViewModel = hiltViewModel()
 
@@ -700,7 +816,10 @@ fun AppNavigation(
                 }
             )
         ) { backStackEntry ->
-
+            DisposableEffect(Unit) {
+                Log.d(TAG, "PersonnelShiftScreen ENTER")
+                onDispose { Log.d(TAG, "PersonnelShiftScreen DISPOSE") }
+            }
             val personnelId =
                 backStackEntry.arguments?.getInt("personnelId") ?: 0
 
@@ -716,6 +835,10 @@ fun AppNavigation(
         }
 
         composable("admin_leave") {
+            DisposableEffect(Unit) {
+                Log.d(TAG, "AdminLeaveScreen ENTER")
+                onDispose { Log.d(TAG, "AdminLeaveScreen DISPOSE") }
+            }
             val leaveViewModel: LeaveViewModel = hiltViewModel()
 
             AdminLeaveScreen(
@@ -734,7 +857,10 @@ fun AppNavigation(
                 }
             )
         ) { backStackEntry ->
-
+            DisposableEffect(Unit) {
+                Log.d(TAG, "PersonnelLeaveScreen ENTER")
+                onDispose { Log.d(TAG, "PersonnelLeaveScreen DISPOSE") }
+            }
             val personnelId =
                 backStackEntry.arguments?.getInt("personnelId") ?: 0
 
@@ -753,6 +879,10 @@ fun AppNavigation(
             route = "personnel_overtime/{personnelId}",
             arguments = listOf(navArgument("personnelId") { type = NavType.IntType })
         ) { backStackEntry ->
+            DisposableEffect(Unit) {
+                Log.d(TAG, "PersonnelOvertimeScreen ENTER")
+                onDispose { Log.d(TAG, "PersonnelOvertimeScreen DISPOSE") }
+            }
             val personnelId = backStackEntry.arguments?.getInt("personnelId") ?: 0
             val overtimeViewModel: OvertimeViewModel = hiltViewModel()
 
@@ -766,7 +896,10 @@ fun AppNavigation(
         composable(
             "service_history/{firestoreId}/{serviceId}/{companyName}"
         ) { backStackEntry ->
-
+            DisposableEffect(Unit) {
+                Log.d(TAG, "ServiceHistoryScreen ENTER")
+                onDispose { Log.d(TAG, "ServiceHistoryScreen DISPOSE") }
+            }
             val firestoreId =
                 backStackEntry.arguments?.getString("firestoreId") ?: ""
 

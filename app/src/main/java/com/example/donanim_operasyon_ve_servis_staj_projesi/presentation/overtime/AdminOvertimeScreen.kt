@@ -15,7 +15,8 @@ import androidx.compose.ui.unit.dp
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.OvertimeViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,6 +28,7 @@ fun AdminOvertimeScreen(
     val overtimes by overtimeViewModel.allOvertimes.collectAsState()
     val personnelList by personnelViewModel.personnelList.collectAsState()
 
+    // Ekran ilk açıldığında yalnızca bir kez veri akışını başlatır.
     LaunchedEffect(Unit) {
         overtimeViewModel.loadAllOvertimes()
     }
@@ -34,16 +36,29 @@ fun AdminOvertimeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Fazla Mesai Takibi", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        text = "Fazla Mesai Takibi",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                    IconButton(
+                        onClick = onNavigateBack
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Geri"
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { paddingValues ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -51,86 +66,205 @@ fun AdminOvertimeScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Tüm Fazla Mesai Kayıtları", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
+            Text(
+                text = "Tüm Fazla Mesai Kayıtları",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
 
             if (overtimes.isEmpty()) {
-                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    Text("Kayıtlı fazla mesai bulunmuyor.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Kayıtlı fazla mesai bulunmuyor.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
+
             } else {
+
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(overtimes) { item ->
-                        val personnel = personnelList.find { it.id == item.personnelId }
-                        val personnelName = personnel?.fullName ?: "Personel #${item.personnelId}"
 
-                        val startStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(item.startTime))
-                        val endStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(item.endTime))
+                    items(
+                        items = overtimes,
+                        key = { item -> item.id }
+                    ) { item ->
 
-                        val (statusText, statusColor) = when (item.status) {
-                            "APPROVED" -> "Onaylandı" to MaterialTheme.colorScheme.primaryContainer
-                            "REJECTED" -> "Reddedildi" to MaterialTheme.colorScheme.errorContainer
-                            else -> "Onay Bekliyor" to MaterialTheme.colorScheme.surfaceVariant
+                        val personnel = personnelList.find {
+                            it.id == item.personnelId
+                        }
+
+                        val personnelName =
+                            personnel?.fullName
+                                ?: "Personel #${item.personnelId}"
+
+                        val startStr = remember(item.startTime) {
+                            SimpleDateFormat(
+                                "dd.MM.yyyy HH:mm",
+                                Locale.getDefault()
+                            ).format(
+                                Date(item.startTime)
+                            )
+                        }
+
+                        val endStr = remember(item.endTime) {
+                            SimpleDateFormat(
+                                "dd.MM.yyyy HH:mm",
+                                Locale.getDefault()
+                            ).format(
+                                Date(item.endTime)
+                            )
+                        }
+
+                        val statusText = when (item.status) {
+                            "APPROVED" -> "Onaylandı"
+                            "REJECTED" -> "Reddedildi"
+                            else -> "Onay Bekliyor"
+                        }
+
+                        val statusColor = when (item.status) {
+                            "APPROVED" ->
+                                MaterialTheme.colorScheme.primaryContainer
+
+                            "REJECTED" ->
+                                MaterialTheme.colorScheme.errorContainer
+
+                            else ->
+                                MaterialTheme.colorScheme.surfaceVariant
                         }
 
                         ElevatedCard(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         ) {
+
                             Column(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalArrangement =
+                                    Arrangement.spacedBy(6.dp)
                             ) {
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    horizontalArrangement =
+                                        Arrangement.SpaceBetween,
+                                    verticalAlignment =
+                                        Alignment.CenterVertically
                                 ) {
-                                    Text(text = personnelName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
+                                    Text(
+                                        text = personnelName,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
                                         color = statusColor
                                     ) {
+
                                         Text(
                                             text = statusText,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.padding(
+                                                horizontal = 8.dp,
+                                                vertical = 2.dp
+                                            ),
+                                            style =
+                                                MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
                                 }
 
-                                Text(text = "Süre: ${item.durationMinutes} dakika", fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    text =
+                                        "Süre: ${item.durationMinutes} dakika",
+                                    fontWeight = FontWeight.SemiBold
+                                )
+
                                 if (item.serviceRecordId != null) {
-                                    Text(text = "İş Emri ID: #${item.serviceRecordId}", style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        text =
+                                            "İş Emri ID: #${item.serviceRecordId}",
+                                        style =
+                                            MaterialTheme.typography.bodySmall
+                                    )
                                 }
-                                Text(text = "Başlangıç: $startStr", style = MaterialTheme.typography.bodyMedium)
-                                Text(text = "Bitiş: $endStr", style = MaterialTheme.typography.bodyMedium)
+
+                                Text(
+                                    text = "Başlangıç: $startStr",
+                                    style =
+                                        MaterialTheme.typography.bodyMedium
+                                )
+
+                                Text(
+                                    text = "Bitiş: $endStr",
+                                    style =
+                                        MaterialTheme.typography.bodyMedium
+                                )
 
                                 if (!item.description.isNullOrBlank()) {
-                                    Text(text = "Açıklama: ${item.description}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        text =
+                                            "Açıklama: ${item.description}",
+                                        style =
+                                            MaterialTheme.typography.bodySmall,
+                                        color =
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
 
                                 if (item.status == "PENDING") {
-                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Spacer(
+                                        modifier = Modifier.height(4.dp)
+                                    )
+
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement =
+                                            Arrangement.spacedBy(8.dp)
                                     ) {
+
                                         Button(
-                                            onClick = { overtimeViewModel.approveOvertime(item) },
+                                            onClick = {
+                                                overtimeViewModel
+                                                    .approveOvertime(item)
+                                            },
                                             modifier = Modifier.weight(1f),
-                                            shape = RoundedCornerShape(8.dp)
+                                            shape =
+                                                RoundedCornerShape(8.dp)
                                         ) {
                                             Text("Onayla")
                                         }
+
                                         Button(
-                                            onClick = { overtimeViewModel.rejectOvertime(item) },
+                                            onClick = {
+                                                overtimeViewModel
+                                                    .rejectOvertime(item)
+                                            },
                                             modifier = Modifier.weight(1f),
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                            shape = RoundedCornerShape(8.dp)
+                                            colors =
+                                                ButtonDefaults.buttonColors(
+                                                    containerColor =
+                                                        MaterialTheme.colorScheme.error
+                                                ),
+                                            shape =
+                                                RoundedCornerShape(8.dp)
                                         ) {
                                             Text("Reddet")
                                         }

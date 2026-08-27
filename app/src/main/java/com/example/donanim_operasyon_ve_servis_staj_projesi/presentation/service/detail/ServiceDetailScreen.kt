@@ -80,7 +80,7 @@ fun ServiceDetailScreen(
     val serviceRecords by viewModel.serviceRecords.collectAsState()
     val personnelRecords by viewModel.personnelServiceRecords.collectAsState()
     val service = serviceRecords.find { it.id == serviceId } ?: personnelRecords.find { it.id == serviceId }
-    val serviceFeedback by viewModel.getFeedbackFlow(serviceId, service?.firestoreId).collectAsState(initial = null)
+    val serviceFeedback by viewModel.getFeedbackForServiceFlow(serviceId, service?.firestoreId.orEmpty()).collectAsState(initial = null)
 
     // Servis kayıtlarından firma ve cihaz istatistiklerini hesapla
     val companyRegistryCount = remember(serviceRecords, service) {
