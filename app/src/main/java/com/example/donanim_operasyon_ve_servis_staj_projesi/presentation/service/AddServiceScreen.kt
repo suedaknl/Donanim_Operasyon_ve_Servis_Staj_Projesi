@@ -389,29 +389,26 @@ fun AddServiceScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            Row(
+            // Cihaz Tipi ve Modeli telefonda kaymayı önlemek için alt alta alındı
+            OutlinedTextField(
+                value = deviceType,
+                onValueChange = { deviceType = it; showError = false },
+                label = { Text("Cihaz Tipi") },
+                leadingIcon = { Icon(Icons.Default.Devices, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = deviceType,
-                    onValueChange = { deviceType = it; showError = false },
-                    label = { Text("Cihaz Tipi") },
-                    leadingIcon = { Icon(Icons.Default.Devices, contentDescription = null) },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
-                OutlinedTextField(
-                    value = deviceModel,
-                    onValueChange = { deviceModel = it; showError = false },
-                    label = { Text("Cihaz Modeli") },
-                    leadingIcon = { Icon(Icons.Default.PhoneAndroid, contentDescription = null) },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            OutlinedTextField(
+                value = deviceModel,
+                onValueChange = { deviceModel = it; showError = false },
+                label = { Text("Cihaz Modeli") },
+                leadingIcon = { Icon(Icons.Default.PhoneAndroid, contentDescription = null) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
 
             OutlinedTextField(
                 value = serialNumber,
