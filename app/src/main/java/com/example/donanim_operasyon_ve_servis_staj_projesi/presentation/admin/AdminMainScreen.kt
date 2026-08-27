@@ -117,8 +117,10 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.People, contentDescription = null) },
                     onClick = {
-                        coroutineScope.launch { drawerState.close() }
-                        onNavigateToPersonnel()
+                        coroutineScope.launch {
+                            drawerState.close()
+                            onNavigateToPersonnel()
+                        }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -127,8 +129,10 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.Schedule, contentDescription = null) },
                     onClick = {
-                        coroutineScope.launch { drawerState.close() }
-                        onNavigateToShift()
+                        coroutineScope.launch {
+                            drawerState.close()
+                            onNavigateToShift()
+                        }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -137,8 +141,10 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.EventBusy, contentDescription = null) },
                     onClick = {
-                        coroutineScope.launch { drawerState.close() }
-                        onNavigateToLeave()
+                        coroutineScope.launch {
+                            drawerState.close()
+                            onNavigateToLeave()
+                        }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -147,8 +153,10 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.MoreTime, contentDescription = null) },
                     onClick = {
-                        coroutineScope.launch { drawerState.close() }
-                        onNavigateToOvertime()
+                        coroutineScope.launch {
+                            drawerState.close()
+                            onNavigateToOvertime()
+                        }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -157,8 +165,10 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.History, contentDescription = null) },
                     onClick = {
-                        coroutineScope.launch { drawerState.close() }
-                        onNavigateToServiceRegistry()
+                        coroutineScope.launch {
+                            drawerState.close()
+                            onNavigateToServiceRegistry()
+                        }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -167,8 +177,12 @@ fun AdminMainScreen(
                     selected = false,
                     icon = { Icon(Icons.Default.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                     onClick = {
-                        coroutineScope.launch { drawerState.close() }
-                        navController.navigate("ai_assistant/ADMIN")
+                        coroutineScope.launch {
+                            drawerState.close()
+                            navController.navigate("ai_assistant/ADMIN") {
+                                launchSingleTop = true
+                            }
+                        }
                     },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -229,7 +243,6 @@ fun AdminMainScreen(
                     )
                 }
             },
-            // floatingActionButton kısmının ilgili bölümü:
             floatingActionButton = {
                 if ((selectedTab == 0 || selectedTab == 1) && serviceSubScreen == "list") {
                     Box(
@@ -253,20 +266,6 @@ fun AdminMainScreen(
                                     ExtendedFloatingActionButton(
                                         onClick = {
                                             showFabMenu = false
-                                            onNavigateToAddService()
-                                        },
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(Icons.Default.AddCircle, null, tint = MaterialTheme.colorScheme.primary)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Yeni İş Emri Ekle", fontWeight = FontWeight.Medium)
-                                    }
-
-                                    ExtendedFloatingActionButton(
-                                        onClick = {
-                                            showFabMenu = false
                                             onNavigateToAddPersonnel()
                                         },
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -281,7 +280,9 @@ fun AdminMainScreen(
                                     ExtendedFloatingActionButton(
                                         onClick = {
                                             showFabMenu = false
-                                            navController.navigate("ai_assistant/ADMIN")
+                                            navController.navigate("ai_assistant/ADMIN") {
+                                                launchSingleTop = true
+                                            }
                                         },
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
                                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1075,11 +1076,13 @@ fun AdminWorkAnalysisSection(
                 val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
 
                 val maxVal = (analysis.createdCounts + analysis.completedCounts).maxOrNull()?.coerceAtLeast(4) ?: 4
-
-                val textPaint = android.graphics.Paint().apply {
-                    textSize = 10.dp.value * LocalDensity.current.density
-                    color = android.graphics.Color.DKGRAY
-                    textAlign = android.graphics.Paint.Align.CENTER
+                val density = LocalDensity.current
+                val textPaint = remember(density) {
+                    android.graphics.Paint().apply {
+                        textSize = 10.dp.value * density.density
+                        color = android.graphics.Color.DKGRAY
+                        textAlign = android.graphics.Paint.Align.CENTER
+                    }
                 }
 
                 Box(modifier = Modifier.fillMaxWidth().height(210.dp)) {
@@ -1087,76 +1090,77 @@ fun AdminWorkAnalysisSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(180.dp)
-                            .padding(vertical = 4.dp)
-                    ) {
-                        val width = size.width
-                        val height = size.height
-                        val paddingBottom = 20.dp.toPx()
-                        val paddingLeft = 24.dp.toPx()
-                        val chartWidth = width - paddingLeft
-                        val chartHeight = height - paddingBottom
+                            .padding(vertical = 4.dp),
+                        onDraw = {
+                            val width = size.width
+                            val height = size.height
+                            val paddingBottom = 20.dp.toPx()
+                            val paddingLeft = 24.dp.toPx()
+                            val chartWidth = width - paddingLeft
+                            val chartHeight = height - paddingBottom
 
-                        val stepX = if (analysis.labels.size > 1) chartWidth / (analysis.labels.size - 1) else chartWidth
+                            val stepX = if (analysis.labels.size > 1) chartWidth / (analysis.labels.size - 1) else chartWidth
 
-                        for (i in 0..4) {
-                            val y = chartHeight * (i / 4f)
-                            drawLine(
-                                color = gridColor,
-                                start = Offset(paddingLeft, y),
-                                end = Offset(width, y),
-                                strokeWidth = 1.dp.toPx()
+                            for (i in 0..4) {
+                                val y = chartHeight * (i / 4f)
+                                drawLine(
+                                    color = gridColor,
+                                    start = Offset(paddingLeft, y),
+                                    end = Offset(width, y),
+                                    strokeWidth = 1.dp.toPx()
+                                )
+                            }
+
+                            val getX: (Int) -> Float = { index -> paddingLeft + (index * stepX) }
+                            val getY: (Int) -> Float = { value -> chartHeight - (value.toFloat() / maxVal * chartHeight) }
+
+                            val createdPath = Path().apply {
+                                analysis.createdCounts.forEachIndexed { index, value ->
+                                    val x = getX(index)
+                                    val y = getY(value)
+                                    if (index == 0) moveTo(x, y) else lineTo(x, y)
+                                }
+                            }
+
+                            val completedPath = Path().apply {
+                                analysis.completedCounts.forEachIndexed { index, value ->
+                                    val x = getX(index)
+                                    val y = getY(value)
+                                    if (index == 0) moveTo(x, y) else lineTo(x, y)
+                                }
+                            }
+
+                            drawPath(
+                                path = createdPath,
+                                color = primaryColor,
+                                style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                             )
-                        }
+                            drawPath(
+                                path = completedPath,
+                                color = successColor,
+                                style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                            )
 
-                        val getX: (Int) -> Float = { index -> paddingLeft + (index * stepX) }
-                        val getY: (Int) -> Float = { value -> chartHeight - (value.toFloat() / maxVal * chartHeight) }
-
-                        val createdPath = Path().apply {
                             analysis.createdCounts.forEachIndexed { index, value ->
-                                val x = getX(index)
-                                val y = getY(value)
-                                if (index == 0) moveTo(x, y) else lineTo(x, y)
+                                drawCircle(color = primaryColor, radius = 4.dp.toPx(), center = Offset(getX(index), getY(value)))
+                                drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(getX(index), getY(value)))
                             }
-                        }
-
-                        val completedPath = Path().apply {
                             analysis.completedCounts.forEachIndexed { index, value ->
+                                drawCircle(color = successColor, radius = 4.dp.toPx(), center = Offset(getX(index), getY(value)))
+                                drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(getX(index), getY(value)))
+                            }
+
+                            analysis.labels.forEachIndexed { index, label ->
                                 val x = getX(index)
-                                val y = getY(value)
-                                if (index == 0) moveTo(x, y) else lineTo(x, y)
+                                drawContext.canvas.nativeCanvas.drawText(
+                                    label,
+                                    x,
+                                    chartHeight + 16.dp.toPx(),
+                                    textPaint
+                                )
                             }
                         }
-
-                        drawPath(
-                            path = createdPath,
-                            color = primaryColor,
-                            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                        )
-                        drawPath(
-                            path = completedPath,
-                            color = successColor,
-                            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                        )
-
-                        analysis.createdCounts.forEachIndexed { index, value ->
-                            drawCircle(color = primaryColor, radius = 4.dp.toPx(), center = Offset(getX(index), getY(value)))
-                            drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(getX(index), getY(value)))
-                        }
-                        analysis.completedCounts.forEachIndexed { index, value ->
-                            drawCircle(color = successColor, radius = 4.dp.toPx(), center = Offset(getX(index), getY(value)))
-                            drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(getX(index), getY(value)))
-                        }
-
-                        analysis.labels.forEachIndexed { index, label ->
-                            val x = getX(index)
-                            drawContext.canvas.nativeCanvas.drawText(
-                                label,
-                                x,
-                                chartHeight + 16.dp.toPx(),
-                                textPaint
-                            )
-                        }
-                    }
+                    )
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
