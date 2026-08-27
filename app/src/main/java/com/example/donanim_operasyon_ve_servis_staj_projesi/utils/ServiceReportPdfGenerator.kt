@@ -16,6 +16,8 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.converter
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.signature.SignatureRenderer
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 object ServiceReportPdfGenerator {
 
@@ -225,8 +227,8 @@ object ServiceReportPdfGenerator {
                                 }
                                 rawPath.startsWith("http://") || rawPath.startsWith("https://") -> {
                                     try {
-                                        val url = java.net.URL(rawPath)
-                                        val conn = url.openConnection() as java.net.HttpURLConnection
+                                        val url = URL(rawPath)
+                                        val conn = url.openConnection() as HttpURLConnection
                                         conn.doInput = true
                                         conn.connect()
                                         conn.inputStream.use { BitmapFactory.decodeStream(it) }
@@ -303,8 +305,8 @@ object ServiceReportPdfGenerator {
                 try {
                     sigBitmap = when {
                         signaturePath.startsWith("http://") || signaturePath.startsWith("https://") -> {
-                            val url = java.net.URL(signaturePath)
-                            val conn = url.openConnection() as java.net.HttpURLConnection
+                            val url = URL(signaturePath)
+                            val conn = url.openConnection() as HttpURLConnection
                             conn.doInput = true
                             conn.connect()
                             conn.inputStream.use { BitmapFactory.decodeStream(it) }

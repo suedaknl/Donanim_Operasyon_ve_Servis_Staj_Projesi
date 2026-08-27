@@ -30,6 +30,7 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelV
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.camera.CameraScreen
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.form.ClosingFormScreen
+import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.CustomerFeedbackWebScreen // <-- Eklendi
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.SessionManager
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.AuthRepository
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.repository.NotificationRepository
@@ -161,6 +162,21 @@ fun AppNavigation(
                 onNavigateBack = { navController.popBackStack() },
                 onSuccess = {
                     navController.popBackStack()
+                }
+            )
+        }
+
+        // --- MÜŞTERİ DEĞERLENDİRME WEB EKRANI ROTA TANIMI ---
+        composable(
+            route = "customer_feedback/{serviceId}",
+            arguments = listOf(navArgument("serviceId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: 0
+
+            CustomerFeedbackWebScreen(
+                serviceId = serviceId,
+                onSubmitSuccess = { rating, comment ->
+                    sharedServiceViewModel.submitServiceFeedback(serviceId, rating, comment)
                 }
             )
         }

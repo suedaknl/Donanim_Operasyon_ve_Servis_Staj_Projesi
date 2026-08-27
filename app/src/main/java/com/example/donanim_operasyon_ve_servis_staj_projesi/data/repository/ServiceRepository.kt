@@ -7,8 +7,11 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePh
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceClosingSignature
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.PersonnelDao
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceFeedback
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceFeedbackDao
 import kotlinx.coroutines.flow.Flow
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.remote.FirestoreServiceDataSource
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -16,7 +19,8 @@ import javax.inject.Inject
 class ServiceRepository @Inject constructor(
     private val serviceDao: ServiceDao,
     private val personnelDao: PersonnelDao,
-    private val firestoreDataSource: FirestoreServiceDataSource
+    private val firestoreDataSource: FirestoreServiceDataSource,
+    private val serviceFeedbackDao: ServiceFeedbackDao
 ) {
 
     suspend fun insertRecord(record: ServiceRecord) {
@@ -70,6 +74,56 @@ class ServiceRepository @Inject constructor(
                         status = savedRecord.status,
                         performedByRole = "Admin"
                     )
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // --- MÜŞTERİ DEĞERLENDİRMESİNİ FIRESTORE'DAN ÇEKİP ROOM'A SENKRONİZE ETME ---
+    suspend fun syncServiceFeedback(serviceId: Int, firestoreId: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                val firestore = FirebaseFirestore.getInstance()
+                val targetIds = listOfNotNull(serviceId.toString(), firestoreId.takeIf { !it.isNullOrBlank() })
+
+                for (targetId in targetIds) {
+                    firestore.collection("services")
+                        .document(targetId)
+                        .collection("feedback")
+                        .get()
+                        .addOnSuccessListener { snapshot ->
+                            if (snapshot != null && !snapshot.isEmpty) {
+                                val doc = snapshot.documents[0]
+                                val rating = doc.getLong("rating")?.toInt() ?: 0
+                                val quality = doc.getLong("quality")?.toInt() ?: rating
+                                val staff = doc.getLong("staff")?.toInt() ?: rating
+                                val speed = doc.getLong("speed")?.toInt() ?: rating
+                                val comment = doc.getString("comment") ?: ""
+
+                                // --- GÜVENLİ TIMESTAMP OKUMA (Çökmeyi Önler) ---
+                                val timestamp = try {
+                                    doc.getLong("timestamp") ?: doc.getTimestamp("timestamp")?.toDate()?.time ?: System.currentTimeMillis()
+                                } catch (e: Exception) {
+                                    System.currentTimeMillis()
+                                }
+
+                                kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                                    val feedback = ServiceFeedback(
+                                        serviceId = serviceId,
+                                        firestoreId = targetId,
+                                        rating = rating,
+                                        quality = quality,
+                                        staff = staff,
+                                        speed = speed,
+                                        comment = comment,
+                                        timestamp = timestamp
+                                    )
+                                    serviceFeedbackDao.insertFeedback(feedback)
+                                }
+                            }
+                        }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -239,7 +293,15 @@ class ServiceRepository @Inject constructor(
     }
 
     suspend fun getServiceById(id: Int): ServiceRecord? {
-        return serviceDao.getServiceById(id)
+        val record = serviceDao.getServiceById(id)
+        record?.firestoreId?.let { firestoreId ->
+            if (firestoreId.isNotBlank()) {
+                withContext(Dispatchers.IO) {
+                    syncServiceFeedback(id, firestoreId)
+                }
+            }
+        }
+        return record
     }
 
     suspend fun clearAssignedPersonnel(personnelId: Int) {
@@ -529,6 +591,8 @@ class ServiceRepository @Inject constructor(
                             assignedPersonnelId = matchedPersonnelId ?: existingLocalService.assignedPersonnelId
                         )
                         serviceDao.updateService(serviceToUpdate)
+                        // Senkronizasyon sırasında feedback verisini de çekelim
+                        syncServiceFeedback(existingLocalService.id, firestoreId)
                     } else {
                         val ghostRecord = allLocalServices.find {
                             it.firestoreId == null &&
@@ -542,6 +606,7 @@ class ServiceRepository @Inject constructor(
                                 assignedPersonnelId = matchedPersonnelId
                             )
                             serviceDao.updateService(serviceToUpdate)
+                            syncServiceFeedback(ghostRecord.id, firestoreId)
                         } else {
                             val serviceToInsert = remoteService.copy(
                                 assignedPersonnelId = matchedPersonnelId
@@ -621,6 +686,7 @@ class ServiceRepository @Inject constructor(
 
                     if (existingLocalService != null) {
                         serviceDao.updateService(serviceToSave)
+                        syncServiceFeedback(existingLocalService.id, firestoreId)
                     } else {
                         serviceDao.insertRecord(serviceToSave)
                     }

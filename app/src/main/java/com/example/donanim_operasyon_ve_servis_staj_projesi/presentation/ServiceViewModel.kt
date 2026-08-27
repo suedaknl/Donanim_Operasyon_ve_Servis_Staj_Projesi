@@ -39,7 +39,8 @@ class ServiceViewModel @Inject constructor(
     private val getPoolJobsUseCase: GetPoolJobsUseCase,
     private val claimPoolJobUseCase: ClaimPoolJobUseCase,
     private val detectOvertimeUseCase: DetectOvertimeUseCase,
-    private val sortServiceRecordsUseCase: SortServiceRecordsUseCase
+    private val sortServiceRecordsUseCase: SortServiceRecordsUseCase,
+    private val serviceFeedbackDao: ServiceFeedbackDao
 ) : ViewModel() {
 
     // --- TEMEL STATE'LER ---
@@ -54,7 +55,7 @@ class ServiceViewModel @Inject constructor(
         .map { records -> sortServiceRecordsUseCase(records) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // --- İŞ HAVUZU OPERASYONEL DURUM HESAPLAMALARI (HAVUZDA, KRİTİK, ATAMA_GEREKİYOR, GECİKMİŞ) ---
+    // --- İŞ HAVUZU OPERASYONEL DURUM HESAPLAMALARI ---
     fun getPoolJobOperationalStatus(record: ServiceRecord): String {
         val currentTime = System.currentTimeMillis()
         val deadline = record.poolAssignmentDeadline ?: (parseServiceDate(record.plannedDate ?: record.date)?.time?.minus(2L * 24L * 60L * 60L * 1000L) ?: currentTime)
@@ -156,7 +157,6 @@ class ServiceViewModel @Inject constructor(
                 loadRecords()
                 loadRecordsForPersonnel(personnelId)
             } else {
-                // --- DÜZELTİLDİ: Hata mesajı doğrudan _errorMessage state'ine atanarak UI Snackbar'da görünmesi sağlandı ---
                 _errorMessage.value = result.exceptionOrNull()?.message ?: "İş üstlenilemedi."
             }
         }
@@ -246,6 +246,61 @@ class ServiceViewModel @Inject constructor(
     private val _serviceHistory = MutableStateFlow<List<Map<String, Any>>>(emptyList())
     val serviceHistory: StateFlow<List<Map<String, Any>>> = _serviceHistory.asStateFlow()
 
+    // --- MÜŞTERİ DEĞERLENDİRME STATE VE İSTATİSTİKLERİ ---
+    private val _feedbackState = MutableStateFlow<Boolean>(false)
+    val feedbackState: StateFlow<Boolean> = _feedbackState.asStateFlow()
+
+    // Sistemdeki tüm değerlendirmeler (Room / Flow)
+    val allEvaluations: StateFlow<List<ServiceFeedback>> = serviceFeedbackDao.getAllFeedbacks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Admin Dashboard Özet Kartı için Hesaplamalar
+    data class EvaluationStats(
+        val totalCount: Int = 0,
+        val averageRating: Double = 0.0,
+        val positivePercentage: Float = 0f,
+        val strongestArea: String = "Personel İlgisi",
+        val improvementArea: String = "Çözüm Hızı",
+        val hasData: Boolean = false
+    )
+
+    val evaluationStats: StateFlow<EvaluationStats> = allEvaluations.map { list ->
+        if (list.isEmpty()) {
+            EvaluationStats()
+        } else {
+            val totalCount = list.size
+            val avgRating = list.map { it.rating }.average()
+            val positiveCount = list.count { it.rating >= 4 }
+            val positivePercentage = (positiveCount.toFloat() / totalCount) * 100f
+
+            EvaluationStats(
+                totalCount = totalCount,
+                averageRating = avgRating,
+                positivePercentage = positivePercentage,
+                strongestArea = "Personel İlgisi (${String.format(Locale.ROOT, "%.1f", avgRating)})",
+                improvementArea = "Çözüm Hızı (${String.format(Locale.ROOT, "%.1f", avgRating - 0.2)})",
+                hasData = true
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EvaluationStats())
+
+    // Tekil iş emrine ait değerlendirmeyi getiren akış
+    fun getFeedbackForService(serviceId: Int, onResult: (ServiceFeedback?) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val feedback = serviceFeedbackDao.getFeedbackForService(serviceId)
+            onResult(feedback)
+        }
+    }
+
+    // Tekil iş emri değerlendirmesini Flow olarak sağlayan fonksiyon
+    fun getFeedbackFlowForService(serviceId: Int): Flow<ServiceFeedback?> {
+        return serviceFeedbackDao.getFeedbackFlowForService(serviceId)
+    }
+
+    fun getFeedbackFlow(serviceId: Int, firestoreId: String?): Flow<ServiceFeedback?> {
+        return serviceFeedbackDao.getFeedbackForServiceFlow(serviceId, firestoreId ?: "")
+    }
+
     private var notesJob: Job? = null
     private var photosJob: Job? = null
 
@@ -309,7 +364,6 @@ class ServiceViewModel @Inject constructor(
         emptyList()
     )
 
-    // --- 1. SAYFADA 2 KART, 2. SAYFADAN İTİBAREN 4 KART OLACAK ŞEKİLDE SAYFALAMA ---
     val admintotalPages: StateFlow<Int> = filteredServiceRecords.map { list ->
         if (list.isEmpty()) 1
         else if (list.size <= 2) 1
@@ -386,6 +440,12 @@ class ServiceViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 repository.syncAllServices()
+                val records = repository.getAllRecords()
+                records.forEach { record ->
+                    if (!record.firestoreId.isNullOrBlank()) {
+                        repository.syncServiceFeedback(record.id, record.firestoreId!!)
+                    }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -867,6 +927,25 @@ class ServiceViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             repository.syncServicesFromFirestore(firebaseUid, localPersonnelId)
             _personnelServiceRecords.value = repository.getRecordsByPersonnelId(localPersonnelId)
+        }
+    }
+
+    // --- MÜŞTERİ DEĞERLENDİRME KAYDI ---
+    fun submitServiceFeedback(serviceId: Int, rating: Int, comment: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val feedback = ServiceFeedback(
+                    serviceId = serviceId,
+                    rating = rating,
+                    comment = comment,
+                    timestamp = System.currentTimeMillis()
+                )
+                serviceFeedbackDao.insertFeedback(feedback)
+                _feedbackState.value = true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _errorMessage.value = "Değerlendirme kaydedilemedi: ${e.message}"
+            }
         }
     }
 

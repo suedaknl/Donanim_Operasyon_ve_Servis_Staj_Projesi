@@ -17,9 +17,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ShiftEntity::class,
         LeaveRequestEntity::class,
         OvertimeEntity::class,
-        NotificationEntity::class
+        NotificationEntity::class,
+        ServiceFeedback::class
     ],
-    version = 22,
+    version = 23,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -31,6 +32,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun leaveRequestDao(): LeaveRequestDao
     abstract fun overtimeDao(): OvertimeDao
     abstract fun notificationDao(): NotificationDao
+    abstract fun serviceFeedbackDao(): ServiceFeedbackDao
 
     companion object {
         @Volatile
@@ -182,6 +184,25 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // --- MİGRATİON (22 -> 23): ServiceFeedbacks Tablosu ve Kolonları ---
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS service_feedbacks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        serviceId INTEGER NOT NULL,
+                        firestoreId TEXT,
+                        rating INTEGER NOT NULL,
+                        quality INTEGER NOT NULL DEFAULT 0,
+                        staff INTEGER NOT NULL DEFAULT 0,
+                        speed INTEGER NOT NULL DEFAULT 0,
+                        comment TEXT,
+                        timestamp INTEGER NOT NULL
+                    )
+                """)
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -197,13 +218,14 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_12_13,
                         MIGRATION_13_14,
                         MIGRATION_14_15,
-                        AppDatabase.MIGRATION_15_16,
-                        AppDatabase.MIGRATION_16_17,
-                        AppDatabase.MIGRATION_17_18,
-                        AppDatabase.MIGRATION_18_19,
-                        AppDatabase.MIGRATION_19_20,
-                        AppDatabase.MIGRATION_20_21,
-                        AppDatabase.MIGRATION_21_22
+                        MIGRATION_15_16,
+                        MIGRATION_16_17,
+                        MIGRATION_17_18,
+                        MIGRATION_18_19,
+                        MIGRATION_19_20,
+                        MIGRATION_20_21,
+                        MIGRATION_21_22,
+                        MIGRATION_22_23
                     )
                     .build()
                 INSTANCE = instance

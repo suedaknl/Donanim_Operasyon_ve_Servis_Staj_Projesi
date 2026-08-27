@@ -255,6 +255,36 @@ class FirestoreServiceDataSource @Inject constructor(
         }
     }
 
+    // --- MÜŞTERİ DEĞERLENDİRMESİNİ FİREBASE'E KAYDETME ---
+    suspend fun uploadServiceFeedback(
+        firestoreId: String,
+        rating: Int,
+        comment: String?
+    ): Result<Unit> {
+        return try {
+            if (firestoreId.isBlank()) {
+                return Result.failure(IllegalArgumentException("Firestore ID boş."))
+            }
+
+            val timestamp = System.currentTimeMillis()
+            val feedbackData = hashMapOf(
+                "rating" to rating,
+                "comment" to (comment ?: ""),
+                "timestamp" to timestamp
+            )
+
+            // Servis dokümanının altına "feedback" adında bir subcollection olarak ekliyoruz
+            collection.document(firestoreId)
+                .collection("feedback")
+                .add(feedbackData)
+                .await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getServiceSignatures(firestoreId: String): Result<List<Map<String, Any>>> {
         return try {
             val snapshot = collection.document(firestoreId).collection("signatures").get().await()

@@ -6,6 +6,7 @@ import android.location.Location
 import android.net.Uri
 import android.os.Looper
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -25,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -35,12 +37,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.PhotoCategory
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceFeedback
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePhoto
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceStatus
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.ServiceViewModel
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.service.detail.components.ServiceApprovalSection
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.LocationHelper
+import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.QrCodeGenerator
 import com.example.donanim_operasyon_ve_servis_staj_projesi.viewmodel.PersonnelViewModel
 import com.google.android.gms.location.*
 import kotlinx.coroutines.launch
@@ -59,7 +63,7 @@ fun ServiceDetailScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEdit: (Int) -> Unit,
     onNavigateToHistory: (String, Int, String) -> Unit,
-    onNavigateToServiceRegistry: (String?, String?) -> Unit = { _, _ -> }, // <--- Yeni Navigasyon Callback
+    onNavigateToServiceRegistry: (String?, String?) -> Unit = { _, _ -> },
     returnedPhotoUri: String? = null,
     onPhotoSaved: () -> Unit = {},
     onCreateExtraJob: (Int) -> Unit,
@@ -72,9 +76,11 @@ fun ServiceDetailScreen(
         viewModel.loadClosingSignature(serviceId)
     }
 
+
     val serviceRecords by viewModel.serviceRecords.collectAsState()
     val personnelRecords by viewModel.personnelServiceRecords.collectAsState()
     val service = serviceRecords.find { it.id == serviceId } ?: personnelRecords.find { it.id == serviceId }
+    val serviceFeedback by viewModel.getFeedbackFlow(serviceId, service?.firestoreId).collectAsState(initial = null)
 
     // Servis kayıtlarından firma ve cihaz istatistiklerini hesapla
     val companyRegistryCount = remember(serviceRecords, service) {
@@ -317,7 +323,7 @@ fun ServiceDetailScreen(
     ) { paddingValues ->
         if (personnelId == null) {
             // =================================================================
-            // ADMIN EKRANI (Tıklanabilir Sekmeli Yapı)
+            // ADMIN EKRANI
             // =================================================================
             Column(
                 modifier = Modifier
@@ -380,7 +386,6 @@ fun ServiceDetailScreen(
                                     }
                                 }
 
-                                // --- SERVİS SİCİLİ ÖZET BÖLÜMÜ ---
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text("Servis Sicili", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                 ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
@@ -535,8 +540,9 @@ fun ServiceDetailScreen(
                                     onCreateExtraJob = onCreateExtraJob,
                                     onArchiveClick = { showArchiveDialog = true },
                                     onDeleteClick = { showDeleteDialog = true },
-                                    signatureData = finalSignatureData, // <-- Güncellendi
-                                    onImageClick = { uri -> selectedImageUri = uri }
+                                    signatureData = finalSignatureData,
+                                    onImageClick = { uri -> selectedImageUri = uri },
+                                    feedbackItem = serviceFeedback
                                 )
                             }
                         }
@@ -816,10 +822,52 @@ fun ServiceDetailScreen(
                                         }
                                     }
                                 } else {
+                                    // BAŞARIYLA TAMAMLANDI VE MÜŞTERİ DEĞERLENDİRME QR KODU
                                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                                        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                             Text("Bu iş emri başarıyla tamamlanmıştır.", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                             Text("Tamamlayan: $assignedPersonnelName")
+                                        }
+                                    }
+
+                                    // --- DİNAMİK MÜŞTERİ DEĞERLENDİRME QR KODU (Gerçek URL Formatı) ---
+                                    val qrContent = "https://donanim-servis-projesi.web.app/?serviceId=${service.id}"
+                                    val qrBitmap = remember(service.id) {
+                                        QrCodeGenerator.generateQrCode(qrContent, width = 400, height = 400)
+                                    }
+
+                                    if (qrBitmap != null) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        ElevatedCard(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(20.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Text(
+                                                    text = "Müşteri Değerlendirme QR Kodu",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Servis hizmetini değerlendirmesi için QR'ı müşteriye okutun.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                                Spacer(modifier = Modifier.height(16.dp))
+
+                                                Image(
+                                                    bitmap = qrBitmap.asImageBitmap(),
+                                                    contentDescription = "Müşteri Değerlendirme QR",
+                                                    modifier = Modifier.size(180.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -996,6 +1044,8 @@ fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String
         Text(text = value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
     }
 }
+
+
 
 @Composable
 fun TabIndicator(title: String, isSelected: Boolean, onClick: () -> Unit) {

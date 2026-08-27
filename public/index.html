@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teknik Servis Değerlendirme</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 16px; box-sizing: border-box; }
+        .card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); width: 100%; max-width: 420px; text-align: center; }
+        h2 { color: #1a1a1a; margin-bottom: 4px; font-size: 20px; }
+        .service-summary { background: #f8f9fa; padding: 12px; border-radius: 8px; margin: 12px 0 20px 0; font-size: 14px; color: #555; border-left: 4px solid #2196F3; text-align: left; line-height: 1.5; }
+        .service-summary b { color: #222; }
+
+        .criterion { margin: 16px 0; text-align: left; }
+        .criterion-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .criterion label { font-size: 14px; color: #444; font-weight: 500; }
+        .criterion-score { font-size: 13px; font-weight: 600; color: #f5b301; }
+
+        .stars { font-size: 28px; cursor: pointer; color: #ddd; letter-spacing: 4px; }
+        .stars span.active { color: #f5b301; }
+
+        .rating-text { font-size: 14px; font-weight: 600; color: #f5b301; margin-top: 4px; height: 20px; }
+
+        .chips-container { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; justify-content: center; }
+        .chip { border: 1px solid #ddd; background: #fff; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; transition: all 0.2s; color: #555; user-select: none; }
+        .chip.selected { background: #e3f2fd; border-color: #2196F3; color: #1976D2; font-weight: 600; }
+
+        textarea { width: 100%; height: 80px; border-radius: 8px; border: 1px solid #ddd; padding: 10px; margin-top: 8px; resize: none; box-sizing: border-box; font-family: inherit; font-size: 14px; }
+        textarea:focus { border-color: #2196F3; outline: none; }
+        .char-count { font-size: 11px; color: #888; text-align: right; margin-top: 2px; }
+
+        button { background-color: #2196F3; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 15px; transition: background 0.2s; }
+        button:hover { background-color: #1976D2; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        .security-note { font-size: 11px; color: #888; margin-top: 14px; line-height: 1.4; }
+        #successCard { display: none; padding: 20px 0; }
+        .success-icon { font-size: 48px; color: #4CAF50; margin-bottom: 10px; }
+        .user-score-box { background: #f8f9fa; padding: 12px; border-radius: 8px; margin: 15px 0; font-size: 15px; color: #333; font-weight: 500; }
+    </style>
+</head>
+<body>
+
+<div class="card" id="formCard">
+    <h2>🔧 Teknik Servis Değerlendirme</h2>
+
+    <div class="service-summary" id="serviceSummary">
+        <b>İş Emri Yükleniyor...</b><br>
+        <span style="font-size: 12px; color: #777;">Lütfen bekleyin...</span>
+    </div>
+
+    <!-- Genel Puan (Zorunlu) -->
+    <div class="criterion" style="text-align: center;">
+        <label>Genel Memnuniyetiniz *</label>
+        <div class="stars" id="mainStars">
+            <span onclick="setMainRating(1)">★</span><span onclick="setMainRating(2)">★</span><span onclick="setMainRating(3)">★</span><span onclick="setMainRating(4)">★</span><span onclick="setMainRating(5)">★</span>
+        </div>
+        <div class="rating-text" id="mainRatingText">Lütfen puan seçiniz</div>
+    </div>
+
+    <hr style="border: none; border-top: 1px solid #eee; margin: 15px 0;">
+
+    <!-- 3 Kısa Kriter (Opsiyonel) -->
+    <div class="criterion">
+        <div class="criterion-header">
+            <label>Servis Kalitesi</label>
+            <span class="criterion-score" id="scoreQuality">Seçilmedi</span>
+        </div>
+        <div class="stars" id="starQuality" style="font-size: 20px;" data-score="0">
+            <span onclick="setSubRating('Quality', 1)">★</span><span onclick="setSubRating('Quality', 2)">★</span><span onclick="setSubRating('Quality', 3)">★</span><span onclick="setSubRating('Quality', 4)">★</span><span onclick="setSubRating('Quality', 5)">★</span>
+        </div>
+    </div>
+
+    <div class="criterion">
+        <div class="criterion-header">
+            <label>Personel İlgisi</label>
+            <span class="criterion-score" id="scoreStaff">Seçilmedi</span>
+        </div>
+        <div class="stars" id="starStaff" style="font-size: 20px;" data-score="0">
+            <span onclick="setSubRating('Staff', 1)">★</span><span onclick="setSubRating('Staff', 2)">★</span><span onclick="setSubRating('Staff', 3)">★</span><span onclick="setSubRating('Staff', 4)">★</span><span onclick="setSubRating('Staff', 5)">★</span>
+        </div>
+    </div>
+
+    <div class="criterion">
+        <div class="criterion-header">
+            <label>Çözüm Hızı</label>
+            <span class="criterion-score" id="scoreSpeed">Seçilmedi</span>
+        </div>
+        <div class="stars" id="starSpeed" style="font-size: 20px;" data-score="0">
+            <span onclick="setSubRating('Speed', 1)">★</span><span onclick="setSubRating('Speed', 2)">★</span><span onclick="setSubRating('Speed', 3)">★</span><span onclick="setSubRating('Speed', 4)">★</span><span onclick="setSubRating('Speed', 5)">★</span>
+        </div>
+    </div>
+
+    <!-- Hazır Etiketler (Çoklu Seçim & Dinamik) -->
+    <label style="font-size: 13px; color: #555; display: block; text-align: left; margin-top: 12px;">Deneyiminizi özetleyin:</label>
+    <div class="chips-container" id="chipsContainer">
+        <!-- Dinamik dolacak -->
+    </div>
+
+    <!-- Yorum Alanı -->
+    <div style="text-align: left; margin-top: 12px;">
+        <label style="font-size: 13px; color: #555;">Eklemek istediğiniz bir şey var mı? (İsteğe bağlı)</label>
+        <textarea id="comment" maxlength="500" placeholder="Deneyiminizi kısaca paylaşabilirsiniz..." oninput="updateCharCount(this)"></textarea>
+        <div class="char-count"><span id="charNum">0</span> / 500</div>
+    </div>
+
+    <div class="security-note">
+        Değerlendirmeniz hizmet kalitesini geliştirmek amacıyla kullanılacaktır.
+    </div>
+
+    <button id="submitBtn" onclick="submitFeedback()" disabled>Değerlendirmeyi Gönder</button>
+</div>
+
+<div class="card" id="successCard">
+    <div class="success-icon">✓</div>
+    <h2 style="color: #4CAF50;">Teşekkür Ediyoruz!</h2>
+    <p style="color: #666; font-size: 14px; margin: 10px 0;">Değerlendirmeniz başarıyla alındı.</p>
+
+    <div class="user-score-box">
+        Verdiğiniz Puan: <span id="finalScoreText" style="color: #f5b301; font-size: 18px;"></span> / 5 ⭐
+    </div>
+
+    <p style="font-size: 12px; color: #888; line-height: 1.4;">Geri bildiriminiz hizmet kalitemizi geliştirmemize yardımcı olacaktır.</p>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+<script>
+    const firebaseConfig = { projectId: "donanim-servis-projesi" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const serviceId = urlParams.get('serviceId');
+
+    const ratingTexts = { 1: "Çok Kötü", 2: "Kötü", 3: "Orta", 4: "İyi", 5: "Mükemmel" };
+    const positiveChips = ["Hızlı çözüldü", "Personel ilgiliydi", "Sorun tamamen çözüldü", "Bilgilendirme iyiydi"];
+    const negativeChips = ["Sorun çözülmedi", "Geç tamamlandı", "İletişim yetersizdi", "Tekrar arıza oluştu"];
+
+    let mainRating = 0;
+
+    // Tarih formatı ve servis özeti
+    const todayStr = new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    if (serviceId) {
+        db.collection("services").doc(serviceId).get().then((doc) => {
+            if (doc.exists) {
+                const data = doc.data();
+                const deviceStr = (data.deviceType || 'Cihaz') + " • " + (data.brandModel || 'Servis Kaydı');
+                document.getElementById('serviceSummary').innerHTML = `
+                    <b>İş Emri #${serviceId.substring(0,6).toUpperCase()}</b><br>
+                    <span>${deviceStr}</span><br>
+                    <span style="color: #4CAF50;">Servis tamamlandı ✓</span> &nbsp;|&nbsp; <span style="color: #777; font-size: 12px;">${todayStr}</span>
+                `;
+            } else {
+                setDefaultSummary();
+            }
+        }).catch(() => {
+            setDefaultSummary();
+        });
+    } else {
+        setDefaultSummary();
+    }
+
+    function setDefaultSummary() {
+        document.getElementById('serviceSummary').innerHTML = `
+            <b>İş Emri #4</b><br>
+            <span>Tablet • TAB X</span><br>
+            <span style="color: #4CAF50;">Servis tamamlandı ✓</span> &nbsp;|&nbsp; <span style="color: #777; font-size: 12px;">${todayStr}</span>
+        `;
+    }
+
+    // Başlangıçta boş etiketler
+    renderChips(true);
+
+    function setMainRating(rating) {
+        mainRating = rating;
+        document.getElementById('mainRatingText').innerText = ratingTexts[rating];
+        const stars = document.querySelectorAll('#mainStars span');
+        stars.forEach((star, index) => {
+            star.classList.toggle('active', index < rating);
+        });
+
+        // Butonu aktif et
+        document.getElementById('submitBtn').removeAttribute('disabled');
+
+        // Dinamik Chip Değişimi
+        renderChips(rating > 3);
+    }
+
+    function renderChips(isPositive) {
+        const container = document.getElementById('chipsContainer');
+        const list = isPositive ? positiveChips : negativeChips;
+        container.innerHTML = list.map(chip => `<div class="chip" onclick="toggleChip(this)">${chip}</div>`).join('');
+    }
+
+    function setSubRating(type, rating) {
+        const container = document.getElementById('star' + type);
+        container.setAttribute('data-score', rating);
+        document.getElementById('scoreQuality' ? ('score' + type) : '').innerText = rating + ".0 (" + ratingTexts[rating] + ")";
+
+        // Etiket renk güncellemesi
+        const scoreSpan = document.getElementById('score' + type);
+        scoreSpan.innerText = rating + ".0 (" + ratingTexts[rating] + ")";
+
+        const stars = container.querySelectorAll('span');
+        stars.forEach((star, index) => {
+            star.classList.toggle('active', index < rating);
+        });
+    }
+
+    function toggleChip(element) {
+        element.classList.toggle('selected');
+    }
+
+    function updateCharCount(textarea) {
+        document.getElementById('charNum').innerText = textarea.value.length;
+    }
+
+    function submitFeedback() {
+        if (!mainRating) {
+            alert("Lütfen genel memnuniyet puanınızı seçiniz.");
+            return;
+        }
+
+        const selectedChips = Array.from(document.querySelectorAll('.chip.selected')).map(c => c.innerText);
+        const comment = document.getElementById('comment').value;
+
+        const feedbackData = {
+            rating: mainRating,
+            quality: parseInt(document.getElementById('starQuality').getAttribute('data-score')) || null,
+            staff: parseInt(document.getElementById('starStaff').getAttribute('data-score')) || null,
+            speed: parseInt(document.getElementById('starSpeed').getAttribute('data-score')) || null,
+            tags: selectedChips,
+            comment: comment,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        const targetId = serviceId || "test_service_id";
+
+        db.collection("services").doc(targetId).collection("feedback").add(feedbackData)
+        .then(() => {
+            document.getElementById('formCard').style.display = 'none';
+            document.getElementById('finalScoreText.innerText = mainRating'); // güvenli atama
+            document.getElementById('finalScoreText').innerText = mainRating;
+            document.getElementById('successCard').style.display = 'block';
+        })
+        .catch((error) => {
+            console.error("Hata: ", error);
+            alert("Gönderilirken bir hata oluştu.");
+        });
+    }
+</script>
+
+</body>
+</html>

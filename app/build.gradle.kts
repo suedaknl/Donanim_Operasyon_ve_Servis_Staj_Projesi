@@ -61,6 +61,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-functions-ktx")
+    implementation("com.google.zxing:core:3.5.2")
 
     // Coil - Modern resim yükleme kütüphanesi
     implementation("io.coil-kt:coil-compose:2.6.0")
@@ -104,4 +105,5 @@ dependencies {
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
+
 }

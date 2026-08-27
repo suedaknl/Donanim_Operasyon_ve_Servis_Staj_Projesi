@@ -409,6 +409,99 @@ fun AdminMainScreen(
 }
 
 @Composable
+fun AdminCustomerSatisfactionCard(
+    serviceViewModel: ServiceViewModel
+) {
+    val stats by serviceViewModel.evaluationStats.collectAsState()
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Müşteri Memnuniyeti",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = Color(0xFFF5B301)
+                )
+            }
+
+            if (!stats.hasData) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Henüz müşteri değerlendirmesi bulunmuyor.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = String.format(java.util.Locale.ROOT, "%.1f", stats.averageRating),
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "/ 5",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
+                        Text(
+                            text = "${stats.totalCount} değerlendirme • %${stats.positivePercentage.toInt()} olumlu",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("En Güçlü Alan", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stats.strongestArea, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFF4CAF50))
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Geliştirilebilir", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stats.improvementArea, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFFF59E0B))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun androidx.compose.material3.MaterialTheme.colorStorageContainerCompatSafe(): Color? = null
 
 @Composable
@@ -572,6 +665,9 @@ fun AdminDashboardContent(
                 records = allServices,
                 analysisUseCase = analysisUseCase
             )
+        }
+        item {
+            AdminCustomerSatisfactionCard(serviceViewModel = serviceViewModel)
         }
     }
 }

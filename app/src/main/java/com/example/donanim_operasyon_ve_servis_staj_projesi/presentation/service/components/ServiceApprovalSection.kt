@@ -15,7 +15,6 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
+import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceFeedback
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceNote
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServicePhoto
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceRecord
@@ -37,6 +38,9 @@ import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.ServiceSt
 import com.example.donanim_operasyon_ve_servis_staj_projesi.data.local.converter.SignatureConverter
 import com.example.donanim_operasyon_ve_servis_staj_projesi.presentation.signature.SignatureRenderer
 import com.example.donanim_operasyon_ve_servis_staj_projesi.utils.ServiceReportPdfGenerator
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun ServiceApprovalSection(
@@ -52,13 +56,16 @@ fun ServiceApprovalSection(
     onCreateExtraJob: (Int) -> Unit,
     onArchiveClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    onImageClick: (String) -> Unit
+    onImageClick: (String) -> Unit,
+    // ViewModel üzerinden tetiklenecek feedback verisi için ek parametre:
+    feedbackItem: ServiceFeedback? = null
 ) {
     val context = LocalContext.current
 
     var isCompletionInfoExpanded by rememberSaveable { mutableStateOf(false) }
     var isClosingResultExpanded by rememberSaveable { mutableStateOf(false) }
     var isDigitalSignatureExpanded by rememberSaveable { mutableStateOf(false) }
+    var isEvaluationExpanded by rememberSaveable { mutableStateOf(false) }
     var isActionsExpanded by rememberSaveable { mutableStateOf(false) }
 
     val closingKeywords = listOf(
@@ -168,10 +175,6 @@ fun ServiceApprovalSection(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
 
-                        // -------------------------------------------------
-                        // PDF GÖRÜNTÜLE
-                        // -------------------------------------------------
-
                         Button(
                             onClick = {
 
@@ -250,10 +253,6 @@ fun ServiceApprovalSection(
 
                             Text("PDF Görüntüle")
                         }
-
-                        // -------------------------------------------------
-                        // PDF PAYLAŞ
-                        // -------------------------------------------------
 
                         OutlinedButton(
                             onClick = {
@@ -479,7 +478,7 @@ fun ServiceApprovalSection(
             }
 
             // -----------------------------------------------------
-            // MÜŞTERİ DİJİTAL İmzasi
+            // MÜŞTERİ DİJİTAL İMZASI
             // -----------------------------------------------------
 
             ExpandableSection(
@@ -528,7 +527,6 @@ fun ServiceApprovalSection(
 
                         when {
 
-                            // Yeni X-Y-P sistemi
                             signatureBitmap != null -> {
 
                                 Image(
@@ -550,7 +548,6 @@ fun ServiceApprovalSection(
                                 )
                             }
 
-                            // Eski PNG sistemi fallback
                             !effectiveSignaturePath.isNullOrBlank() -> {
 
                                 AsyncImage(
@@ -583,6 +580,85 @@ fun ServiceApprovalSection(
                                             .onSurfaceVariant
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            // -----------------------------------------------------
+            // MÜŞTERİ DEĞERLENDİRMESİ (YENİ EKLENEN KISIM)
+            // -----------------------------------------------------
+
+            val evaluationTitle = if (feedbackItem != null) {
+                "Müşteri Değerlendirmesi    ⭐ ${feedbackItem.rating} / 5"
+            } else {
+                "Müşteri Değerlendirmesi"
+            }
+
+            ExpandableSection(
+                title = evaluationTitle,
+                expanded = isEvaluationExpanded,
+                onExpandedChange = { isEvaluationExpanded = it },
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (feedbackItem == null) {
+                            Text(
+                                text = "Müşteri henüz değerlendirme yapmadı.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Genel Memnuniyet",
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${feedbackItem.rating} / 5 ⭐",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFF5B301)
+                                )
+                            }
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                            Text("Servis Kalitesi: ${feedbackItem.quality} / 5")
+                            Text("Personel İlgisi: ${feedbackItem.staff} / 5")
+                            Text("Çözüm Hızı: ${feedbackItem.speed} / 5")
+
+                            if (!feedbackItem.comment.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Müşteri Yorumu:",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "\"${feedbackItem.comment}\"",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val dateStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(feedbackItem.timestamp))
+                            Text(
+                                text = "Değerlendirme: $dateStr",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
@@ -641,7 +717,6 @@ fun ServiceApprovalSection(
                         }
                     }
 
-                    // İş Emrini Çoğalt Butonu (Mevcut Mantık Korundu)
                     Button(
                         onClick = {
                             val targetId =
@@ -675,7 +750,6 @@ fun ServiceApprovalSection(
                         Text("İş Emrini Çoğalt")
                     }
 
-                    // Düzenle ve Sil Butonları
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement =

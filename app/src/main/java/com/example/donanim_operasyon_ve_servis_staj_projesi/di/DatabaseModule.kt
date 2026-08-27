@@ -62,4 +62,11 @@ object DatabaseModule {
     ): NotificationDao {
         return database.notificationDao()
     }
+
+    @Provides
+    fun provideServiceFeedbackDao(
+        database: AppDatabase
+    ): ServiceFeedbackDao {
+        return database.serviceFeedbackDao()
+    }
 }

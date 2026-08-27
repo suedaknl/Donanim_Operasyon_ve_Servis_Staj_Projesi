@@ -15,11 +15,9 @@ interface ServiceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecord(record: ServiceRecord)
 
-    // --- KAPANIŞ İŞLEMİ İÇİN EKSİK OLAN METOT ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSignature(signature: ServiceClosingSignature)
 
-    // ATOMİK İŞLEM: Ya hepsi gerçekleşir, ya hiçbiri!
     @Transaction
     suspend fun completeServiceTransaction(
         updatedRecord: ServiceRecord,
