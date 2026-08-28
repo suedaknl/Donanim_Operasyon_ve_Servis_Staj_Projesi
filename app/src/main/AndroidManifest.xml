@@ -43,7 +43,7 @@
         <!-- Google Maps API Key DOĞRU YERDE (<application> İÇİNDE) -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="***REMOVED***" />
+            android:value="${MAPS_API_KEY}" />
 
         <!-- Aktif İş Konum Takibi Foreground Service Bildirimi -->
         <service

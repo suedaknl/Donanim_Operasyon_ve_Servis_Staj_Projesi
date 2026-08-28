@@ -248,20 +248,6 @@ fun AdminMainScreen(
                                     ExtendedFloatingActionButton(
                                         onClick = {
                                             showFabMenu = false
-                                            onNavigateToAddService()
-                                        },
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(Icons.Default.AddCircle, null, tint = MaterialTheme.colorScheme.primary)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Yeni İş Emri Ekle", fontWeight = FontWeight.Medium)
-                                    }
-
-                                    ExtendedFloatingActionButton(
-                                        onClick = {
-                                            showFabMenu = false
                                             onNavigateToAddPersonnel()
                                         },
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant,

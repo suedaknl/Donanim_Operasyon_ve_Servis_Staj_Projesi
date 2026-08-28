@@ -19,17 +19,6 @@ admin.initializeApp();
 
 setGlobalOptions({maxInstances: 10});
 
-/**
- * Helper to create a notification record in Firestore.
- * @param {Object} params - The notification parameters.
- * @param {string} params.recipientUid - The recipient user UID.
- * @param {string} params.role - The recipient role (ADMIN or PERSONNEL).
- * @param {string} params.type - The notification type.
- * @param {string} params.title - The notification title.
- * @param {string} params.body - The notification body.
- * @param {string} [params.targetId] - The optional target ID.
- * @return {Promise<void>}
- */
 async function createNotificationRecord({
   recipientUid,
   role,
@@ -170,6 +159,192 @@ exports.onServiceAssignedDirectly = onDocumentUpdated(
       } catch (error) {
         logger.error(
             `SERVICE_ASSIGNED error serviceId=${serviceId}`,
+            error,
+        );
+      }
+    },
+);
+
+/**
+ * Trigger to notify admins about personnel service status changes
+ */
+exports.onServiceStatusChanged = onDocumentUpdated(
+    "services/{serviceId}",
+    async (event) => {
+      const serviceId = event.params.serviceId;
+      const beforeData = event.data.before.data();
+      const afterData = event.data.after.data();
+
+      if (!beforeData || !afterData) {
+        return;
+      }
+
+      const rawBeforeStatus = beforeData.status;
+      const rawStatus = afterData.status;
+
+      const beforeStatus =
+        typeof rawBeforeStatus === "string" ?
+          rawBeforeStatus.trim().toUpperCase() :
+          "";
+
+      const afterStatus =
+        typeof rawStatus === "string" ?
+          rawStatus.trim().toUpperCase() :
+          "";
+
+      if (beforeStatus === afterStatus) {
+        logger.info(
+            `SERVICE_STATUS_CHANGED skipped ` +
+            `reason=status_unchanged serviceId=${serviceId}`,
+        );
+        return;
+      }
+
+      let title = "";
+      let body = "";
+      let type = "";
+
+      const companyName =
+        afterData.companyName || "Firma Belirtilmemiş";
+      const personnelName =
+        afterData.assignedPersonnelName || "Personel";
+
+      if (
+        afterStatus === "İPTAL" ||
+        afterStatus === "IPTAL" ||
+        afterStatus === "REDDEDILDI" ||
+        afterStatus === "RED" ||
+        afterStatus === "CANCELLED"
+      ) {
+        const reason = afterData.rejectionReason;
+        title = "İş Emri Reddedildi";
+        body = `${personnelName}, #${serviceId} numaralı ` +
+          `${companyName} iş emrini reddetti.` +
+          `${reason ? " Neden: " + reason : ""}`;
+        type = "SERVICE_REJECTED";
+      } else if (
+        afterStatus === "İŞLEME BAŞLANDI" ||
+        afterStatus === "ISLEME_BASLANDI" ||
+        afterStatus === "DEVAM EDEN" ||
+        afterStatus === "İŞLEMDE"
+      ) {
+        title = "İşleme Başlandı";
+        body = `${personnelName}, #${serviceId} numaralı ` +
+          `${companyName} iş emri için çalışmaya başladı.`;
+        type = "SERVICE_STARTED";
+      } else if (
+        afterStatus === "YOLDA" ||
+        afterStatus === "KABUL EDILDI" ||
+        afterStatus === "KABUL EDİLDİ"
+      ) {
+        title = "Personel Yolda";
+        body = `${personnelName}, #${serviceId} numaralı ` +
+          `${companyName} iş emri için yola çıktı.`;
+        type = "SERVICE_ACCEPTED";
+      } else if (
+        afterStatus === "PARÇA BEKLENİYOR" ||
+        afterStatus === "PARCA_BEKLENIYOR"
+      ) {
+        title = "Parça Bekleniyor";
+        body = `${personnelName}, #${serviceId} numaralı ` +
+          `${companyName} iş emri için parça bekliyor.`;
+        type = "PART_WAITING";
+      } else if (
+        afterStatus === "TAMAMLANDI" ||
+        afterStatus === "COMPLETED"
+      ) {
+        title = "İş Tamamlandı";
+        body = `${personnelName}, #${serviceId} numaralı ` +
+          `${companyName} iş emrini başarıyla tamamladı.`;
+        type = "SERVICE_COMPLETED";
+      } else {
+        logger.info(
+            `SERVICE_STATUS_CHANGED ignored unknown status: ${rawStatus}`,
+        );
+        return;
+      }
+
+      logger.info(
+          `SERVICE_STATUS_CHANGED triggered ` +
+          `serviceId=${serviceId} status=${rawStatus}`,
+      );
+
+      try {
+        const adminsSnapshot = await admin
+            .firestore()
+            .collection("notification_users")
+            .where("role", "==", "ADMIN")
+            .get();
+
+        if (adminsSnapshot.empty) {
+          logger.info(
+              `SERVICE_STATUS_CHANGED skipped ` +
+              `reason=no_admin_users_found serviceId=${serviceId}`,
+          );
+          return;
+        }
+
+        const sendPromises = adminsSnapshot.docs.map(
+            async (doc) => {
+              const adminData = doc.data();
+              const adminUid = doc.id;
+
+              await createNotificationRecord({
+                recipientUid: adminUid,
+                role: "ADMIN",
+                type: type,
+                title: title,
+                body: body,
+                targetId: String(serviceId),
+              });
+
+              const fcmToken = adminData ?
+                adminData.fcmToken :
+                null;
+
+              if (
+                !fcmToken ||
+                typeof fcmToken !== "string" ||
+                fcmToken.trim() === ""
+              ) {
+                return;
+              }
+
+              const message = {
+                token: fcmToken,
+                notification: {
+                  title: title,
+                  body: body,
+                },
+                data: {
+                  type: type,
+                  targetId: String(serviceId),
+                  title: title,
+                  body: body,
+                },
+              };
+
+              try {
+                await admin.messaging().send(message);
+                logger.info(
+                    `SERVICE_STATUS_CHANGED sent to admin ` +
+                    `serviceId=${serviceId}`,
+                );
+              } catch (err) {
+                logger.error(
+                    `SERVICE_STATUS_CHANGED error ` +
+                    `serviceId=${serviceId}`,
+                    err,
+                );
+              }
+            },
+        );
+
+        await Promise.all(sendPromises);
+      } catch (error) {
+        logger.error(
+            `SERVICE_STATUS_CHANGED error ` +
+            `serviceId=${serviceId}`,
             error,
         );
       }
