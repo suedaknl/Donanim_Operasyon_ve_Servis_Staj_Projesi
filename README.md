@@ -144,30 +144,30 @@ Konum servisleri ise saha operasyonlarıyla ilişkilendirilmiş; iş konumunun g
 
 ---
 
-## Ekran Görüntüleri
+## 📱 Ekran Görüntüleri
 
 ### Yönetici Paneli
 
 <p align="center">
-  <img src="screenshots/admin_dashboard.png" width="30%">
-  <img src="screenshots/admin_analytics.png" width="30%">
-  <img src="screenshots/personnel_management.png" width="30%">
+  <img src="screenshots/admin_dashboard.jpg" width="30%">
+  <img src="screenshots/admin_analytics.jpg" width="30%">
+  <img src="screenshots/personnel_management.jpg" width="30%">
 </p>
 
 ### İş Emri ve Servis Süreci
 
 <p align="center">
-  <img src="screenshots/work_order_detail.png" width="30%">
-  <img src="screenshots/work_order_history.png" width="30%">
-  <img src="screenshots/service_report.png" width="30%">
+  <img src="screenshots/work_order_detail.jpg" width="30%">
+  <img src="screenshots/work_order_history.jpg" width="30%">
+  <img src="screenshots/service_report.jpg" width="30%">
 </p>
 
 ### Personel ve AI
 
 <p align="center">
-  <img src="screenshots/personnel_dashboard.png" width="30%">
-  <img src="screenshots/ai_assistant.png" width="30%">
-  <img src="screenshots/ai_voice.png" width="30%">
+  <img src="screenshots/personnel_dashboard.jpg" width="30%">
+  <img src="screenshots/ai_assistant.jpg" width="30%">
+  <img src="screenshots/ai_voice.jpg" width="30%">
 </p>
 
 ## Kurulum ve Güvenlik
